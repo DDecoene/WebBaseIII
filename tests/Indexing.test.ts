@@ -55,4 +55,9 @@ describe('IndexStore', () => {
     expect(indexes).toHaveLength(1);
     expect(indexes[0].expression).toBe('firstname');
   });
+
+  it('setActive throws when tag does not exist', () => {
+    const store = new IndexStore(tmpPath());
+    expect(() => store.setActive('customers', 'ghost')).toThrow("Index 'ghost' not found on table 'customers'");
+  });
 });

@@ -54,6 +54,10 @@ export class IndexStore implements IIndexStore {
   }
 
   setActive(tableName: string, tag: string): void {
+    const exists = this.db.prepare(
+      'SELECT 1 FROM indexes WHERE table_name = ? AND tag = ?'
+    ).get(tableName, tag);
+    if (!exists) throw new Error(`Index '${tag}' not found on table '${tableName}'`);
     this.db.prepare(`
       INSERT INTO active_indexes (table_name, tag) VALUES (?, ?)
       ON CONFLICT(table_name) DO UPDATE SET tag = excluded.tag
