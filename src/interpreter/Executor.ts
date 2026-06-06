@@ -109,7 +109,7 @@ export class Executor {
     this.state.filter = null;
     this.state.rowPtr = 1;
     const exists = await this.db.tableExists(name);
-    const storage = this.state.opfsAvailable ? 'OPFS (persistent)' : 'in-memory';
+    const storage = this.state.opfsAvailable ? 'OPFS (persistent)' : 'server-side persistent';
     const lines: OutputLine[] = [
       { text: `Database : ${dbName}  [${storage}]`, cls: 'info' },
     ];
@@ -128,7 +128,7 @@ export class Executor {
     this.state.table = null;
     this.state.opfsAvailable = this.db.opfsAvailable;
     const tables = await this.db.getTables();
-    const storage = this.state.opfsAvailable ? 'OPFS (persistent)' : 'in-memory';
+    const storage = this.state.opfsAvailable ? 'OPFS (persistent)' : 'server-side persistent';
     return { output: [
       { text: `Opened database: ${name}  [${storage}]`, cls: 'ok' },
       { text: `Tables: ${tables.length ? tables.join(', ') : '(none)'}`, cls: 'info' },

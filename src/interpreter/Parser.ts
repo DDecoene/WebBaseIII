@@ -124,7 +124,10 @@ export class Parser {
     // rest of line is the filter expression (raw SQL-compatible)
     const parts: string[] = [];
     while (!this.end() && this.peek().type !== 'NL' && this.peek().type !== 'SEMI' && this.peek().type !== 'EOF') {
-      parts.push(this.peek().val); this.adv();
+      const t = this.peek();
+      // Re-quote string literals so they become valid SQL (e.g. 'Alice' not bare Alice)
+      parts.push(t.type === 'STR' ? `'${t.val.replace(/'/g, "''")}'` : t.val);
+      this.adv();
     }
     return { type: 'SET_FILTER', expr: parts.length ? parts.join(' ') : null };
   }

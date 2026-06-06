@@ -4,6 +4,8 @@ import type { ServerMessage } from '../src/shared/types.js';
 import fs from 'fs';
 import path from 'path';
 
+let testDbCounter = 0;
+
 function makeSession() {
   const sent: ServerMessage[] = [];
   const send = vi.fn((msg: ServerMessage) => { sent.push(msg); });
@@ -11,12 +13,16 @@ function makeSession() {
   return { session, sent, send };
 }
 
+function uniqueDb() {
+  return `test_session_${++testDbCounter}`;
+}
+
 afterEach(() => {
-  // Clean up any test databases
+  // Clean up all test_session_* databases created during tests
   const dataDir = path.join(process.cwd(), 'data');
   if (fs.existsSync(dataDir)) {
     fs.readdirSync(dataDir)
-      .filter(f => f.startsWith('test_') && f.endsWith('.sqlite3'))
+      .filter(f => f.startsWith('test_session_') && f.endsWith('.sqlite3'))
       .forEach(f => fs.unlinkSync(path.join(dataDir, f)));
   }
 });
@@ -48,12 +54,38 @@ describe('Session', () => {
 
   it('sends grid-open when BROWSE issued after table created and selected', async () => {
     const { session, sent } = makeSession();
-    await session.handleMessage({ type: 'command', text: 'CREATE TABLE test_browse (name TEXT)' });
-    await session.handleMessage({ type: 'command', text: 'USE test_browse' });
+    const db = uniqueDb();
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    await session.handleMessage({ type: 'command', text: 'CREATE TABLE browse_tbl (name TEXT)' });
+    await session.handleMessage({ type: 'command', text: 'USE browse_tbl' });
     sent.length = 0;
     await session.handleMessage({ type: 'command', text: 'BROWSE' });
     const gridMsg = sent.find(m => m.type === 'grid-open');
     expect(gridMsg).toBeDefined();
+  });
+
+  it('SET FILTER with string value filters correctly', async () => {
+    const { session, sent } = makeSession();
+    const db = uniqueDb();
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    await session.handleMessage({ type: 'command', text: 'CREATE TABLE filter_tbl (name TEXT, age INTEGER)' });
+    await session.handleMessage({ type: 'command', text: 'USE filter_tbl' });
+    // Insert Alice at row 1 (REPLACE without ALL updates current row)
+    await session.handleMessage({ type: 'command', text: 'APPEND RECORD' });
+    await session.handleMessage({ type: 'command', text: 'REPLACE name WITH "Alice", age WITH 30' });
+    // Insert Bob at row 2
+    await session.handleMessage({ type: 'command', text: 'APPEND RECORD' });
+    await session.handleMessage({ type: 'command', text: 'REPLACE name WITH "Bob", age WITH 25' });
+    // Filter for Alice — string quotes must survive into SQL
+    await session.handleMessage({ type: 'command', text: 'SET FILTER TO name == "Alice"' });
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: 'LIST' });
+    const listMsg = sent.find(m => m.type === 'output') as any;
+    const lines = listMsg?.lines?.map((l: any) => l.text).join(' ') ?? '';
+    expect(lines).toContain('Alice');
+    expect(lines).not.toContain('Bob');
+    const hasError = (listMsg?.lines ?? []).some((l: any) => l.cls === 'error');
+    expect(hasError).toBe(false);
   });
 
   it('sends view-terminal on grid-exit', async () => {
@@ -65,8 +97,10 @@ describe('Session', () => {
 
   it('REPLACE ALL with multiple comma-separated fields updates all fields', async () => {
     const { session, sent } = makeSession();
-    await session.handleMessage({ type: 'command', text: 'CREATE TABLE test_replace (name TEXT, value INTEGER, city TEXT)' });
-    await session.handleMessage({ type: 'command', text: 'USE test_replace' });
+    const db = uniqueDb();
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    await session.handleMessage({ type: 'command', text: 'CREATE TABLE replace_tbl (name TEXT, value INTEGER, city TEXT)' });
+    await session.handleMessage({ type: 'command', text: 'USE replace_tbl' });
     await session.handleMessage({ type: 'command', text: 'APPEND RECORD' });
     sent.length = 0;
     await session.handleMessage({ type: 'command', text: 'REPLACE ALL name WITH "Acme Corp", value WITH 42, city WITH "Brussels"' });
