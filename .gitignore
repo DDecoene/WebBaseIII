@@ -1,5 +1,7 @@
 node_modules/
 dist/
+dist-server/
+data/*.sqlite3
 .DS_Store
 webbase-screenshot.png
 .playwright-mcp/
