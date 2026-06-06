@@ -1,17 +1,12 @@
-import { DatabaseBridge } from '../db/DatabaseBridge';
+import { IDatabaseBridge, OutputLine, FormField } from '../shared/types';
 import { ASTNode, Expr, ColDef } from './Parser';
 
-export type OutputLine = { text: string; cls?: string };
+export type { OutputLine, FormField } from '../shared/types';
 
 export interface ExecResult {
   output: OutputLine[];
   action?: 'BROWSE' | 'CLEAR' | 'QUIT' | 'FORM_READY' | 'FORM_SUBMIT';
   formFields?: FormField[];
-}
-
-export interface FormField {
-  row: number; col: number;
-  label: string; varName: string;
 }
 
 export interface State {
@@ -38,7 +33,7 @@ function mapType(t: string): DbType {
 export class Executor {
   public state: State;
 
-  constructor(private db: DatabaseBridge) {
+  constructor(private db: IDatabaseBridge) {
     this.state = {
       db: null, table: null, filter: null,
       vars: new Map(), rowPtr: 1,
