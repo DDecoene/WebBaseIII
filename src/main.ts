@@ -1,25 +1,21 @@
 import './styles/main.css';
-import { DatabaseBridge } from './db/DatabaseBridge';
-import { Executor } from './interpreter/Executor';
+import { WsClient } from './ws/WsClient';
 import { Terminal } from './terminal/Terminal';
 
 async function boot() {
-  const bridge = new DatabaseBridge();
+  const ws = new WsClient();
 
   const statusEl = document.createElement('span');
   statusEl.className = 't-line info';
-  statusEl.textContent = 'Initialising SQLite Wasm engine…';
+  statusEl.textContent = 'Connecting to WebBase-III server…';
   document.getElementById('terminal-output')?.appendChild(statusEl);
 
-  const { opfsAvailable } = await bridge.waitReady();
+  await ws.waitReady();
 
-  statusEl.textContent = opfsAvailable
-    ? 'SQLite Wasm ready — OPFS persistent storage available.'
-    : 'SQLite Wasm ready — OPFS not available, using in-memory storage.';
-  statusEl.className = 't-line ' + (opfsAvailable ? 'ok' : 'warn');
+  statusEl.textContent = 'Connected.';
+  statusEl.className = 't-line ok';
 
-  const executor = new Executor(bridge);
-  const terminal = new Terminal(executor);
+  const terminal = new Terminal(ws);
   terminal.mount();
 }
 
@@ -28,7 +24,7 @@ boot().catch(err => {
   if (out) {
     const el = document.createElement('span');
     el.className = 't-line error';
-    el.textContent = `Fatal boot error: ${err instanceof Error ? err.message : String(err)}`;
+    el.textContent = `Fatal: ${err instanceof Error ? err.message : String(err)}`;
     out.appendChild(el);
   }
   console.error('WebBase-III boot error:', err);
