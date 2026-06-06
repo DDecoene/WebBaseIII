@@ -1,5 +1,4 @@
 node_modules/
-programs/*.prg
 dist/
 dist-server/
 data/*.sqlite3

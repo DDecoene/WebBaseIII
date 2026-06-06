@@ -1,13 +1,10 @@
-import fs from 'fs';
-import path from 'path';
 import { Lexer } from '../src/interpreter/Lexer.js';
 import { Parser } from '../src/interpreter/Parser.js';
 import { Executor } from '../src/interpreter/Executor.js';
 import type { ASTNode } from '../src/interpreter/Parser.js';
 import { ServerDatabaseBridge } from './ServerDatabaseBridge.js';
+import { programStore } from './ProgramStore.js';
 import type { ClientMessage, ServerMessage } from '../src/shared/types.js';
-
-const PROGRAMS_DIR = path.join(process.cwd(), 'programs');
 
 export class Session {
   private bridge: ServerDatabaseBridge;
@@ -90,8 +87,7 @@ export class Session {
         case 'save-program': {
           const safeName = msg.name.replace(/[^a-zA-Z0-9_-]/g, '');
           if (!safeName) break;
-          fs.mkdirSync(PROGRAMS_DIR, { recursive: true });
-          fs.writeFileSync(path.join(PROGRAMS_DIR, `${safeName}.prg`), msg.content, 'utf8');
+          programStore.save(safeName, msg.content);
           this.send({ type: 'output', lines: [{ text: `Saved: ${safeName}.prg`, cls: 'ok' }] });
           this.send({ type: 'view-terminal' });
           this.sendStatus();
@@ -148,31 +144,28 @@ export class Session {
 
       if (result.action === 'DO_PRG' && result.prgName) {
         const safeName = result.prgName.replace(/[^a-zA-Z0-9_-]/g, '');
-        const filePath = path.join(PROGRAMS_DIR, `${safeName}.prg`);
-        if (!fs.existsSync(filePath)) {
-          this.send({ type: 'output', lines: [{ text: `Program not found: ${safeName}.prg`, cls: 'error' }] });
+        const src = programStore.load(safeName);
+        if (src === null) {
+          this.send({ type: 'output', lines: [{ text: `Program not found: ${safeName}`, cls: 'error' }] });
         } else {
-          const src = fs.readFileSync(filePath, 'utf8');
           await this.runCommand(src);
         }
         continue;
       }
 
       if (result.action === 'LIST_PROGRAMS') {
-        fs.mkdirSync(PROGRAMS_DIR, { recursive: true });
-        const files = fs.readdirSync(PROGRAMS_DIR).filter(f => f.endsWith('.prg'));
-        if (!files.length) {
+        const names = programStore.list();
+        if (!names.length) {
           this.send({ type: 'output', lines: [{ text: '(No programs)', cls: 'info' }] });
         } else {
-          this.send({ type: 'output', lines: files.map(f => ({ text: f, cls: 'info' })) });
+          this.send({ type: 'output', lines: names.map(n => ({ text: n, cls: 'info' })) });
         }
         continue;
       }
 
       if (result.action === 'EDIT_PRG' && result.prgName) {
         const safeName = result.prgName.replace(/[^a-zA-Z0-9_-]/g, '');
-        const filePath = path.join(PROGRAMS_DIR, `${safeName}.prg`);
-        const content = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : '';
+        const content = programStore.load(safeName) ?? '';
         this.send({ type: 'program-open', name: safeName, content });
         return;
       }
