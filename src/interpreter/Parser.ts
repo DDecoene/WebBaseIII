@@ -29,6 +29,9 @@ export type ASTNode =
   | { type: 'DO_WHILE';    cond: Expr; body: ASTNode[] }
   | { type: 'CREATE_TABLE'; name: string; cols: ColDef[] }
   | { type: 'DROP_TABLE';  name: string }
+  | { type: 'DO_PRG';      name: string }
+  | { type: 'LIST_PROGRAMS' }
+  | { type: 'EDIT_PRG';    name: string }
   | { type: 'UNKNOWN';     raw: string };
 
 export interface ColDef { name: string; colType: string; size?: number; }
@@ -94,6 +97,7 @@ export class Parser {
       case 'DO':       return this.parseDo();
       case 'CREATE':   return this.parseCreate();
       case 'DROP':     return this.parseDrop();
+      case 'EDIT':     { this.adv(); return { type: 'EDIT_PRG', name: this.ident() }; }
       default: {
         const raw = t.val; this.adv(); this.skipLine();
         return { type: 'UNKNOWN', raw };
@@ -114,6 +118,7 @@ export class Parser {
     this.adv();
     if (this.peekKw('STRUCTURE') || this.peekKw('STRUCT')) { this.adv(); return { type: 'LIST_STRUCT' }; }
     if (this.peekKw('TABLES')) { this.adv(); return { type: 'LIST_TABLES' }; }
+    if (this.peekKw('PROGRAMS') || this.peekKw('PROGS')) { this.adv(); return { type: 'LIST_PROGRAMS' }; }
     return { type: 'LIST' };
   }
 
@@ -187,6 +192,9 @@ export class Parser {
 
   private parseDo(): ASTNode {
     this.adv();
+    if (!this.peekKw('WHILE')) {
+      return { type: 'DO_PRG', name: this.ident() };
+    }
     this.expectKw('WHILE');
     const cond = this.expr();
     this.skipNlSemi();

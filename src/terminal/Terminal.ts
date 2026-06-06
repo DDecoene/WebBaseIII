@@ -1,6 +1,7 @@
 import { WsClient } from '../ws/WsClient';
 import { Grid } from '../ui/Grid';
 import { FormLayout } from '../ui/FormLayout';
+import { ProgramEditor } from '../ui/ProgramEditor';
 import type { OutputLine, FormField } from '../shared/types';
 
 const HISTORY_LIMIT = 200;
@@ -18,6 +19,7 @@ export class Terminal {
   private termView: HTMLElement;
   private gridView: HTMLElement;
   private formView: HTMLElement;
+  private editorView: HTMLElement;
 
   private ws: WsClient;
   private history: string[] = [];
@@ -26,6 +28,7 @@ export class Terminal {
   private blockDepth = 0;
   private grid: Grid | null = null;
   private form: FormLayout | null = null;
+  private editor: ProgramEditor | null = null;
 
   constructor(ws: WsClient) {
     this.ws = ws;
@@ -39,6 +42,7 @@ export class Terminal {
     this.termView    = document.getElementById('terminal-view')!;
     this.gridView    = document.getElementById('grid-view')!;
     this.formView    = document.getElementById('form-view')!;
+    this.editorView  = document.getElementById('editor-view')!;
 
     ws.on('output', (msg) => {
       (msg as any).lines.forEach((l: OutputLine) => this.printLine(l.text, l.cls));
@@ -67,6 +71,11 @@ export class Terminal {
 
     ws.on('view-terminal', () => {
       this.showTerminal();
+    });
+
+    ws.on('program-open', (msg) => {
+      const m = msg as any;
+      this.openEditor(m.name, m.content);
     });
 
     ws.on('error', (msg) => {
@@ -216,10 +225,23 @@ export class Terminal {
     this.showTerminal();
   }
 
+  private openEditor(name: string, content: string) {
+    if (!this.editor) {
+      this.editor = new ProgramEditor(this.ws, () => {
+        this.editor = null;
+        this.showTerminal();
+      });
+    }
+    this.termView.classList.add('hidden');
+    this.editorView.classList.remove('hidden');
+    this.editor.open(name, content);
+  }
+
   showTerminal() {
     this.termView.classList.remove('hidden');
     this.gridView.classList.add('hidden');
     this.formView.classList.add('hidden');
+    this.editorView.classList.add('hidden');
     this.input.focus();
   }
 

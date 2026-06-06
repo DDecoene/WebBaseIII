@@ -5,8 +5,9 @@ export type { OutputLine, FormField } from '../shared/types';
 
 export interface ExecResult {
   output: OutputLine[];
-  action?: 'BROWSE' | 'CLEAR' | 'QUIT' | 'FORM_READY' | 'FORM_SUBMIT';
+  action?: 'BROWSE' | 'CLEAR' | 'QUIT' | 'FORM_READY' | 'FORM_SUBMIT' | 'DO_PRG' | 'EDIT_PRG' | 'LIST_PROGRAMS';
   formFields?: FormField[];
+  prgName?: string;
 }
 
 export interface State {
@@ -90,6 +91,9 @@ export class Executor {
         case 'DO_WHILE':    return this.doWhile(node.cond, node.body);
         case 'CREATE_TABLE':return this.doCreateTable(node.name, node.cols);
         case 'DROP_TABLE':  return this.doDropTable(node.name);
+        case 'DO_PRG':      return { output: [], action: 'DO_PRG', prgName: node.name };
+        case 'LIST_PROGRAMS': return { output: [], action: 'LIST_PROGRAMS' };
+        case 'EDIT_PRG':    return { output: [], action: 'EDIT_PRG', prgName: node.name };
         case 'UNKNOWN':     return { output: [{ text: `Unknown command: ${node.raw}`, cls: 'warn' }] };
       }
     } catch (e: unknown) {

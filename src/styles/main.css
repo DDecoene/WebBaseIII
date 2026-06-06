@@ -205,3 +205,23 @@ html, body {
   padding: 1px 5px; outline: none; min-width: 120px;
 }
 .f-get:focus { border-color: #0088ff; background: #001c35; }
+
+/* ── Program Editor ─────────────────────────────────────────────────────── */
+#editor-view {
+  flex: 1; display: flex; flex-direction: column;
+  background: var(--bg); overflow: hidden;
+}
+#editor-toolbar {
+  flex-shrink: 0; display: flex; justify-content: space-between; align-items: center;
+  padding: 4px 14px; font-size: 11px; color: #44aa44;
+  background: #060606; border-bottom: 1px solid #003300;
+}
+#editor-filename { color: var(--fg-bright); font-weight: bold; }
+.editor-keys { color: #446644; }
+#editor-textarea {
+  flex: 1; resize: none; border: none; outline: none;
+  background: #010d01; color: var(--fg);
+  font-family: var(--font); font-size: var(--font-size);
+  padding: 12px 16px; tab-size: 2;
+}
+#editor-textarea::selection { background: #004400; }

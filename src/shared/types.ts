@@ -46,7 +46,8 @@ export type ClientMessage =
   | { type: 'grid-delete'; rowid: number }
   | { type: 'grid-new-row' }
   | { type: 'grid-refresh' }
-  | { type: 'grid-exit' };
+  | { type: 'grid-exit' }
+  | { type: 'save-program'; name: string; content: string };
 
 // Server → Client
 export type ServerMessage =
@@ -55,6 +56,7 @@ export type ServerMessage =
   | { type: 'input-request'; prompt: string }
   | { type: 'grid-open'; table: string; filter: string | null; columns: ColInfo[]; rows: Record<string, unknown>[] }
   | { type: 'form-open'; fields: FormField[] }
+  | { type: 'program-open'; name: string; content: string }
   | { type: 'view-terminal' }
   | { type: 'clear' }
   | { type: 'error'; message: string };
