@@ -30,7 +30,8 @@ export class Session {
             }
             const cont = this.pendingContinuation;
             this.pendingContinuation = null;
-            await this.handleExecResult(await cont());
+            const done = await this.handleExecResult(await cont());
+            if (!done) this.sendStatus();
           }
           break;
 
@@ -91,7 +92,7 @@ export class Session {
           break;
 
         case 'save-program': {
-          const safeName = msg.name.replace(/[^a-zA-Z0-9_-]/g, '');
+          const safeName = msg.name.replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase();
           if (!safeName) break;
           programStore.save(safeName, msg.content);
           this.send({ type: 'output', lines: [{ text: `Saved: ${safeName}.prg`, cls: 'ok' }] });
@@ -119,11 +120,39 @@ export class Session {
 
   private async executeNodes(nodes: ASTNode[]): Promise<void> {
     for (let i = 0; i < nodes.length; i++) {
-      const result = await this.executor.exec(nodes[i]);
+      let result = await this.executor.exec(nodes[i]);
+
+      // Thread remaining top-level nodes into FORM_READY/BROWSE continuations
+      // so nodes after a DO WHILE (e.g. a trailing LIST) still execute after the loop finishes.
+      if ((result.action === 'FORM_READY' || result.action === 'BROWSE') && i + 1 < nodes.length) {
+        const remaining = nodes.slice(i + 1);
+        const innerCont = result.continuation;
+        result = {
+          ...result,
+          continuation: () => this.drainAndContinue(innerCont, remaining),
+        };
+      }
+
       const done = await this.handleExecResult(result);
       if (done) return;
     }
     this.sendStatus();
+  }
+
+  // Drains innerCont (threading FORM_READY/BROWSE through), then runs remaining top-level nodes.
+  private async drainAndContinue(
+    innerCont: (() => Promise<import('../src/interpreter/Executor.js').ExecResult>) | undefined,
+    remaining: ASTNode[],
+  ): Promise<import('../src/interpreter/Executor.js').ExecResult> {
+    if (innerCont) {
+      const r = await innerCont();
+      if (r.action === 'FORM_READY' || r.action === 'BROWSE') {
+        return { ...r, continuation: () => this.drainAndContinue(r.continuation, remaining) };
+      }
+      if (r.action === 'QUIT') return r;
+    }
+    await this.executeNodes(remaining);
+    return { output: [] };
   }
 
   /** Handles a single ExecResult. Returns true if execution should stop. */
@@ -157,7 +186,7 @@ export class Session {
     }
 
     if (result.action === 'DO_PRG' && result.prgName) {
-      const safeName = result.prgName.replace(/[^a-zA-Z0-9_-]/g, '');
+      const safeName = result.prgName.replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase();
       const src = programStore.load(safeName);
       if (src === null) {
         this.send({ type: 'output', lines: [{ text: `Program not found: ${safeName}`, cls: 'error' }] });
@@ -178,7 +207,7 @@ export class Session {
     }
 
     if (result.action === 'EDIT_PRG' && result.prgName) {
-      const safeName = result.prgName.replace(/[^a-zA-Z0-9_-]/g, '');
+      const safeName = result.prgName.replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase();
       const content = programStore.load(safeName) ?? '';
       this.send({ type: 'program-open', name: safeName, content });
       return true;

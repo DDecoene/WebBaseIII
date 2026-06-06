@@ -5,12 +5,12 @@ import fs from 'fs';
 const DATA_DIR = path.join(process.cwd(), 'data');
 const DB_PATH  = path.join(DATA_DIR, 'system.sqlite3');
 
-class ProgramStore {
+export class ProgramStore {
   private db: Database.Database;
 
-  constructor() {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-    this.db = new Database(DB_PATH);
+  constructor(dbPath = DB_PATH) {
+    fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+    this.db = new Database(dbPath);
     this.db.pragma('journal_mode = WAL');
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS programs (

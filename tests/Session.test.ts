@@ -95,6 +95,142 @@ describe('Session', () => {
     expect(vtMsg).toBeDefined();
   });
 
+  it('DO runs a saved program', async () => {
+    const { session, sent } = makeSession();
+    const db = uniqueDb();
+    await session.handleMessage({ type: 'save-program', name: 'test_do_prog', content: `USE DATABASE ${db}\nCREATE TABLE do_tbl (val TEXT)\nUSE do_tbl\nAPPEND RECORD\nREPLACE val WITH "from_prog"\nLIST` });
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: 'DO test_do_prog' });
+    const allText = sent
+      .filter(m => m.type === 'output')
+      .flatMap((m: any) => m.lines.map((l: any) => l.text))
+      .join(' ');
+    expect(allText).toContain('from_prog');
+  });
+
+  it('DO reports error for missing program', async () => {
+    const { session, sent } = makeSession();
+    await session.handleMessage({ type: 'command', text: 'DO nosuchprog' });
+    const outputMsg = sent.find(m => m.type === 'output') as any;
+    const hasError = outputMsg?.lines?.some((l: any) => l.cls === 'error');
+    expect(hasError).toBe(true);
+  });
+
+  it('LIST PROGRAMS shows saved programs', async () => {
+    const { session, sent } = makeSession();
+    await session.handleMessage({ type: 'save-program', name: 'test_list_prog', content: 'LIST\n' });
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: 'LIST PROGRAMS' });
+    const outputMsg = sent.find(m => m.type === 'output') as any;
+    const text = outputMsg?.lines?.map((l: any) => l.text).join(' ') ?? '';
+    expect(text).toContain('test_list_prog');
+  });
+
+  it('EDIT sends program-open with existing content', async () => {
+    const { session, sent } = makeSession();
+    await session.handleMessage({ type: 'save-program', name: 'test_edit_prog', content: 'LIST TABLES\n' });
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: 'EDIT test_edit_prog' });
+    const msg = sent.find(m => m.type === 'program-open') as any;
+    expect(msg).toBeDefined();
+    expect(msg.name).toBe('test_edit_prog');
+    expect(msg.content).toBe('LIST TABLES\n');
+  });
+
+  it('save-program persists and returns to terminal', async () => {
+    const { session, sent } = makeSession();
+    await session.handleMessage({ type: 'save-program', name: 'test_save_prog', content: 'LIST\n' });
+    const okMsg = sent.find(m => m.type === 'output') as any;
+    expect(okMsg?.lines?.[0]?.cls).toBe('ok');
+    const vtMsg = sent.find(m => m.type === 'view-terminal');
+    expect(vtMsg).toBeDefined();
+  });
+
+  it('READ inside DO WHILE resumes loop after form submit', async () => {
+    const { session, sent } = makeSession();
+    const db = uniqueDb();
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    await session.handleMessage({ type: 'command', text: 'CREATE TABLE loop_tbl (val TEXT)' });
+    await session.handleMessage({ type: 'command', text: 'USE loop_tbl' });
+
+    // Program: loop twice, each iteration asks for input then appends
+    const prog = [
+      'STORE 0 TO i',
+      'DO WHILE i < 2',
+      '  STORE "" TO val',
+      '  @ 1,1 SAY "Value:" GET val',
+      '  READ',
+      '  APPEND RECORD',
+      '  REPLACE val WITH val',
+      '  STORE i + 1 TO i',
+      'ENDDO',
+      'LIST',
+    ].join('\n');
+
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: prog });
+
+    // First iteration should pause at READ and send form-open
+    expect(sent.find(m => m.type === 'form-open')).toBeDefined();
+
+    // Submit first value (Lexer uppercases variable names → 'VAL')
+    sent.length = 0;
+    await session.handleMessage({ type: 'form-submit', values: { VAL: 'alpha' } });
+    // Should pause again for second iteration
+    expect(sent.find(m => m.type === 'form-open')).toBeDefined();
+
+    // Submit second value
+    sent.length = 0;
+    await session.handleMessage({ type: 'form-submit', values: { VAL: 'beta' } });
+    // Loop done — LIST output (across all output messages) should contain both values
+    const allText = sent
+      .filter(m => m.type === 'output')
+      .flatMap((m: any) => m.lines.map((l: any) => l.text))
+      .join(' ');
+    expect(allText).toContain('alpha');
+    expect(allText).toContain('beta');
+  });
+
+  it('BROWSE inside DO WHILE resumes loop after grid-exit', async () => {
+    const { session, sent } = makeSession();
+    const db = uniqueDb();
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    await session.handleMessage({ type: 'command', text: 'CREATE TABLE browse_loop_tbl (val TEXT)' });
+    await session.handleMessage({ type: 'command', text: 'USE browse_loop_tbl' });
+
+    const prog = [
+      'STORE "" TO choice',
+      'DO WHILE choice != "Q"',
+      '  @ 1,1 SAY "Choice (B=Browse, Q=Quit):" GET choice',
+      '  READ',
+      '  IF choice == "B"',
+      '    USE browse_loop_tbl',
+      '    BROWSE',
+      '  ENDIF',
+      'ENDDO',
+    ].join('\n');
+
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: prog });
+    expect(sent.find(m => m.type === 'form-open')).toBeDefined();
+
+    // Choose Browse (Lexer uppercases → 'CHOICE')
+    sent.length = 0;
+    await session.handleMessage({ type: 'form-submit', values: { CHOICE: 'B' } });
+    expect(sent.find(m => m.type === 'grid-open')).toBeDefined();
+
+    // Exit grid — loop should resume and show form again
+    sent.length = 0;
+    await session.handleMessage({ type: 'grid-exit' });
+    expect(sent.find(m => m.type === 'view-terminal')).toBeDefined();
+    expect(sent.find(m => m.type === 'form-open')).toBeDefined();
+
+    // Quit the loop
+    sent.length = 0;
+    await session.handleMessage({ type: 'form-submit', values: { CHOICE: 'Q' } });
+    expect(sent.find(m => m.type === 'status')).toBeDefined();
+  });
+
   it('REPLACE ALL with multiple comma-separated fields updates all fields', async () => {
     const { session, sent } = makeSession();
     const db = uniqueDb();
