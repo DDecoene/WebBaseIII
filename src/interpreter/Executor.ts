@@ -358,6 +358,9 @@ export class Executor {
       { text: 'READ                    — show form, collect input' },
       { text: 'IF <cond> … ENDIF       — conditional block' },
       { text: 'DO WHILE <cond> … ENDDO — loop' },
+      { text: 'DO <name>               — run a saved program' },
+      { text: 'EDIT <name>             — create/edit a program' },
+      { text: 'LIST PROGRAMS           — list saved programs' },
       { text: 'QUIT                    — exit' },
     ]};
   }
