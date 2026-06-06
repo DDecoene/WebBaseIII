@@ -9,7 +9,7 @@ import type { ClientMessage, ServerMessage } from '../src/shared/types.js';
 export class Session {
   private bridge: ServerDatabaseBridge;
   private executor: Executor;
-  private pendingNodes: ASTNode[] | null = null;
+  private pendingContinuation: (() => Promise<import('../src/interpreter/Executor.js').ExecResult>) | null = null;
 
   constructor(private send: (msg: ServerMessage) => void) {
     this.bridge = new ServerDatabaseBridge();
@@ -24,13 +24,13 @@ export class Session {
           break;
 
         case 'form-submit':
-          if (this.pendingNodes !== null) {
+          if (this.pendingContinuation !== null) {
             for (const [k, v] of Object.entries(msg.values)) {
               this.executor.setVar(k, v);
             }
-            const remaining = this.pendingNodes;
-            this.pendingNodes = null;
-            await this.executeNodes(remaining);
+            const cont = this.pendingContinuation;
+            this.pendingContinuation = null;
+            await this.handleExecResult(await cont());
           }
           break;
 
@@ -81,7 +81,13 @@ export class Session {
 
         case 'grid-exit':
           this.send({ type: 'view-terminal' });
-          this.sendStatus();
+          if (this.pendingContinuation) {
+            const cont = this.pendingContinuation;
+            this.pendingContinuation = null;
+            await this.handleExecResult(await cont());
+          } else {
+            this.sendStatus();
+          }
           break;
 
         case 'save-program': {
@@ -114,63 +120,71 @@ export class Session {
   private async executeNodes(nodes: ASTNode[]): Promise<void> {
     for (let i = 0; i < nodes.length; i++) {
       const result = await this.executor.exec(nodes[i]);
-
-      if (result.output.length > 0) {
-        this.send({ type: 'output', lines: result.output });
-      }
-
-      if (result.action === 'CLEAR') {
-        this.send({ type: 'clear' });
-        this.sendStatus();
-        return;
-      }
-
-      if (result.action === 'QUIT') {
-        this.send({ type: 'output', lines: [{ text: 'Goodbye.', cls: 'ok' }] });
-        this.sendStatus();
-        return;
-      }
-
-      if (result.action === 'BROWSE') {
-        await this.sendGridData();
-        return;
-      }
-
-      if (result.action === 'FORM_READY' && result.formFields) {
-        this.pendingNodes = nodes.slice(i + 1);
-        this.send({ type: 'form-open', fields: result.formFields });
-        return;
-      }
-
-      if (result.action === 'DO_PRG' && result.prgName) {
-        const safeName = result.prgName.replace(/[^a-zA-Z0-9_-]/g, '');
-        const src = programStore.load(safeName);
-        if (src === null) {
-          this.send({ type: 'output', lines: [{ text: `Program not found: ${safeName}`, cls: 'error' }] });
-        } else {
-          await this.runCommand(src);
-        }
-        continue;
-      }
-
-      if (result.action === 'LIST_PROGRAMS') {
-        const names = programStore.list();
-        if (!names.length) {
-          this.send({ type: 'output', lines: [{ text: '(No programs)', cls: 'info' }] });
-        } else {
-          this.send({ type: 'output', lines: names.map(n => ({ text: n, cls: 'info' })) });
-        }
-        continue;
-      }
-
-      if (result.action === 'EDIT_PRG' && result.prgName) {
-        const safeName = result.prgName.replace(/[^a-zA-Z0-9_-]/g, '');
-        const content = programStore.load(safeName) ?? '';
-        this.send({ type: 'program-open', name: safeName, content });
-        return;
-      }
+      const done = await this.handleExecResult(result);
+      if (done) return;
     }
     this.sendStatus();
+  }
+
+  /** Handles a single ExecResult. Returns true if execution should stop. */
+  private async handleExecResult(result: import('../src/interpreter/Executor.js').ExecResult): Promise<boolean> {
+    if (result.output.length > 0) {
+      this.send({ type: 'output', lines: result.output });
+    }
+
+    if (result.action === 'CLEAR') {
+      this.send({ type: 'clear' });
+      this.sendStatus();
+      return true;
+    }
+
+    if (result.action === 'QUIT') {
+      this.send({ type: 'output', lines: [{ text: 'Goodbye.', cls: 'ok' }] });
+      this.sendStatus();
+      return true;
+    }
+
+    if (result.action === 'BROWSE') {
+      if (result.continuation) this.pendingContinuation = result.continuation;
+      await this.sendGridData();
+      return true;
+    }
+
+    if (result.action === 'FORM_READY' && result.formFields) {
+      this.pendingContinuation = result.continuation ?? null;
+      this.send({ type: 'form-open', fields: result.formFields });
+      return true;
+    }
+
+    if (result.action === 'DO_PRG' && result.prgName) {
+      const safeName = result.prgName.replace(/[^a-zA-Z0-9_-]/g, '');
+      const src = programStore.load(safeName);
+      if (src === null) {
+        this.send({ type: 'output', lines: [{ text: `Program not found: ${safeName}`, cls: 'error' }] });
+      } else {
+        await this.runCommand(src);
+      }
+      return false;
+    }
+
+    if (result.action === 'LIST_PROGRAMS') {
+      const names = programStore.list();
+      if (!names.length) {
+        this.send({ type: 'output', lines: [{ text: '(No programs)', cls: 'info' }] });
+      } else {
+        this.send({ type: 'output', lines: names.map(n => ({ text: n, cls: 'info' })) });
+      }
+      return false;
+    }
+
+    if (result.action === 'EDIT_PRG' && result.prgName) {
+      const safeName = result.prgName.replace(/[^a-zA-Z0-9_-]/g, '');
+      const content = programStore.load(safeName) ?? '';
+      this.send({ type: 'program-open', name: safeName, content });
+      return true;
+    }
+
+    return false;
   }
 
   private async sendGridData(): Promise<void> {

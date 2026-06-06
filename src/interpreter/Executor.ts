@@ -8,6 +8,8 @@ export interface ExecResult {
   action?: 'BROWSE' | 'CLEAR' | 'QUIT' | 'FORM_READY' | 'FORM_SUBMIT' | 'DO_PRG' | 'EDIT_PRG' | 'LIST_PROGRAMS';
   formFields?: FormField[];
   prgName?: string;
+  remainingNodes?: ASTNode[];
+  continuation?: () => Promise<ExecResult>;
 }
 
 export interface State {
@@ -46,19 +48,32 @@ export class Executor {
     const out: OutputLine[] = [];
     let action: ExecResult['action'];
     let formFields: FormField[] | undefined;
+    let continuation: (() => Promise<ExecResult>) | undefined;
 
-    for (const node of nodes) {
-      const r = await this.exec(node);
+    for (let i = 0; i < nodes.length; i++) {
+      const r = await this.exec(nodes[i]);
       out.push(...r.output);
       if (r.action) {
         action = r.action;
         formFields = r.formFields;
-        if (action === 'QUIT') break;
-        if (action === 'CLEAR') { break; }
-        if (action === 'FORM_READY') break;
+        if (action === 'QUIT' || action === 'CLEAR') break;
+        if (action === 'FORM_READY' || action === 'BROWSE') {
+          const afterForm = nodes.slice(i + 1);
+          const innerCont = r.continuation;
+          continuation = async () => {
+            const tail = await this.run(afterForm);
+            if (innerCont && (!tail.action || tail.action === 'FORM_READY' || tail.action === 'BROWSE')) {
+              return { output: [...tail.output], action: tail.action, formFields: tail.formFields, continuation: tail.continuation ?? innerCont };
+            }
+            return tail;
+          };
+          break;
+        }
+        // propagate loop continuations from inner blocks
+        if (r.continuation) continuation = r.continuation;
       }
     }
-    return { output: out, action, formFields };
+    return { output: out, action, formFields, continuation };
   }
 
   async exec(node: ASTNode): Promise<ExecResult> {
@@ -302,16 +317,43 @@ export class Executor {
     return this.run(cond ? body : elseBody);
   }
 
-  private async doWhile(condE: Expr, body: ASTNode[]): Promise<ExecResult> {
+  private async doWhile(condE: Expr, body: ASTNode[], startIter = 0): Promise<ExecResult> {
     const out: OutputLine[] = [];
-    let iters = 0;
+    let iters = startIter;
     while (this.evalExpr(condE) && iters++ < 10000) {
       const r = await this.run(body);
       out.push(...r.output);
       if (r.action === 'QUIT') return { output: out, action: 'QUIT' };
+      if (r.action === 'FORM_READY' || r.action === 'BROWSE') {
+        return {
+          output: out,
+          action: r.action,
+          formFields: r.formFields,
+          continuation: () => this.resumeAndLoop(r.continuation, condE, body, iters),
+        };
+      }
     }
     if (iters >= 10000) out.push({ text: '** DO WHILE limit (10000) reached', cls: 'warn' });
     return { output: out };
+  }
+
+  // Drains the continuation chain from inside a loop, then re-enters the loop.
+  // Threads "re-enter loop" through every level of nested FORM_READY.
+  private async resumeAndLoop(
+    innerCont: (() => Promise<ExecResult>) | undefined,
+    condE: Expr, body: ASTNode[], capturedIter: number,
+  ): Promise<ExecResult> {
+    if (innerCont) {
+      const resume = await innerCont();
+      if (resume.action === 'FORM_READY' || resume.action === 'BROWSE') {
+        return {
+          ...resume,
+          continuation: () => this.resumeAndLoop(resume.continuation, condE, body, capturedIter),
+        };
+      }
+      if (resume.action === 'QUIT') return resume;
+    }
+    return this.doWhile(condE, body, capturedIter);
   }
 
   private async doCreateTable(name: string, cols: ColDef[]): Promise<ExecResult> {
