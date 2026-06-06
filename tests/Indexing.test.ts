@@ -1,5 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { IndexStore } from '../server/IndexStore';
+import { Lexer } from '../src/interpreter/Lexer';
+import { Parser } from '../src/interpreter/Parser';
 import fs from 'fs';
 import path from 'path';
 
@@ -59,5 +61,51 @@ describe('IndexStore', () => {
   it('setActive throws when tag does not exist', () => {
     const store = new IndexStore(tmpPath());
     expect(() => store.setActive('customers', 'ghost')).toThrow("Index 'ghost' not found on table 'customers'");
+  });
+});
+
+describe('Parser: index commands', () => {
+  function parse(src: string) {
+    return new Parser(new Lexer(src).tokenize()).parse();
+  }
+
+  it('parses INDEX ON field TO tag', () => {
+    const nodes = parse('INDEX ON lastname TO byname');
+    expect(nodes[0]).toEqual({ type: 'INDEX_ON', expression: 'LASTNAME', tag: 'BYNAME' });
+  });
+
+  it('parses INDEX ON expression TO tag', () => {
+    const nodes = parse('INDEX ON lastname+firstname TO full');
+    expect(nodes[0]).toEqual({ type: 'INDEX_ON', expression: 'LASTNAME+FIRSTNAME', tag: 'FULL' });
+  });
+
+  it('parses SET INDEX TO tag', () => {
+    const nodes = parse('SET INDEX TO byname');
+    expect(nodes[0]).toEqual({ type: 'SET_INDEX', tag: 'BYNAME' });
+  });
+
+  it('parses SET INDEX TO (clear)', () => {
+    const nodes = parse('SET INDEX TO');
+    expect(nodes[0]).toEqual({ type: 'SET_INDEX', tag: null });
+  });
+
+  it('parses REINDEX', () => {
+    const nodes = parse('REINDEX');
+    expect(nodes[0]).toEqual({ type: 'REINDEX' });
+  });
+
+  it('parses LIST INDEXES', () => {
+    const nodes = parse('LIST INDEXES');
+    expect(nodes[0]).toEqual({ type: 'LIST_INDEXES' });
+  });
+
+  it('parses SEEK value', () => {
+    const nodes = parse('SEEK "Smith"');
+    expect(nodes[0]).toMatchObject({ type: 'SEEK' });
+  });
+
+  it('parses FIND string', () => {
+    const nodes = parse('FIND Smith');
+    expect(nodes[0]).toMatchObject({ type: 'FIND', value: 'SMITH' });
   });
 });

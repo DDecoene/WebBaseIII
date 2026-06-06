@@ -32,6 +32,12 @@ export type ASTNode =
   | { type: 'DO_PRG';      name: string }
   | { type: 'LIST_PROGRAMS' }
   | { type: 'EDIT_PRG';    name: string }
+  | { type: 'INDEX_ON';    expression: string; tag: string }
+  | { type: 'SET_INDEX';   tag: string | null }
+  | { type: 'REINDEX' }
+  | { type: 'LIST_INDEXES' }
+  | { type: 'SEEK';        value: Expr }
+  | { type: 'FIND';        value: string }
   | { type: 'UNKNOWN';     raw: string };
 
 export interface ColDef { name: string; colType: string; size?: number; }
@@ -98,6 +104,10 @@ export class Parser {
       case 'CREATE':   return this.parseCreate();
       case 'DROP':     return this.parseDrop();
       case 'EDIT':     { this.adv(); return { type: 'EDIT_PRG', name: this.ident() }; }
+      case 'INDEX':    return this.parseIndexOn();
+      case 'REINDEX':  this.adv(); return { type: 'REINDEX' };
+      case 'SEEK':     this.adv(); return { type: 'SEEK', value: this.expr() };
+      case 'FIND':     { this.adv(); const val = this.peek().val; this.adv(); return { type: 'FIND', value: val }; }
       default: {
         const raw = t.val; this.adv(); this.skipLine();
         return { type: 'UNKNOWN', raw };
@@ -119,11 +129,20 @@ export class Parser {
     if (this.peekKw('STRUCTURE') || this.peekKw('STRUCT')) { this.adv(); return { type: 'LIST_STRUCT' }; }
     if (this.peekKw('TABLES')) { this.adv(); return { type: 'LIST_TABLES' }; }
     if (this.peekKw('PROGRAMS') || this.peekKw('PROGS')) { this.adv(); return { type: 'LIST_PROGRAMS' }; }
+    if (this.peekKw('INDEXES') || this.peekKw('INDEX')) { this.adv(); return { type: 'LIST_INDEXES' }; }
     return { type: 'LIST' };
   }
 
   private parseSet(): ASTNode {
     this.adv();
+    if (this.peekKw('INDEX')) {
+      this.adv();
+      this.expectKw('TO');
+      const tag = (!this.end() && this.peek().type !== 'NL' && this.peek().type !== 'EOF' && this.peek().type !== 'SEMI')
+        ? (this.adv(), this.prev().val)
+        : null;
+      return { type: 'SET_INDEX', tag };
+    }
     this.expectKw('FILTER');
     this.expectKw('TO');
     // rest of line is the filter expression (raw SQL-compatible)
@@ -135,6 +154,20 @@ export class Parser {
       this.adv();
     }
     return { type: 'SET_FILTER', expr: parts.length ? parts.join(' ') : null };
+  }
+
+  private parseIndexOn(): ASTNode {
+    this.adv(); // INDEX
+    this.expectKw('ON');
+    // Collect expression tokens until TO keyword
+    const parts: string[] = [];
+    while (!this.end() && !this.peekKw('TO') && this.peek().type !== 'NL' && this.peek().type !== 'EOF') {
+      parts.push(this.peek().val);
+      this.adv();
+    }
+    this.expectKw('TO');
+    const tag = this.ident();
+    return { type: 'INDEX_ON', expression: parts.join(''), tag };
   }
 
   private parseReplace(): ASTNode {

@@ -13,6 +13,7 @@ const KWS = new Set([
   'COUNT','LOCATE','CONTINUE','QUIT','FIELDS','HELP',
   'AND','OR','NOT','TRUE','FALSE','CREATE','TABLE','DROP','INDEX','ON',
   'INPUT','ACCEPT','DISPLAY','DATABASE','FOR','NEXT',
+  'SEEK','FIND','REINDEX','INDEXES',
 ]);
 
 export class Lexer {
