@@ -1,4 +1,4 @@
-import { FormField } from '../interpreter/Executor';
+import type { FormField } from '../shared/types';
 
 // Character-cell dimensions (must match CSS --char-w / --char-h)
 const CW = 8.4;
