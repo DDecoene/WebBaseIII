@@ -7,3 +7,4 @@ data/*.sqlite3-wal
 .DS_Store
 webbase-screenshot.png
 .playwright-mcp/
+.superpowers/
