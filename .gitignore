@@ -2,6 +2,8 @@ node_modules/
 dist/
 dist-server/
 data/*.sqlite3
+data/*.sqlite3-shm
+data/*.sqlite3-wal
 .DS_Store
 webbase-screenshot.png
 .playwright-mcp/
