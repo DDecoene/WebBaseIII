@@ -14,7 +14,7 @@ export type ASTNode =
   | { type: 'HELP' }
   | { type: 'PACK' }
   | { type: 'SET_FILTER';  expr: string | null }
-  | { type: 'REPLACE_ALL'; field: string; value: Expr; scope: 'ALL' | 'CURRENT' }
+  | { type: 'REPLACE_ALL'; fields: Array<{ field: string; value: Expr }>; scope: 'ALL' | 'CURRENT' }
   | { type: 'APPEND' }
   | { type: 'DELETE';      scope: 'CURRENT' | 'ALL' }
   | { type: 'RECALL';      scope: 'CURRENT' | 'ALL' }
@@ -132,10 +132,13 @@ export class Parser {
   private parseReplace(): ASTNode {
     this.adv();
     const scope = this.peekKw('ALL') ? (this.adv(), 'ALL' as const) : 'CURRENT' as const;
-    const field = this.ident();
-    this.expectKw('WITH');
-    const value = this.expr();
-    return { type: 'REPLACE_ALL', field, value, scope };
+    const fields: Array<{ field: string; value: Expr }> = [];
+    do {
+      const field = this.ident();
+      this.expectKw('WITH');
+      fields.push({ field, value: this.expr() });
+    } while (this.peek().type === 'COMMA' && (this.adv(), true));
+    return { type: 'REPLACE_ALL', fields, scope };
   }
 
   private parseGo(): ASTNode {

@@ -62,4 +62,26 @@ describe('Session', () => {
     const vtMsg = sent.find(m => m.type === 'view-terminal');
     expect(vtMsg).toBeDefined();
   });
+
+  it('REPLACE ALL with multiple comma-separated fields updates all fields', async () => {
+    const { session, sent } = makeSession();
+    await session.handleMessage({ type: 'command', text: 'CREATE TABLE test_replace (name TEXT, value INTEGER, city TEXT)' });
+    await session.handleMessage({ type: 'command', text: 'USE test_replace' });
+    await session.handleMessage({ type: 'command', text: 'APPEND RECORD' });
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: 'REPLACE ALL name WITH "Acme Corp", value WITH 42, city WITH "Brussels"' });
+    const outputMsg = sent.find(m => m.type === 'output') as any;
+    expect(outputMsg).toBeDefined();
+    // Should NOT produce an "Unknown command" line
+    const hasUnknown = outputMsg?.lines?.some((l: any) => l.text?.includes('Unknown command'));
+    expect(hasUnknown).toBe(false);
+    // Verify data was actually written
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: 'LIST' });
+    const listMsg = sent.find(m => m.type === 'output') as any;
+    const listText = listMsg?.lines?.map((l: any) => l.text).join(' ') ?? '';
+    expect(listText).toContain('Acme Corp');
+    expect(listText).toContain('42');
+    expect(listText).toContain('Brussels');
+  });
 });

@@ -74,7 +74,7 @@ export class Executor {
         case 'QUIT':        return { output: [], action: 'QUIT' };
         case 'HELP':        return this.doHelp();
         case 'SET_FILTER':  return this.doSetFilter(node.expr);
-        case 'REPLACE_ALL': return this.doReplaceAll(node.field, node.value, node.scope);
+        case 'REPLACE_ALL': return this.doReplaceAll(node.fields, node.scope);
         case 'APPEND':      return this.doAppend();
         case 'DELETE':      return this.doDelete(node.scope);
         case 'RECALL':      return this.doRecall(node.scope);
@@ -185,18 +185,21 @@ export class Executor {
     return { output: [{ text: expr ? `Filter set: ${expr}` : 'Filter cleared', cls: 'ok' }] };
   }
 
-  private async doReplaceAll(field: string, valueExpr: Expr, scope: 'ALL' | 'CURRENT'): Promise<ExecResult> {
+  private async doReplaceAll(fields: Array<{ field: string; value: Expr }>, scope: 'ALL' | 'CURRENT'): Promise<ExecResult> {
     this.requireTable();
-    const value = this.evalExpr(valueExpr);
+    const pairs = fields.map(f => ({ field: f.field, value: this.evalExpr(f.value) }));
+    const setClauses = pairs.map(p => `${q(p.field)} = ?`).join(', ');
+    const params = pairs.map(p => p.value);
     let sql: string;
     if (scope === 'ALL') {
       const where = this.state.filter ? ` WHERE ${this.state.filter}` : '';
-      sql = `UPDATE ${q(this.state.table!)} SET ${q(field)} = ?${where}`;
+      sql = `UPDATE ${q(this.state.table!)} SET ${setClauses}${where}`;
     } else {
-      sql = `UPDATE ${q(this.state.table!)} SET ${q(field)} = ? WHERE rowid = (SELECT rowid FROM ${q(this.state.table!)} LIMIT 1 OFFSET ${this.state.rowPtr - 1})`;
+      sql = `UPDATE ${q(this.state.table!)} SET ${setClauses} WHERE rowid = (SELECT rowid FROM ${q(this.state.table!)} LIMIT 1 OFFSET ${this.state.rowPtr - 1})`;
     }
-    await this.db.exec(sql, [value]);
-    return { output: [{ text: `Replaced ${field} with ${JSON.stringify(value)} (${scope})`, cls: 'ok' }] };
+    await this.db.exec(sql, params);
+    const desc = pairs.map(p => `${p.field} = ${JSON.stringify(p.value)}`).join(', ');
+    return { output: [{ text: `Replaced: ${desc} (${scope})`, cls: 'ok' }] };
   }
 
   private async doAppend(): Promise<ExecResult> {
