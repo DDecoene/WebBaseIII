@@ -1,9 +1,12 @@
-import { DatabaseBridge } from '../db/DatabaseBridge';
+import type { WsClient } from '../ws/WsClient';
+import type { ColInfo } from '../shared/types';
 
 export interface GridOptions {
   table: string;
   filter: string | null;
-  db: DatabaseBridge;
+  columns: ColInfo[];
+  rows: Record<string, unknown>[];
+  ws: WsClient;
   onExit: () => void;
   onStatusChange: (msg: string) => void;
 }
@@ -13,7 +16,7 @@ interface Row { _rowid: number; [key: string]: unknown; }
 export class Grid {
   private table: string;
   private filter: string | null;
-  private db: DatabaseBridge;
+  private ws: WsClient;
   private onExit: () => void;
   private onStatus: (m: string) => void;
 
@@ -33,9 +36,14 @@ export class Grid {
   constructor(opts: GridOptions) {
     this.table = opts.table;
     this.filter = opts.filter;
-    this.db = opts.db;
+    this.ws = opts.ws;
     this.onExit = opts.onExit;
     this.onStatus = opts.onStatusChange;
+
+    this.rows = opts.rows as Row[];
+    this.cols = this.rows.length > 0
+      ? Object.keys(this.rows[0]).filter(c => c !== '_rowid')
+      : opts.columns.map(c => c.name);
 
     this.container = document.getElementById('grid-scroll-container')!;
     this.thead = document.getElementById('grid-thead')!;
@@ -45,26 +53,26 @@ export class Grid {
     this.boundKey = this.handleKey.bind(this);
   }
 
-  async mount() {
-    await this.loadData();
+  mount() {
     this.render();
     document.addEventListener('keydown', this.boundKey, true);
+
+    this.ws.on('grid-open', (msg) => {
+      const m = msg as any;
+      this.rows = m.rows as Row[];
+      this.cols = this.rows.length > 0
+        ? Object.keys(this.rows[0]).filter((c: string) => c !== '_rowid')
+        : m.columns.map((c: ColInfo) => c.name);
+      this.selRow = Math.min(this.selRow, Math.max(0, this.rows.length - 1));
+      this.render();
+    });
+
     this.container.focus();
     this.scrollIntoView();
   }
 
   unmount() {
     document.removeEventListener('keydown', this.boundKey, true);
-  }
-
-  private async loadData() {
-    const where = this.filter ? ` WHERE ${this.filter}` : '';
-    const sql = `SELECT rowid as _rowid, * FROM "${this.table}"${where} LIMIT 2000`;
-    const raw = await this.db.query(sql);
-    this.rows = raw as Row[];
-    this.cols = this.rows.length > 0
-      ? Object.keys(this.rows[0]).filter(c => c !== '_rowid')
-      : (await this.db.getStructure(this.table)).map(c => c.name);
   }
 
   private render() {
@@ -153,10 +161,10 @@ export class Grid {
     inp.focus(); inp.select();
     this.editingCell = { r: ri, c: ci };
 
-    inp.addEventListener('keydown', async (e) => {
+    inp.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === 'Tab') {
         e.preventDefault(); e.stopPropagation();
-        await this.commitEdit(inp.value);
+        this.commitEdit(inp.value);
         if (e.key === 'Tab') this.selectCell(ri, ci + 2);
       } else if (e.key === 'Escape') {
         e.preventDefault(); e.stopPropagation();
@@ -165,17 +173,12 @@ export class Grid {
     });
   }
 
-  private async commitEdit(val: string) {
+  private commitEdit(newValue: string) {
     if (!this.editingCell) return;
     const { r, c } = this.editingCell;
-    const colName = this.cols[c];
-    const rowid = this.rows[r]._rowid;
-    try {
-      await this.db.exec(`UPDATE "${this.table}" SET "${colName}" = ? WHERE rowid = ?`, [val, rowid]);
-      this.rows[r][colName] = val;
-    } catch (e: unknown) {
-      this.onStatus(`Error: ${e instanceof Error ? e.message : String(e)}`);
-    }
+    const row = this.rows[r];
+    this.ws.send({ type: 'grid-edit', rowid: row._rowid as number, col: this.cols[c], value: newValue });
+    row[this.cols[c]] = newValue;
     this.editingCell = null;
     this.renderBody();
     this.refreshSelection();
@@ -187,38 +190,29 @@ export class Grid {
     this.refreshSelection();
   }
 
-  private async newRow() {
-    const colDefs = await this.db.getStructure(this.table);
-    const fields = colDefs.filter(c => !c.pk).map(c => `"${c.name}"`).join(', ');
-    const vals = colDefs.filter(c => !c.pk).map(() => 'NULL').join(', ');
-    if (fields) {
-      await this.db.exec(`INSERT INTO "${this.table}" (${fields}) VALUES (${vals})`);
-    } else {
-      await this.db.exec(`INSERT INTO "${this.table}" DEFAULT VALUES`);
-    }
-    await this.loadData();
-    this.selRow = this.rows.length - 1;
-    this.renderBody();
-    this.refreshSelection();
-    this.scrollIntoView();
+  private newRow() {
+    this.ws.send({ type: 'grid-new-row' });
   }
 
-  private async deleteRow() {
-    if (!this.rows.length) return;
-    const rowid = this.rows[this.selRow]._rowid;
-    await this.db.exec(`DELETE FROM "${this.table}" WHERE rowid = ?`, [rowid]);
-    await this.loadData();
-    this.selRow = Math.min(this.selRow, this.rows.length - 1);
-    this.renderBody();
-    this.refreshSelection();
+  private deleteRow() {
+    const row = this.rows[this.selRow];
+    if (!row) return;
+    this.ws.send({ type: 'grid-delete', rowid: row._rowid as number });
   }
 
   private handleKey(e: KeyboardEvent) {
     if (this.editingCell) return;
 
     switch (e.key) {
-      case 'Escape': e.preventDefault(); this.onExit(); break;
-      case 'F5':     e.preventDefault(); this.loadData().then(() => this.render()); break;
+      case 'Escape':
+        e.preventDefault();
+        this.ws.send({ type: 'grid-exit' });
+        this.onExit();
+        break;
+      case 'F5':
+        e.preventDefault();
+        this.ws.send({ type: 'grid-refresh' });
+        break;
       case 'ArrowDown':
         e.preventDefault();
         this.selectCell(this.selRow + 1, this.selCol);
