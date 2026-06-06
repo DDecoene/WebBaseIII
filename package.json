@@ -20,8 +20,7 @@
     "vitest": "^4.1.8"
   },
   "dependencies": {
-    "@sqlite.org/sqlite-wasm": "^3.46.1-build1",
-    "better-sqlite3": "^12.10.0",
+"better-sqlite3": "^12.10.0",
     "ws": "^8.21.0"
   }
 }
