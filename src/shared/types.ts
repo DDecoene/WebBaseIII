@@ -35,6 +35,19 @@ export interface IDatabaseBridge {
   tableExists(name: string): Promise<boolean>;
 }
 
+export interface IndexDef {
+  tag: string;
+  expression: string;
+}
+
+export interface IIndexStore {
+  saveIndex(tableName: string, tag: string, expression: string): void;
+  listIndexes(tableName: string): IndexDef[];
+  getActive(tableName: string): IndexDef | null;
+  setActive(tableName: string, tag: string): void;
+  clearActive(tableName: string): void;
+}
+
 // ── WebSocket message types ────────────────────────────────────────────────
 
 // Client → Server
