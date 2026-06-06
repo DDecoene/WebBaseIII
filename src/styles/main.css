@@ -1,0 +1,207 @@
+:root {
+  --bg: #0a0a0a;
+  --fg: #00cc00;
+  --fg-bright: #00ff00;
+  --fg-dim: #006600;
+  --prompt-color: #ffff00;
+  --error-color: #ff4444;
+  --warn-color: #ffaa00;
+  --info-color: #00aaff;
+  --status-bg: #002200;
+  --status-fg: #00cc00;
+  --grid-bg: #000011;
+  --grid-header-bg: #001133;
+  --grid-header-fg: #88aaff;
+  --grid-row-bg: #050510;
+  --grid-row-alt-bg: #08081a;
+  --grid-selected-bg: #003355;
+  --grid-selected-fg: #ffffff;
+  --grid-border: #1a2a3a;
+  --font: 'Courier New', Courier, monospace;
+  --font-size: 14px;
+  --char-w: 8.4px;
+  --char-h: 21px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font);
+  font-size: var(--font-size);
+}
+
+#app {
+  width: 100%; height: 100%;
+  display: flex; flex-direction: column;
+}
+
+.hidden { display: none !important; }
+
+/* ── STATUS BAR ── */
+#status-bar {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--status-bg);
+  color: var(--status-fg);
+  padding: 2px 10px;
+  font-size: 12px;
+  border-bottom: 1px solid #004400;
+  white-space: nowrap;
+  gap: 8px;
+  min-height: 22px;
+}
+#status-left  { display: flex; gap: 14px; }
+#status-right { display: flex; gap: 14px; align-items: center; }
+#status-center { font-weight: bold; color: #aaffaa; letter-spacing: 1px; }
+#status-db, #status-table { color: #77bb77; }
+#status-record { color: #88aaff; font-size: 11px; }
+#status-version { color: #446644; font-size: 11px; }
+
+/* ── TERMINAL VIEW ── */
+#terminal-view {
+  flex: 1; display: flex; flex-direction: column; overflow: hidden;
+}
+
+#terminal-output {
+  flex: 1; overflow-y: auto;
+  padding: 8px 14px; line-height: 1.6;
+  white-space: pre-wrap; word-break: break-all;
+}
+#terminal-output::-webkit-scrollbar { width: 8px; }
+#terminal-output::-webkit-scrollbar-track { background: #050505; }
+#terminal-output::-webkit-scrollbar-thumb { background: #003300; border-radius: 2px; }
+
+.t-line { display: block; }
+.t-line.out     { color: var(--fg); }
+.t-line.echo    { color: var(--fg-dim); }
+.t-line.error   { color: var(--error-color); }
+.t-line.warn    { color: var(--warn-color); }
+.t-line.info    { color: var(--info-color); }
+.t-line.ok      { color: var(--fg-bright); }
+.t-line.hdr     { color: var(--grid-header-fg); font-weight: bold; }
+.t-line.sep     { color: var(--fg-dim); }
+.t-line.blank   { min-height: 1em; }
+
+#terminal-input-line {
+  flex-shrink: 0;
+  display: flex; align-items: center;
+  padding: 5px 14px;
+  border-top: 1px solid #003300;
+  background: #060606;
+}
+#terminal-prompt {
+  color: var(--prompt-color);
+  margin-right: 4px;
+  white-space: nowrap;
+  user-select: none;
+}
+#terminal-input {
+  flex: 1;
+  background: transparent; border: none; outline: none;
+  color: var(--fg-bright);
+  font-family: var(--font); font-size: var(--font-size);
+  caret-color: var(--fg-bright);
+}
+
+/* ── GRID VIEW ── */
+#grid-view {
+  flex: 1; display: flex; flex-direction: column;
+  overflow: hidden; background: var(--grid-bg);
+}
+
+#grid-toolbar {
+  flex-shrink: 0;
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 4px 14px; background: #000022;
+  border-bottom: 1px solid var(--grid-border);
+  font-size: 12px;
+}
+#grid-info  { color: #aabbff; font-weight: bold; }
+.grid-keys  { color: #445566; }
+
+#grid-scroll-container {
+  flex: 1; overflow: auto; position: relative;
+}
+#grid-scroll-container::-webkit-scrollbar { width: 8px; height: 8px; }
+#grid-scroll-container::-webkit-scrollbar-track { background: #000011; }
+#grid-scroll-container::-webkit-scrollbar-thumb { background: #1a2a4a; border-radius: 2px; }
+
+#grid-table { border-collapse: collapse; min-width: 100%; table-layout: auto; }
+
+#grid-table th {
+  background: var(--grid-header-bg); color: var(--grid-header-fg);
+  padding: 5px 10px; text-align: left;
+  border-right: 1px solid var(--grid-border);
+  border-bottom: 2px solid #2a3a5a;
+  font-weight: bold; position: sticky; top: 0; z-index: 10;
+  white-space: nowrap; font-size: 12px; user-select: none;
+  cursor: pointer;
+}
+#grid-table th.rn { width: 52px; text-align: center; color: #445566; cursor: default; }
+
+#grid-table td {
+  padding: 3px 10px;
+  border-right: 1px solid var(--grid-border);
+  border-bottom: 1px solid var(--grid-border);
+  color: var(--fg); white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+  max-width: 280px; font-size: 13px; cursor: default;
+}
+#grid-table td.rn { color: #445566; text-align: right; width: 52px; user-select: none; }
+
+#grid-table tr:nth-child(even) td { background: var(--grid-row-alt-bg); }
+#grid-table tr:nth-child(odd)  td { background: var(--grid-row-bg); }
+
+#grid-table tr.sel td {
+  background: var(--grid-selected-bg) !important;
+  color: var(--grid-selected-fg);
+}
+#grid-table tr.del td {
+  text-decoration: line-through; color: #884444;
+  background: #110000 !important;
+}
+
+#grid-table td.active-cell {
+  outline: 2px solid #4488cc;
+  outline-offset: -2px;
+}
+
+#grid-table td.editing { padding: 0; }
+#grid-table td input.cell-ed {
+  width: 100%; height: 100%; min-height: 25px;
+  padding: 3px 10px;
+  background: #001428; border: 2px solid #0066cc;
+  color: #ffffff; font-family: var(--font); font-size: 13px; outline: none;
+}
+
+/* ── FORM VIEW ── */
+#form-view {
+  flex: 1; display: flex; flex-direction: column;
+  background: var(--bg); overflow: hidden;
+}
+#form-canvas {
+  flex: 1; position: relative; overflow: hidden;
+}
+#form-footer {
+  flex-shrink: 0;
+  padding: 4px 14px; font-size: 11px; color: #446644;
+  background: #060606; border-top: 1px solid #003300;
+}
+.f-say {
+  position: absolute; color: var(--fg-bright);
+  font-family: var(--font); font-size: var(--font-size);
+  white-space: pre; pointer-events: none;
+}
+.f-get {
+  position: absolute;
+  background: #001122; border: 1px solid #004488;
+  color: #ffffff; font-family: var(--font); font-size: var(--font-size);
+  padding: 1px 5px; outline: none; min-width: 120px;
+}
+.f-get:focus { border-color: #0088ff; background: #001c35; }

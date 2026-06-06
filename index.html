@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="WebBase-III: Browser-based dBASE III revival">
+  <title>WebBase-III</title>
+  <link rel="stylesheet" href="/src/styles/main.css">
+</head>
+<body>
+  <div id="app">
+
+    <div id="terminal-view">
+      <div id="status-bar">
+        <span id="status-left">
+          <span id="status-db">[ No DB ]</span>
+          <span id="status-table">[ No Table ]</span>
+        </span>
+        <span id="status-center">WebBase-III</span>
+        <span id="status-right">
+          <span id="status-record"></span>
+          <span id="status-version">v0.1.0</span>
+        </span>
+      </div>
+      <div id="terminal-output"></div>
+      <div id="terminal-input-line">
+        <span id="terminal-prompt">. </span>
+        <input
+          type="text"
+          id="terminal-input"
+          autocomplete="off"
+          autocorrect="off"
+          autocapitalize="off"
+          spellcheck="false"
+        />
+      </div>
+    </div>
+
+    <div id="grid-view" class="hidden">
+      <div id="grid-toolbar">
+        <span id="grid-info"></span>
+        <span class="grid-keys">TAB/Enter: edit &nbsp;|&nbsp; ESC: exit &nbsp;|&nbsp; Ctrl+N: new row &nbsp;|&nbsp; Del: delete row &nbsp;|&nbsp; F5: refresh</span>
+      </div>
+      <div id="grid-scroll-container">
+        <table id="grid-table">
+          <thead id="grid-thead"></thead>
+          <tbody id="grid-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="form-view" class="hidden">
+      <div id="form-canvas"></div>
+      <div id="form-footer">
+        <span>READ mode — press Enter to submit, Esc to cancel</span>
+      </div>
+    </div>
+
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
