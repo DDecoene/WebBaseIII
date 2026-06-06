@@ -6,7 +6,7 @@ import type { OutputLine, FormField } from '../shared/types';
 
 const HISTORY_LIMIT = 200;
 
-const BLOCK_OPENERS: Record<string, string> = { IF: 'ENDIF', 'DO WHILE': 'ENDDO', DO: 'ENDDO' };
+const BLOCK_OPENERS: Record<string, string> = { IF: 'ENDIF', 'DO WHILE': 'ENDDO' };
 const BLOCK_CLOSERS = new Set(['ENDIF', 'ENDDO', 'ELSE']);
 
 export class Terminal {
