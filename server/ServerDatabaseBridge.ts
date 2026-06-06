@@ -24,12 +24,18 @@ export class ServerDatabaseBridge implements IDatabaseBridge {
   private db: Database.Database | null = null;
 
   async openDatabase(dbName: string): Promise<{ dbName: string; opfsAvailable: boolean }> {
+    if (!/^[a-zA-Z0-9_-]+$/.test(dbName)) {
+      throw new Error(`Invalid database name: "${dbName}". Only alphanumeric, underscore, and hyphen allowed.`);
+    }
     this.db = getDb(dbName);
     this.currentDb = dbName;
     return { dbName, opfsAvailable: false };
   }
 
   async closeDatabase(): Promise<void> {
+    if (this.db) {
+      this.db.close();
+    }
     if (this.currentDb) {
       openDbs.delete(this.currentDb);
     }

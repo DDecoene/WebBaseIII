@@ -61,4 +61,9 @@ describe('ServerDatabaseBridge', () => {
   it('throws when exec called with no open database', async () => {
     await expect(bridge.exec('SELECT 1')).rejects.toThrow('No database open');
   });
+
+  it('rejects invalid database names', async () => {
+    await expect(bridge.openDatabase('../evil')).rejects.toThrow('Invalid database name');
+    await expect(bridge.openDatabase('../../etc/passwd')).rejects.toThrow('Invalid database name');
+  });
 });
