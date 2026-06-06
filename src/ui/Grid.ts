@@ -25,6 +25,7 @@ export class Grid {
   private selRow = 0;
   private selCol = 1;
   private editingCell: { r: number; c: number } | null = null;
+  private pendingNewRow = false;
 
   private container: HTMLElement;
   private thead: HTMLElement;
@@ -63,8 +64,16 @@ export class Grid {
       this.cols = this.rows.length > 0
         ? Object.keys(this.rows[0]).filter((c: string) => c !== '_rowid')
         : m.columns.map((c: ColInfo) => c.name);
-      this.selRow = Math.min(this.selRow, Math.max(0, this.rows.length - 1));
-      this.render();
+      if (this.pendingNewRow) {
+        this.pendingNewRow = false;
+        this.selRow = Math.max(0, this.rows.length - 1);
+        this.selCol = 1;
+        this.render();
+        this.startEdit();
+      } else {
+        this.selRow = Math.min(this.selRow, Math.max(0, this.rows.length - 1));
+        this.render();
+      }
     });
 
     this.container.focus();
@@ -191,6 +200,7 @@ export class Grid {
   }
 
   private newRow() {
+    this.pendingNewRow = true;
     this.ws.send({ type: 'grid-new-row' });
   }
 

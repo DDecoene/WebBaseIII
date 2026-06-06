@@ -76,8 +76,14 @@ export class Terminal {
 
   mount() {
     this.input.addEventListener('keydown', this.handleInputKey.bind(this));
-    document.addEventListener('click', () => {
-      if (!this.grid && !this.form) this.input.focus();
+    document.addEventListener('click', (e) => {
+      if (!this.grid && !this.form) {
+        const sel = window.getSelection();
+        if (sel && sel.toString().length > 0) return;
+        const target = e.target as Element;
+        if (target.closest('#terminal-output')) return;
+        this.input.focus();
+      }
     });
     this.input.focus();
     this.printWelcome();
