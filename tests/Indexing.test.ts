@@ -16,7 +16,7 @@ afterEach(() => {
   const dataDir = path.join(process.cwd(), 'data');
   if (fs.existsSync(dataDir)) {
     fs.readdirSync(dataDir)
-      .filter(f => f.startsWith('test_idx_'))
+      .filter(f => (f.startsWith('test_idx_') || f.startsWith('test_idx_sess_')) && f.endsWith('.sqlite3'))
       .forEach(f => fs.unlinkSync(path.join(dataDir, f)));
   }
 });
@@ -127,5 +127,87 @@ function makeSession() {
 function uniqueDb() { return `test_idx_sess_${++sessionCounter}`; }
 
 describe('Session: INDEX ON restores on USE', () => {
-  it.todo('active index is restored when table is re-opened');
+  it('active index is restored when table is re-opened', async () => {
+    const { session, sent } = makeSession();
+    const db = uniqueDb();
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    await session.handleMessage({ type: 'command', text: 'CREATE TABLE contacts (lastname TEXT, firstname TEXT)' });
+    await session.handleMessage({ type: 'command', text: 'USE contacts' });
+    await session.handleMessage({ type: 'command', text: 'INDEX ON LASTNAME TO BYNAME' });
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: 'USE contacts' });
+    const output = sent.find(m => m.type === 'output') as any;
+    expect(output?.lines.some((l: any) => l.text.includes('BYNAME'))).toBe(true);
+  });
+});
+
+describe('Session: INDEX ON and SET INDEX TO', () => {
+  it('INDEX ON creates index and sets it active', async () => {
+    const { session, sent } = makeSession();
+    const db = uniqueDb();
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    await session.handleMessage({ type: 'command', text: 'CREATE TABLE t1 (lastname TEXT, firstname TEXT)' });
+    await session.handleMessage({ type: 'command', text: 'USE t1' });
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: 'INDEX ON LASTNAME TO BYNAME' });
+    const output = sent.find(m => m.type === 'output') as any;
+    expect(output?.lines.some((l: any) => l.text.includes('BYNAME'))).toBe(true);
+    expect(output?.lines.some((l: any) => l.cls === 'ok')).toBe(true);
+  });
+
+  it('LIST INDEXES shows defined indexes with active marker', async () => {
+    const { session, sent } = makeSession();
+    const db = uniqueDb();
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    await session.handleMessage({ type: 'command', text: 'CREATE TABLE t2 (lastname TEXT)' });
+    await session.handleMessage({ type: 'command', text: 'USE t2' });
+    await session.handleMessage({ type: 'command', text: 'INDEX ON LASTNAME TO BYNAME' });
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: 'LIST INDEXES' });
+    const output = sent.find(m => m.type === 'output') as any;
+    expect(output?.lines.some((l: any) => l.text.includes('BYNAME'))).toBe(true);
+    expect(output?.lines.some((l: any) => l.text.includes('LASTNAME'))).toBe(true);
+    expect(output?.lines.some((l: any) => l.text.includes('*'))).toBe(true);
+  });
+
+  it('SET INDEX TO clears active index', async () => {
+    const { session, sent } = makeSession();
+    const db = uniqueDb();
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    await session.handleMessage({ type: 'command', text: 'CREATE TABLE t3 (lastname TEXT)' });
+    await session.handleMessage({ type: 'command', text: 'USE t3' });
+    await session.handleMessage({ type: 'command', text: 'INDEX ON LASTNAME TO BYNAME' });
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: 'SET INDEX TO' });
+    const output = sent.find(m => m.type === 'output') as any;
+    expect(output?.lines.some((l: any) => l.text.toLowerCase().includes('cleared'))).toBe(true);
+  });
+
+  it('SET INDEX TO tag activates an existing index', async () => {
+    const { session, sent } = makeSession();
+    const db = uniqueDb();
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    await session.handleMessage({ type: 'command', text: 'CREATE TABLE t4 (lastname TEXT)' });
+    await session.handleMessage({ type: 'command', text: 'USE t4' });
+    await session.handleMessage({ type: 'command', text: 'INDEX ON LASTNAME TO BYNAME' });
+    await session.handleMessage({ type: 'command', text: 'SET INDEX TO' });
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: 'SET INDEX TO BYNAME' });
+    const output = sent.find(m => m.type === 'output') as any;
+    expect(output?.lines.some((l: any) => l.text.includes('BYNAME'))).toBe(true);
+    expect(output?.lines.some((l: any) => l.cls === 'ok')).toBe(true);
+  });
+
+  it('REINDEX completes without error', async () => {
+    const { session, sent } = makeSession();
+    const db = uniqueDb();
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    await session.handleMessage({ type: 'command', text: 'CREATE TABLE t5 (lastname TEXT)' });
+    await session.handleMessage({ type: 'command', text: 'USE t5' });
+    await session.handleMessage({ type: 'command', text: 'INDEX ON LASTNAME TO BYNAME' });
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: 'REINDEX' });
+    const output = sent.find(m => m.type === 'output') as any;
+    expect(output?.lines.some((l: any) => l.cls === 'ok')).toBe(true);
+  });
 });

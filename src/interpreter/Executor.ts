@@ -393,17 +393,59 @@ export class Executor {
     return { output: [{ text: `Table dropped: ${name}`, cls: 'ok' }] };
   }
 
-  private async doIndexOn(_expression: string, _tag: string): Promise<ExecResult> {
-    return { output: [{ text: 'INDEX ON: not yet implemented', cls: 'warn' }] };
+  private async doIndexOn(expression: string, tag: string): Promise<ExecResult> {
+    this.requireTable();
+    if (!this.indexStore) return { output: [{ text: '** IndexStore not available', cls: 'error' }] };
+    const table = this.state.table!;
+    this.indexStore.saveIndex(table, tag, expression);
+    // For simple single-field: also create a real SQLite index for query performance
+    if (/^[A-Z_][A-Z0-9_]*$/i.test(expression.trim())) {
+      try {
+        await this.db.exec(
+          `CREATE INDEX IF NOT EXISTS ${q(`idx_${table}_${tag}`)} ON ${q(table)} (${q(expression.trim())})`
+        );
+      } catch { /* ignore — expression may not be a valid SQL column ref */ }
+    }
+    this.indexStore.setActive(table, tag);
+    this.state.activeIndex = { tag, expression };
+    return { output: [{ text: `Index created: ${tag}  ON  ${expression}`, cls: 'ok' }] };
   }
-  private async doSetIndex(_tag: string | null): Promise<ExecResult> {
-    return { output: [{ text: 'SET INDEX: not yet implemented', cls: 'warn' }] };
+  private async doSetIndex(tag: string | null): Promise<ExecResult> {
+    this.requireTable();
+    if (!this.indexStore) return { output: [{ text: '** IndexStore not available', cls: 'error' }] };
+    const table = this.state.table!;
+    if (tag === null) {
+      this.indexStore.clearActive(table);
+      this.state.activeIndex = null;
+      return { output: [{ text: 'Active index cleared', cls: 'ok' }] };
+    }
+    const def = this.indexStore.listIndexes(table).find(i => i.tag.toUpperCase() === tag.toUpperCase());
+    if (!def) return { output: [{ text: `Index '${tag}' not found — use INDEX ON to create it`, cls: 'warn' }] };
+    this.indexStore.setActive(table, def.tag);
+    this.state.activeIndex = { tag: def.tag, expression: def.expression };
+    return { output: [{ text: `Index active: ${def.tag}  (${def.expression})`, cls: 'ok' }] };
   }
   private async doReindex(): Promise<ExecResult> {
-    return { output: [{ text: 'REINDEX: not yet implemented', cls: 'warn' }] };
+    this.requireTable();
+    await this.db.exec('REINDEX');
+    return { output: [{ text: 'Indexes rebuilt', cls: 'ok' }] };
   }
   private async doListIndexes(): Promise<ExecResult> {
-    return { output: [{ text: 'LIST INDEXES: not yet implemented', cls: 'warn' }] };
+    this.requireTable();
+    if (!this.indexStore) return { output: [{ text: '** IndexStore not available', cls: 'error' }] };
+    const table = this.state.table!;
+    const indexes = this.indexStore.listIndexes(table);
+    if (!indexes.length) return { output: [{ text: '(No indexes defined)', cls: 'info' }] };
+    const out: OutputLine[] = [
+      { text: `Indexes for table: ${table}`, cls: 'hdr' },
+      { text: `${'Tag'.padEnd(20)}  ${'Expression'.padEnd(40)}  Active`, cls: 'hdr' },
+      { text: '─'.repeat(65), cls: 'sep' },
+    ];
+    for (const idx of indexes) {
+      const active = this.state.activeIndex?.tag === idx.tag ? ' *' : '';
+      out.push({ text: `${idx.tag.padEnd(20)}  ${idx.expression.padEnd(40)}${active}` });
+    }
+    return { output: out };
   }
   private async doSeek(_value: Expr): Promise<ExecResult> {
     return { output: [{ text: 'SEEK: not yet implemented', cls: 'warn' }] };
