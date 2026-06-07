@@ -129,7 +129,7 @@ export class Parser {
     if (this.peekKw('STRUCTURE') || this.peekKw('STRUCT')) { this.adv(); return { type: 'LIST_STRUCT' }; }
     if (this.peekKw('TABLES')) { this.adv(); return { type: 'LIST_TABLES' }; }
     if (this.peekKw('PROGRAMS') || this.peekKw('PROGS')) { this.adv(); return { type: 'LIST_PROGRAMS' }; }
-    if (this.peekKw('INDEXES') || this.peekKw('INDEX')) { this.adv(); return { type: 'LIST_INDEXES' }; }
+    if (this.peekKw('INDEXES')) { this.adv(); return { type: 'LIST_INDEXES' }; }
     return { type: 'LIST' };
   }
 
@@ -165,6 +165,7 @@ export class Parser {
       parts.push(this.peek().val);
       this.adv();
     }
+    if (!parts.length) throw new Error('INDEX ON requires an expression before TO');
     this.expectKw('TO');
     const tag = this.ident();
     return { type: 'INDEX_ON', expression: parts.join(''), tag };

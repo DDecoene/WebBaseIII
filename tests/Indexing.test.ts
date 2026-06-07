@@ -101,11 +101,16 @@ describe('Parser: index commands', () => {
 
   it('parses SEEK value', () => {
     const nodes = parse('SEEK "Smith"');
-    expect(nodes[0]).toMatchObject({ type: 'SEEK' });
+    expect(nodes[0]).toMatchObject({ type: 'SEEK', value: { k: 'lit', v: 'Smith' } });
   });
 
   it('parses FIND string', () => {
     const nodes = parse('FIND Smith');
     expect(nodes[0]).toMatchObject({ type: 'FIND', value: 'SMITH' });
+  });
+
+  it('parses FIND with quoted string', () => {
+    const nodes = parse('FIND "Smith"');
+    expect(nodes[0]).toMatchObject({ type: 'FIND', value: 'Smith' });
   });
 });
