@@ -101,6 +101,8 @@ tests/
 | `SEEK <expr>` | Position record pointer at first index match |
 | `FIND <string>` | Alias for SEEK (unquoted string — dBASE III legacy) |
 
+> Index expressions support built-in functions: `INDEX ON UPPER(lastname) TO BYUPPER`
+
 ### Programs
 | Command | What it does |
 |---|---|
@@ -121,6 +123,7 @@ tests/
 |---|---|
 | `IF <cond> … ENDIF` | Conditional block |
 | `DO WHILE <cond> … ENDDO` | Loop |
+| `DO CASE … CASE … ENDCASE` | Multi-branch conditional |
 | `HELP` | Print command reference |
 | `QUIT` | Exit |
 | `BROWSE` | Open the editable spreadsheet grid |
@@ -140,7 +143,7 @@ tests/
 ## Roadmap (in progress)
 
 1. ~~Indexing & Search~~ — `INDEX ON`, `SET INDEX TO`, `SEEK`, `FIND`, `REINDEX`, `LIST INDEXES` ✅
-2. **Language Completeness** — `DO CASE/ENDCASE`, built-in functions (`EOF()`, `BOF()`, `FOUND()`, `RECNO()`, `SUBSTR()`, `STR()`, `AT()`, `CTOD()`, `DTOC()`, …), `APPEND FROM` / `COPY TO`
+2. ~~Language Completeness~~ — `DO CASE/ENDCASE`, built-in functions (`EOF()`, `BOF()`, `FOUND()`, `RECNO()`, `RECCOUNT()`, `SUBSTR()`, `STR()`, `AT()`, `UPPER()`, `LOWER()`, and more) ✅
 3. **Report & Label Engine** — `REPORT FORM`, `LABEL FORM` (stored in system.sqlite3)
 4. **The Assistant** — menu-driven UI for non-programmers (dBASE III "assist" mode)
 5. **Multi-Work-Area** — `SELECT 1–10`, `SET RELATION TO`

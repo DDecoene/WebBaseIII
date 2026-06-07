@@ -178,17 +178,31 @@ SET FILTER TO               * clear filter
 
 ### Built-in functions
 
+Functions work anywhere an expression is accepted — `IF`, `DO WHILE`, `STORE`, `REPLACE`, `INDEX ON`, `SET FILTER TO`, etc.
+
 | Function | Returns |
 |---|---|
-| `EOF()` | `.T.` if record pointer is past last record |
-| `BOF()` | `.T.` if at beginning of file |
-| `FOUND()` | `.T.` if last SEEK/FIND succeeded |
+| `EOF()` | True if record pointer is past last record |
+| `BOF()` | True if record pointer is before first record |
+| `FOUND()` | True if last `SEEK` / `FIND` matched |
 | `RECNO()` | Current record number |
-| `SUBSTR(str, start, len)` | Substring extraction |
-| `STR(num, len, dec)` | Number to string |
-| `AT(needle, haystack)` | Position of substring (1-based, 0 = not found) |
-| `CTOD(str)` | Character to date |
-| `DTOC(date)` | Date to character |
+| `RECCOUNT()` | Total records in current table |
+| `UPPER(str)` | Uppercase |
+| `LOWER(str)` | Lowercase |
+| `TRIM(str)` | Strip leading and trailing spaces |
+| `LTRIM(str)` | Strip leading spaces only |
+| `SUBSTR(str, start, len)` | Substring — 1-based; `len` optional (to end) |
+| `LEN(str)` | String length |
+| `AT(needle, haystack)` | 1-based position; 0 if not found (case-sensitive) |
+| `STR(num, len, dec)` | Number to right-justified string; default len=10, dec=0 |
+| `VAL(str)` | String to number; non-numeric → 0 |
+| `INT(n)` | Truncate toward zero |
+| `ABS(n)` | Absolute value |
+| `SPACE(n)` | String of n spaces |
+| `REPLICATE(str, n)` | Repeat string n times |
+| `DATE()` | Today as `MM/DD/YY` |
+| `DTOC(date)` | Date to display string `MM/DD/YY` |
+| `CTOD(str)` | Display string `MM/DD/YY` to ISO date |
 
 ---
 

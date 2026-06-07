@@ -3,6 +3,9 @@ import { WsClient } from './ws/WsClient';
 import { Terminal } from './terminal/Terminal';
 
 async function boot() {
+  const versionEl = document.getElementById('status-version');
+  if (versionEl) versionEl.textContent = `v${__APP_VERSION__}`;
+
   const ws = new WsClient();
 
   const statusEl = document.createElement('span');
