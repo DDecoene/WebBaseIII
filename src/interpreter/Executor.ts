@@ -287,7 +287,7 @@ export class Executor {
 
   private async doSkip(n: number): Promise<ExecResult> {
     this.requireTable();
-    const cnt = await this.db.getRowCount(this.state.table!);
+    const cnt = await this.db.getRowCount(this.state.table!, this.state.filter ?? undefined);
     this.state.rowPtr = Math.max(1, Math.min(cnt, this.state.rowPtr + n));
     return { output: [{ text: `Record pointer: ${this.state.rowPtr} / ${cnt}`, cls: 'info' }] };
   }
@@ -538,16 +538,18 @@ export class Executor {
 
     // Complex expression: fetch all, sort in JS using W3Script evaluator
     const rows = await this.db.query(`SELECT * FROM ${q(table)}${where}`);
+    // Parse expression once before sort loop
+    const exprNode = new Parser(new Lexer(idx.expression).tokenize()).parseExprPublic();
     rows.sort((a, b) => {
-      const va = String(this.evalExprOnRow(idx.expression, a));
-      const vb = String(this.evalExprOnRow(idx.expression, b));
-      return va < vb ? -1 : va > vb ? 1 : 0;
+      const va = this.evalExprOnRowParsed(exprNode, a);
+      const vb = this.evalExprOnRowParsed(exprNode, b);
+      if (typeof va === 'number' && typeof vb === 'number') return va - vb;
+      return String(va) < String(vb) ? -1 : String(va) > String(vb) ? 1 : 0;
     });
     return rows.slice(0, limit);
   }
 
-  private evalExprOnRow(expression: string, row: Record<string, unknown>): unknown {
-    // Temporarily bind row fields as variables, evaluate expression, then restore
+  private evalExprOnRowParsed(exprNode: Expr, row: Record<string, unknown>): unknown {
     const saved = new Map<string, unknown>();
     for (const [k, v] of Object.entries(row)) {
       saved.set(k, this.state.vars.get(k));
@@ -555,17 +557,20 @@ export class Executor {
     }
     let result: unknown = '';
     try {
-      const toks = new Lexer(expression).tokenize();
-      const exprNode = new Parser(toks).parseExprPublic();
       result = this.evalExpr(exprNode);
     } catch {
-      result = String(row[expression.trim()] ?? '');
+      result = '';
     }
     for (const [k, v] of saved) {
       if (v === undefined) this.state.vars.delete(k);
       else this.state.vars.set(k, v);
     }
     return result;
+  }
+
+  private evalExprOnRow(expression: string, row: Record<string, unknown>): unknown {
+    const exprNode = new Parser(new Lexer(expression).tokenize()).parseExprPublic();
+    return this.evalExprOnRowParsed(exprNode, row);
   }
 
   async getOrderedRowsPublic(limit = 500): Promise<Record<string, unknown>[]> {
