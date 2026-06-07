@@ -255,16 +255,159 @@ describe('Session', () => {
     expect(listText).toContain('Brussels');
   });
 
-  it.todo('DO CASE — first matching branch executes');
-  it.todo('DO CASE — OTHERWISE executes when no case matches');
-  it.todo('DO CASE — no branch matches and no OTHERWISE is a no-op');
-  it.todo('UPPER() in expression evaluates correctly');
-  it.todo('SUBSTR() via STORE evaluates correctly');
-  it.todo('LEN() in IF condition');
-  it.todo('EOF() is true after SKIP past end');
-  it.todo('BOF() is true after SKIP before beginning');
-  it.todo('FOUND() is true after successful SEEK');
-  it.todo('RECNO() returns current row pointer');
-  it.todo('RECCOUNT() returns total records');
-  it.todo('INDEX ON UPPER(name) sorts case-insensitively');
+  it('DO CASE — first matching branch executes', async () => {
+    const { session } = makeSession();
+    const db = uniqueDb();
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    await session.handleMessage({ type: 'command', text: 'CREATE TABLE docase1 (score INTEGER)' });
+    await session.handleMessage({ type: 'command', text: 'USE docase1' });
+    await session.handleMessage({ type: 'command', text: 'APPEND RECORD' });
+    await session.handleMessage({ type: 'command', text: 'REPLACE score WITH 4' });
+    await session.handleMessage({ type: 'command', text: 'DO CASE\n  CASE score > 3\n    STORE "high" TO level\n  CASE score > 1\n    STORE "mid" TO level\n  OTHERWISE\n    STORE "low" TO level\nENDCASE' });
+    const exec = (session as any).executor;
+    expect(exec.state.vars.get('LEVEL')).toBe('high');
+  });
+
+  it('DO CASE — OTHERWISE executes when no case matches', async () => {
+    const { session } = makeSession();
+    const db = uniqueDb();
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    await session.handleMessage({ type: 'command', text: 'CREATE TABLE docase2 (score INTEGER)' });
+    await session.handleMessage({ type: 'command', text: 'USE docase2' });
+    await session.handleMessage({ type: 'command', text: 'APPEND RECORD' });
+    await session.handleMessage({ type: 'command', text: 'REPLACE score WITH 0' });
+    await session.handleMessage({ type: 'command', text: 'DO CASE\n  CASE score > 3\n    STORE "high" TO level\n  CASE score > 1\n    STORE "mid" TO level\n  OTHERWISE\n    STORE "low" TO level\nENDCASE' });
+    const exec = (session as any).executor;
+    expect(exec.state.vars.get('LEVEL')).toBe('low');
+  });
+
+  it('DO CASE — no branch matches and no OTHERWISE is a no-op', async () => {
+    const { session } = makeSession();
+    const db = uniqueDb();
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    await session.handleMessage({ type: 'command', text: 'CREATE TABLE docase3 (score INTEGER)' });
+    await session.handleMessage({ type: 'command', text: 'USE docase3' });
+    await session.handleMessage({ type: 'command', text: 'APPEND RECORD' });
+    await session.handleMessage({ type: 'command', text: 'REPLACE score WITH 0' });
+    await session.handleMessage({ type: 'command', text: 'STORE "init" TO level' });
+    await session.handleMessage({ type: 'command', text: 'DO CASE\n  CASE score > 3\n    STORE "high" TO level\nENDCASE' });
+    const exec = (session as any).executor;
+    expect(exec.state.vars.get('LEVEL')).toBe('init');
+  });
+
+  it('UPPER() in expression evaluates correctly', async () => {
+    const { session } = makeSession();
+    await session.handleMessage({ type: 'command', text: 'STORE UPPER("hello") TO result' });
+    const exec = (session as any).executor;
+    expect(exec.state.vars.get('RESULT')).toBe('HELLO');
+  });
+
+  it('SUBSTR() via STORE evaluates correctly', async () => {
+    const { session } = makeSession();
+    await session.handleMessage({ type: 'command', text: 'STORE SUBSTR("Hello World", 7, 5) TO result' });
+    const exec = (session as any).executor;
+    expect(exec.state.vars.get('RESULT')).toBe('World');
+  });
+
+  it('LEN() in IF condition', async () => {
+    const { session } = makeSession();
+    await session.handleMessage({ type: 'command', text: 'STORE "hi" TO x' });
+    await session.handleMessage({ type: 'command', text: 'IF LEN(x) == 2\n  STORE "yes" TO result\nENDIF' });
+    const exec = (session as any).executor;
+    expect(exec.state.vars.get('RESULT')).toBe('yes');
+  });
+
+  it('EOF() is true after SKIP past end', async () => {
+    const { session } = makeSession();
+    const db = uniqueDb();
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    await session.handleMessage({ type: 'command', text: 'CREATE TABLE eof_t (name CHAR(10))' });
+    await session.handleMessage({ type: 'command', text: 'USE eof_t' });
+    await session.handleMessage({ type: 'command', text: 'APPEND RECORD' });
+    await session.handleMessage({ type: 'command', text: 'GO BOTTOM' });
+    await session.handleMessage({ type: 'command', text: 'SKIP 1' });
+    await session.handleMessage({ type: 'command', text: 'STORE EOF() TO ateof' });
+    const exec = (session as any).executor;
+    expect(exec.state.vars.get('ATEOF')).toBe(true);
+  });
+
+  it('BOF() is true after SKIP before beginning', async () => {
+    const { session } = makeSession();
+    const db = uniqueDb();
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    await session.handleMessage({ type: 'command', text: 'CREATE TABLE bof_t (name CHAR(10))' });
+    await session.handleMessage({ type: 'command', text: 'USE bof_t' });
+    await session.handleMessage({ type: 'command', text: 'APPEND RECORD' });
+    await session.handleMessage({ type: 'command', text: 'GO TOP' });
+    await session.handleMessage({ type: 'command', text: 'SKIP -1' });
+    await session.handleMessage({ type: 'command', text: 'STORE BOF() TO atbof' });
+    const exec = (session as any).executor;
+    expect(exec.state.vars.get('ATBOF')).toBe(true);
+  });
+
+  it('FOUND() is true after successful SEEK', async () => {
+    const { session } = makeSession();
+    const db = uniqueDb();
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    await session.handleMessage({ type: 'command', text: 'CREATE TABLE found_t (name CHAR(20))' });
+    await session.handleMessage({ type: 'command', text: 'USE found_t' });
+    await session.handleMessage({ type: 'command', text: 'APPEND RECORD' });
+    await session.handleMessage({ type: 'command', text: 'REPLACE name WITH "Alice"' });
+    await session.handleMessage({ type: 'command', text: 'INDEX ON NAME TO BYNAME' });
+    await session.handleMessage({ type: 'command', text: 'SEEK "Alice"' });
+    await session.handleMessage({ type: 'command', text: 'STORE FOUND() TO f' });
+    const exec = (session as any).executor;
+    expect(exec.state.vars.get('F')).toBe(true);
+  });
+
+  it('RECNO() returns current row pointer', async () => {
+    const { session } = makeSession();
+    const db = uniqueDb();
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    await session.handleMessage({ type: 'command', text: 'CREATE TABLE recno_t (name CHAR(10))' });
+    await session.handleMessage({ type: 'command', text: 'USE recno_t' });
+    await session.handleMessage({ type: 'command', text: 'APPEND RECORD' });
+    await session.handleMessage({ type: 'command', text: 'APPEND RECORD' });
+    await session.handleMessage({ type: 'command', text: 'GO TOP' });
+    await session.handleMessage({ type: 'command', text: 'STORE RECNO() TO r' });
+    const exec = (session as any).executor;
+    expect(exec.state.vars.get('R')).toBe(1);
+  });
+
+  it('RECCOUNT() returns total records', async () => {
+    const { session } = makeSession();
+    const db = uniqueDb();
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    await session.handleMessage({ type: 'command', text: 'CREATE TABLE rc_t (name CHAR(10))' });
+    await session.handleMessage({ type: 'command', text: 'USE rc_t' });
+    await session.handleMessage({ type: 'command', text: 'APPEND RECORD' });
+    await session.handleMessage({ type: 'command', text: 'APPEND RECORD' });
+    await session.handleMessage({ type: 'command', text: 'APPEND RECORD' });
+    await session.handleMessage({ type: 'command', text: 'STORE RECCOUNT() TO rc' });
+    const exec = (session as any).executor;
+    expect(exec.state.vars.get('RC')).toBe(3);
+  });
+
+  it('INDEX ON UPPER(name) sorts case-insensitively', async () => {
+    const { session, sent } = makeSession();
+    const db = uniqueDb();
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    await session.handleMessage({ type: 'command', text: 'CREATE TABLE ci_t (name CHAR(20))' });
+    await session.handleMessage({ type: 'command', text: 'USE ci_t' });
+    await session.handleMessage({ type: 'command', text: 'APPEND RECORD' });
+    await session.handleMessage({ type: 'command', text: 'REPLACE name WITH "zara"' });
+    await session.handleMessage({ type: 'command', text: 'APPEND RECORD' });
+    await session.handleMessage({ type: 'command', text: 'REPLACE name WITH "Alice"' });
+    await session.handleMessage({ type: 'command', text: 'APPEND RECORD' });
+    await session.handleMessage({ type: 'command', text: 'REPLACE name WITH "bob"' });
+    await session.handleMessage({ type: 'command', text: 'INDEX ON UPPER(NAME) TO BYUPPER' });
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: 'LIST' });
+    const output = sent.find(m => m.type === 'output') as any;
+    const lines: string[] = output.lines.map((l: any) => l.text);
+    const dataLines = lines.filter(l => /alice|bob|zara/i.test(l));
+    expect(dataLines[0]).toMatch(/alice/i);
+    expect(dataLines[1]).toMatch(/bob/i);
+    expect(dataLines[2]).toMatch(/zara/i);
+  });
 });

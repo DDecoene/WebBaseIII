@@ -1,6 +1,7 @@
 import { IDatabaseBridge, IIndexStore, OutputLine, FormField } from '../shared/types';
 import { ASTNode, Expr, ColDef, Parser } from './Parser';
 import { Lexer } from './Lexer';
+import { callStateless } from './Builtins';
 
 export type { OutputLine, FormField } from '../shared/types';
 
@@ -23,6 +24,7 @@ export interface State {
   opfsAvailable: boolean;
   activeIndex: { tag: string; expression: string } | null;
   _found: boolean;
+  cachedRecCount: number;
 }
 
 type DbType = 'TEXT' | 'REAL' | 'INTEGER' | 'BLOB';
@@ -49,6 +51,7 @@ export class Executor {
       pendingForm: [], opfsAvailable: false,
       activeIndex: null,
       _found: false,
+      cachedRecCount: 0,
     };
   }
 
@@ -123,6 +126,7 @@ export class Executor {
         case 'LIST_INDEXES':return this.doListIndexes();
         case 'SEEK':        return this.doSeek(node.value);
         case 'FIND':        return this.doFind(node.value);
+        case 'DO_CASE':     return this.doCase(node.cases, node.otherwise);
         case 'UNKNOWN':     return { output: [{ text: `Unknown command: ${node.raw}`, cls: 'warn' }] };
       }
     } catch (e: unknown) {
@@ -174,6 +178,7 @@ export class Executor {
 
   private async doList(): Promise<ExecResult> {
     this.requireTable();
+    await this.refreshRecCount();
     const rows = await this.getOrderedRows(500);
     if (!rows.length) return { output: [{ text: '(No records)', cls: 'info' }] };
 
@@ -288,7 +293,11 @@ export class Executor {
   private async doSkip(n: number): Promise<ExecResult> {
     this.requireTable();
     const cnt = await this.db.getRowCount(this.state.table!, this.state.filter ?? undefined);
-    this.state.rowPtr = Math.max(1, Math.min(cnt, this.state.rowPtr + n));
+    // Allow going out of bounds so EOF()/BOF() can be detected
+    const newPtr = this.state.rowPtr + n;
+    if (newPtr > cnt) this.state.rowPtr = cnt + 1;      // EOF
+    else if (newPtr < 1) this.state.rowPtr = 0;          // BOF
+    else this.state.rowPtr = newPtr;
     return { output: [{ text: `Record pointer: ${this.state.rowPtr} / ${cnt}`, cls: 'info' }] };
   }
 
@@ -315,7 +324,8 @@ export class Executor {
     return { output: [], action: 'FORM_READY', formFields: fields };
   }
 
-  private doStore(valueExpr: Expr, varName: string): ExecResult {
+  private async doStore(valueExpr: Expr, varName: string): Promise<ExecResult> {
+    await this.refreshRecCount();
     const v = this.evalExpr(valueExpr);
     this.state.vars.set(varName, v);
     return { output: [{ text: `${varName} = ${JSON.stringify(v)}`, cls: 'info' }] };
@@ -330,6 +340,7 @@ export class Executor {
   }
 
   private async doIf(condE: Expr, body: ASTNode[], elseBody: ASTNode[]): Promise<ExecResult> {
+    await this.refreshRecCount();
     const cond = this.evalExpr(condE);
     return this.run(cond ? body : elseBody);
   }
@@ -337,7 +348,10 @@ export class Executor {
   private async doWhile(condE: Expr, body: ASTNode[], startIter = 0): Promise<ExecResult> {
     const out: OutputLine[] = [];
     let iters = startIter;
-    while (this.evalExpr(condE) && iters++ < 10000) {
+    while (true) {
+      await this.refreshRecCount();
+      if (!this.evalExpr(condE) || iters >= 10000) break;
+      iters++;
       const r = await this.run(body);
       out.push(...r.output);
       if (r.action === 'QUIT') return { output: out, action: 'QUIT' };
@@ -510,6 +524,13 @@ export class Executor {
       { text: 'READ                    — show form, collect input' },
       { text: 'IF <cond> … ENDIF       — conditional block' },
       { text: 'DO WHILE <cond> … ENDDO — loop' },
+      { text: 'DO CASE … CASE … ENDCASE  — multi-branch conditional' },
+      { text: 'EOF() BOF() FOUND()       — record position / seek state functions' },
+      { text: 'RECNO() RECCOUNT()        — record number / count functions' },
+      { text: 'UPPER() LOWER() TRIM()    — string functions' },
+      { text: 'SUBSTR(s,n,l) LEN() AT()  — string extraction functions' },
+      { text: 'STR(n,l,d) VAL() INT()    — type conversion functions' },
+      { text: 'DATE() CTOD() DTOC()      — date functions' },
       { text: 'DO <name>               — run a saved program' },
       { text: 'EDIT <name>             — create/edit a program' },
       { text: 'LIST PROGRAMS           — list saved programs' },
@@ -543,7 +564,70 @@ export class Executor {
         }
         return null;
       }
+      case 'call': {
+        const args = e.args.map(a => this.evalExpr(a));
+        return this.callBuiltin(e.fn, args);
+      }
     }
+  }
+
+  private callBuiltin(fn: string, args: unknown[]): unknown {
+    switch (fn) {
+      case 'EOF':      return this.state.table ? this.state.rowPtr > this.state.cachedRecCount : true;
+      case 'BOF':      return this.state.rowPtr < 1;
+      case 'FOUND':    return this.state._found;
+      case 'RECNO':    return this.state.rowPtr;
+      case 'RECCOUNT': return this.state.cachedRecCount;
+    }
+    return callStateless(fn, args);
+  }
+
+  private async refreshRecCount(): Promise<void> {
+    if (this.state.table) {
+      this.state.cachedRecCount = await this.db.getRowCount(this.state.table, this.state.filter ?? undefined);
+      await this.loadCurrentRow();
+    } else {
+      this.state.cachedRecCount = 0;
+    }
+  }
+
+  private async loadCurrentRow(): Promise<void> {
+    if (!this.state.table || this.state.rowPtr < 1) return;
+    try {
+      const rows = await this.getOrderedRows(this.state.rowPtr);
+      const row = rows[this.state.rowPtr - 1];
+      if (row) {
+        for (const [k, v] of Object.entries(row)) {
+          this.state.vars.set(k.toUpperCase(), v);
+        }
+      }
+    } catch { /* ignore */ }
+  }
+
+  private async runBlock(nodes: ASTNode[]): Promise<ExecResult> {
+    const out: OutputLine[] = [];
+    for (const node of nodes) {
+      const r = await this.exec(node);
+      out.push(...r.output);
+      if (r.action) return { output: out, action: r.action, formFields: r.formFields, continuation: r.continuation };
+    }
+    return { output: out };
+  }
+
+  private async doCase(
+    cases: Array<{ cond: Expr; body: ASTNode[] }>,
+    otherwise: ASTNode[]
+  ): Promise<ExecResult> {
+    await this.refreshRecCount();
+    for (const { cond, body } of cases) {
+      if (this.evalExpr(cond)) {
+        return this.runBlock(body);
+      }
+    }
+    if (otherwise.length) {
+      return this.runBlock(otherwise);
+    }
+    return { output: [] };
   }
 
   setVar(name: string, value: unknown) { this.state.vars.set(name, value); }

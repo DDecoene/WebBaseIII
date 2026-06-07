@@ -453,6 +453,13 @@ export class Parser {
   private ident(): string { const t = this.adv(); return t.val; }
   private tryNum(): number | null {
     if (this.peek().type === 'NUM') return parseFloat(this.adv().val);
+    // Handle negative: OP '-' followed immediately by NUM
+    if (this.peek().type === 'OP' && this.peek().val === '-') {
+      const saved = this.p;
+      this.adv(); // consume '-'
+      if (this.peek().type === 'NUM') return -parseFloat(this.adv().val);
+      this.p = saved; // backtrack
+    }
     return null;
   }
   private consumeScope(): 'ALL' | 'CURRENT' {
