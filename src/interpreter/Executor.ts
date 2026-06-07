@@ -447,11 +447,36 @@ export class Executor {
     }
     return { output: out };
   }
-  private async doSeek(_value: Expr): Promise<ExecResult> {
-    return { output: [{ text: 'SEEK: not yet implemented', cls: 'warn' }] };
+  private async doSeek(valueExpr: Expr): Promise<ExecResult> {
+    this.requireTable();
+    if (!this.state.activeIndex) {
+      return { output: [{ text: 'No index active — use SET INDEX TO <tag> first', cls: 'warn' }] };
+    }
+    const seekVal = String(this.evalExpr(valueExpr)).toLowerCase();
+    const rows = await this.getOrderedRows(100000);
+    const idx = this.state.activeIndex;
+    const exprNode = new Parser(new Lexer(idx.expression).tokenize()).parseExprPublic();
+
+    const pos = rows.findIndex(row => {
+      const v = String(this.evalExprOnRowParsed(exprNode, row)).toLowerCase();
+      return v === seekVal;
+    });
+
+    if (pos === -1) {
+      this.state._found = false;
+      this.state.rowPtr = rows.length + 1;
+      return { output: [{ text: 'Record not found', cls: 'warn' }] };
+    }
+
+    this.state._found = true;
+    this.state.rowPtr = pos + 1;
+    const row = rows[pos];
+    const preview = Object.entries(row).map(([k, v]) => `${k}: ${v}`).join('  ');
+    return { output: [{ text: `Found at position ${pos + 1}: ${preview}`, cls: 'ok' }] };
   }
-  private async doFind(_value: string): Promise<ExecResult> {
-    return { output: [{ text: 'FIND: not yet implemented', cls: 'warn' }] };
+  private async doFind(value: string): Promise<ExecResult> {
+    const litExpr: Expr = { k: 'lit', v: value };
+    return this.doSeek(litExpr);
   }
 
   private doHelp(): ExecResult {

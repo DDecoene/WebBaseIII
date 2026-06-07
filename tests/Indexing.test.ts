@@ -265,3 +265,71 @@ describe('Session: ordered queries', () => {
     expect(status?.record).toBe(1);
   });
 });
+
+describe('Session: SEEK and FIND', () => {
+  async function setupSeekTable(session: any, db: string, name: string) {
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    await session.handleMessage({ type: 'command', text: `CREATE TABLE ${name} (lastname TEXT, score INTEGER)` });
+    await session.handleMessage({ type: 'command', text: `USE ${name}` });
+    for (const [last, score] of [['Charlie', 3], ['Alice', 1], ['Bob', 2]]) {
+      await session.handleMessage({ type: 'command', text: 'APPEND RECORD' });
+      await session.handleMessage({ type: 'command', text: `REPLACE lastname WITH "${last}", score WITH ${score}` });
+    }
+    await session.handleMessage({ type: 'command', text: 'INDEX ON LASTNAME TO BYNAME' });
+  }
+
+  it('SEEK positions to matching record', async () => {
+    const { session, sent } = makeSession();
+    const db = uniqueDb();
+    await setupSeekTable(session, db, 'seek1');
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: 'SEEK "Bob"' });
+    const output = sent.find(m => m.type === 'output') as any;
+    expect(output?.lines.some((l: any) => l.text.includes('Bob'))).toBe(true);
+    expect(output?.lines.some((l: any) => l.cls === 'ok')).toBe(true);
+  });
+
+  it('SEEK sets rowPtr to the correct index position', async () => {
+    const { session, sent } = makeSession();
+    const db = uniqueDb();
+    await setupSeekTable(session, db, 'seek2');
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: 'SEEK "Alice"' });
+    const status = sent.find(m => m.type === 'status') as any;
+    // Alice is first in index order → rowPtr = 1
+    expect(status?.record).toBe(1);
+  });
+
+  it('SEEK prints not found when no match', async () => {
+    const { session, sent } = makeSession();
+    const db = uniqueDb();
+    await setupSeekTable(session, db, 'seek3');
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: 'SEEK "Zorro"' });
+    const output = sent.find(m => m.type === 'output') as any;
+    expect(output?.lines.some((l: any) => l.text.toLowerCase().includes('not found'))).toBe(true);
+  });
+
+  it('SEEK without active index shows error', async () => {
+    const { session, sent } = makeSession();
+    const db = uniqueDb();
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    await session.handleMessage({ type: 'command', text: 'CREATE TABLE seekerr (lastname TEXT)' });
+    await session.handleMessage({ type: 'command', text: 'USE seekerr' });
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: 'SEEK "Bob"' });
+    const output = sent.find(m => m.type === 'output') as any;
+    expect(output?.lines.some((l: any) => l.cls === 'warn' || l.cls === 'error')).toBe(true);
+  });
+
+  it('FIND behaves identically to SEEK', async () => {
+    const { session, sent } = makeSession();
+    const db = uniqueDb();
+    await setupSeekTable(session, db, 'find1');
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: 'FIND Bob' });
+    const output = sent.find(m => m.type === 'output') as any;
+    expect(output?.lines.some((l: any) => l.text.includes('Bob'))).toBe(true);
+    expect(output?.lines.some((l: any) => l.cls === 'ok')).toBe(true);
+  });
+});
