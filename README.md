@@ -1,16 +1,76 @@
 # WebBase-III
 
-A feature-complete dBASE III revival for the modern web. Write W3Script commands in a terminal REPL, browse and edit data in a spreadsheet grid, build data-entry forms, run programs, and use indexes — all backed by a Node.js WebSocket server and SQLite.
+**dBASE III, reimagined for the modern web.**
+
+Write W3Script commands in a retro terminal REPL, browse and edit records in a spreadsheet grid, build character-cell data-entry forms, run programs with full control flow — all backed by a Node.js WebSocket server and SQLite. Multiple users, persistent databases, no native dependencies beyond Node.
+
+---
+
+## Screenshots
+
+### Terminal REPL
+
+The command interface — type W3Script and see results instantly.
+
+![Terminal REPL](docs/screenshots/screenshot-terminal.png)
+
+---
+
+### LIST — tabular record display
+
+`LIST` prints all records in active index order. The status bar shows the active database and table.
+
+![LIST output](docs/screenshots/screenshot-list.png)
+
+---
+
+### Indexing & SEEK
+
+`INDEX ON name TO BYNAME` creates a SQLite index and activates it — subsequent `LIST` output is sorted alphabetically. `SEEK "Delta NV"` jumps the record pointer to the first match in O(log n).
+
+![Index and SEEK](docs/screenshots/screenshot-index.png)
+
+---
+
+### BROWSE — editable grid
+
+`BROWSE` opens a spreadsheet-style grid. Records are shown in active index order. Tab/Enter to edit a cell, Ctrl+N for a new row, Delete to remove a row, Esc to return to the terminal.
+
+![BROWSE grid](docs/screenshots/screenshot-browse.png)
+
+---
+
+### Program editor
+
+`EDIT <name>` opens the built-in `.prg` source editor. Programs support the full W3Script language: `DO CASE/ENDCASE`, `DO WHILE/ENDDO`, `IF/ENDIF`, form layouts, and all data commands. Ctrl+S saves, Esc cancels.
+
+![Program editor](docs/screenshots/screenshot-program-editor.png)
+
+---
+
+### Form engine — `@ SAY GET` / `READ`
+
+`@ row,col SAY "label" GET variable` lays out character-cell form fields. `READ` renders them as a live form and waits for the user to fill in values and submit.
+
+![Form engine](docs/screenshots/screenshot-form.png)
+
+---
 
 ## Features
 
-- **W3Script interpreter** — dBASE III command dialect: navigation, filters, indexes, loops, forms, programs
-- **BROWSE grid** — inline cell editing, keyboard navigation, index-ordered display
-- **Form engine** — `@ ROW,COL SAY … GET` layout with `READ`
-- **Indexing** — `INDEX ON`, `SEEK`, `FIND`, active index controls all record order
-- **Program files** — save, edit, and run `.prg` scripts with `DO` / `EDIT`
-- **Multi-user** — each WebSocket connection gets its own isolated interpreter session
-- **Persistent storage** — `better-sqlite3` with WAL mode; databases survive server restart
+| Feature | Details |
+|---|---|
+| **W3Script interpreter** | dBASE III command dialect: navigation, filters, variables, loops, conditionals, forms, programs |
+| **BROWSE grid** | Inline cell editing, keyboard nav, index-ordered display |
+| **Form engine** | `@ ROW,COL SAY … GET` character-cell layout with `READ` |
+| **Indexing** | `INDEX ON`, `SEEK`, `FIND` — active index controls all record order |
+| **DO CASE** | Multi-branch conditional, `OTHERWISE` fallback |
+| **Built-in functions** | `EOF()`, `BOF()`, `FOUND()`, `RECNO()`, `SUBSTR()`, `STR()`, `AT()`, `CTOD()`, `DTOC()` and more |
+| **Program files** | Save, edit, and run `.prg` scripts with `DO` / `EDIT` |
+| **Multi-user** | Each WebSocket connection gets its own isolated interpreter session |
+| **Persistent storage** | `better-sqlite3` with WAL mode — databases survive server restart |
+
+---
 
 ## Quick start
 
@@ -19,19 +79,39 @@ npm install
 npm run dev        # http://localhost:5173
 ```
 
-For production:
+Production:
 
 ```bash
-npm run serve      # builds, then serves on http://localhost:3000
+npm run serve      # builds, then serves everything on http://localhost:3000
 ```
 
-## LAN / Tailscale access
+LAN / Tailscale: the server binds to `0.0.0.0`, so `http://<tailscale-ip>:3000` works out of the box.
 
-The server binds to all interfaces:
+---
+
+## Example session
 
 ```
-http://<tailscale-ip>:3000
+USE DATABASE mydb
+CREATE TABLE customers (name CHAR(40), phone CHAR(20), country CHAR(30))
+USE customers
+
+APPEND RECORD
+REPLACE name WITH "Acme Corp", phone WITH "555-1234", country WITH "BE"
+APPEND RECORD
+REPLACE name WITH "Zeta Ltd", phone WITH "555-5678", country WITH "NL"
+
+INDEX ON name TO BYNAME
+LIST                        * sorted A→Z
+
+SEEK "Zeta Ltd"             * jump to record instantly
+BROWSE                      * open editable grid
+SET FILTER TO country == "BE"
+LIST                        * filtered view
+SET FILTER TO               * clear filter
 ```
+
+---
 
 ## W3Script command reference
 
@@ -92,8 +172,25 @@ http://<tailscale-ip>:3000
 |---|---|
 | `IF <cond> … ENDIF` | Conditional block |
 | `DO WHILE <cond> … ENDDO` | Loop |
+| `DO CASE … ENDCASE` | Multi-branch conditional (`CASE`, `OTHERWISE`) |
 | `HELP` | Print command reference |
 | `QUIT` | Exit |
+
+### Built-in functions
+
+| Function | Returns |
+|---|---|
+| `EOF()` | `.T.` if record pointer is past last record |
+| `BOF()` | `.T.` if at beginning of file |
+| `FOUND()` | `.T.` if last SEEK/FIND succeeded |
+| `RECNO()` | Current record number |
+| `SUBSTR(str, start, len)` | Substring extraction |
+| `STR(num, len, dec)` | Number to string |
+| `AT(needle, haystack)` | Position of substring (1-based, 0 = not found) |
+| `CTOD(str)` | Character to date |
+| `DTOC(date)` | Date to character |
+
+---
 
 ## BROWSE grid keyboard shortcuts
 
@@ -107,29 +204,47 @@ http://<tailscale-ip>:3000
 | F5 | Refresh from DB |
 | Esc | Exit grid, return to terminal |
 
-## Example session
+---
+
+## Architecture
 
 ```
-CREATE TABLE customers (name CHAR(40), phone CHAR(20), country CHAR(30))
-USE customers
-APPEND RECORD
-REPLACE name WITH "Acme Corp", phone WITH "555-1234", country WITH "BE"
-APPEND RECORD
-REPLACE name WITH "Zeta Ltd", phone WITH "555-5678", country WITH "NL"
-INDEX ON name TO BYNAME
-LIST
-SEEK "Zeta Ltd"
-BROWSE
-SET FILTER TO country == "BE"
-LIST
-SET FILTER TO
+server/
+  index.ts              Node.js HTTP + WebSocket server (port 3000)
+  Session.ts            Per-connection session: parses commands, drives Executor
+  SessionManager.ts     Tracks all active sessions
+  ServerDatabaseBridge.ts  IDatabaseBridge impl wrapping better-sqlite3
+  ProgramStore.ts       .prg program storage in data/system.sqlite3
+  IndexStore.ts         Index metadata + active index in data/system.sqlite3
+
+src/
+  interpreter/
+    Lexer.ts            Tokenises W3Script input (case-insensitive)
+    Parser.ts           Recursive-descent AST builder
+    Executor.ts         Async AST runner; manages db/table/filter/vars/rowPtr/activeIndex
+    Builtins.ts         Stateless built-in function implementations
+
+  terminal/
+    Terminal.ts         REPL UI — command history, multi-line block accumulation
+
+  ui/
+    Grid.ts             BROWSE spreadsheet — inline cell editing, keyboard nav
+    FormLayout.ts       @ SAY GET form engine — character-cell coordinates
+    ProgramEditor.ts    .prg source editor UI
+
+  ws/
+    WsClient.ts         Browser WebSocket client
 ```
+
+---
 
 ## Running tests
 
 ```bash
 npm test
 ```
+
+---
 
 ## License
 
