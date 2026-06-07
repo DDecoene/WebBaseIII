@@ -14,6 +14,12 @@ const KWS = new Set([
   'AND','OR','NOT','TRUE','FALSE','CREATE','TABLE','DROP','INDEX','ON',
   'INPUT','ACCEPT','DISPLAY','DATABASE','FOR','NEXT',
   'SEEK','FIND','REINDEX','INDEXES',
+  // DO CASE control flow
+  'CASE','OTHERWISE','ENDCASE',
+  // Built-in function names
+  'SUBSTR','LEN','TRIM','LTRIM','UPPER','LOWER','AT','STR','VAL',
+  'INT','ABS','SPACE','REPLICATE','DATE','DTOC','CTOD',
+  'EOF','BOF','FOUND','RECNO','RECCOUNT',
 ]);
 
 export class Lexer {
