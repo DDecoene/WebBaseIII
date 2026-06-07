@@ -1,5 +1,13 @@
 import { Token, TType } from './Lexer';
 
+// ── Built-in Functions ─────────────────────────────────────────────────────
+
+const BUILTIN_FUNCTIONS = new Set([
+  'SUBSTR','LEN','TRIM','LTRIM','UPPER','LOWER','AT','STR','VAL',
+  'INT','ABS','SPACE','REPLICATE','DATE','DTOC','CTOD',
+  'EOF','BOF','FOUND','RECNO','RECCOUNT',
+]);
+
 // ── AST Node Types ──────────────────────────────────────────────────────────
 
 export type ASTNode =
@@ -414,8 +422,8 @@ export class Parser {
     }
     if (t.type === 'ID' || t.type === 'KW') {
       this.adv();
-      // Function call: identifier immediately followed by (
-      if (this.peek().type === 'LPAREN') {
+      // Function call: known built-in name immediately followed by (
+      if (this.peek().type === 'LPAREN' && BUILTIN_FUNCTIONS.has(t.val.toUpperCase())) {
         this.adv(); // consume (
         const args: Expr[] = [];
         while (!this.end() && this.peek().type !== 'RPAREN') {
