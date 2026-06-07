@@ -405,7 +405,7 @@ export class Executor {
   private async doListIndexes(): Promise<ExecResult> {
     return { output: [{ text: 'LIST INDEXES: not yet implemented', cls: 'warn' }] };
   }
-  private async doSeek(_value: import('./Parser').Expr): Promise<ExecResult> {
+  private async doSeek(_value: Expr): Promise<ExecResult> {
     return { output: [{ text: 'SEEK: not yet implemented', cls: 'warn' }] };
   }
   private async doFind(_value: string): Promise<ExecResult> {
