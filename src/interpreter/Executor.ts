@@ -442,7 +442,7 @@ export class Executor {
       { text: '─'.repeat(65), cls: 'sep' },
     ];
     for (const idx of indexes) {
-      const active = this.state.activeIndex?.tag === idx.tag ? ' *' : '';
+      const active = this.state.activeIndex?.tag?.toUpperCase() === idx.tag.toUpperCase() ? ' *' : '';
       out.push({ text: `${idx.tag.padEnd(20)}  ${idx.expression.padEnd(40)}${active}` });
     }
     return { output: out };

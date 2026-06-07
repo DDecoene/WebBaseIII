@@ -16,7 +16,7 @@ afterEach(() => {
   const dataDir = path.join(process.cwd(), 'data');
   if (fs.existsSync(dataDir)) {
     fs.readdirSync(dataDir)
-      .filter(f => (f.startsWith('test_idx_') || f.startsWith('test_idx_sess_')) && f.endsWith('.sqlite3'))
+      .filter(f => f.startsWith('test_idx_') && f.endsWith('.sqlite3'))
       .forEach(f => fs.unlinkSync(path.join(dataDir, f)));
   }
 });
