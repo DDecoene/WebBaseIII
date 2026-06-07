@@ -600,15 +600,6 @@ export class Executor {
     return result;
   }
 
-  private evalExprOnRow(expression: string, row: Record<string, unknown>): unknown {
-    const exprNode = new Parser(new Lexer(expression).tokenize()).parseExprPublic();
-    return this.evalExprOnRowParsed(exprNode, row);
-  }
-
-  async getOrderedRowsPublic(limit = 500): Promise<Record<string, unknown>[]> {
-    return this.getOrderedRows(limit);
-  }
-
   async getOrderedRowsWithIds(limit = 2000): Promise<Record<string, unknown>[]> {
     this.requireTable();
     const table = this.state.table!;
