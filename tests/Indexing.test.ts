@@ -322,7 +322,7 @@ describe('Session: SEEK and FIND', () => {
     expect(output?.lines.some((l: any) => l.cls === 'warn' || l.cls === 'error')).toBe(true);
   });
 
-  it('FIND behaves identically to SEEK', async () => {
+  it('FIND behaves identically to SEEK (alias)', async () => {
     const { session, sent } = makeSession();
     const db = uniqueDb();
     await setupSeekTable(session, db, 'find1');
@@ -331,5 +331,26 @@ describe('Session: SEEK and FIND', () => {
     const output = sent.find(m => m.type === 'output') as any;
     expect(output?.lines.some((l: any) => l.text.includes('Bob'))).toBe(true);
     expect(output?.lines.some((l: any) => l.cls === 'ok')).toBe(true);
+  });
+});
+
+describe('Session: BROWSE respects active index', () => {
+  it('grid-open rows are in index order', async () => {
+    const { session, sent } = makeSession();
+    const db = uniqueDb();
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    await session.handleMessage({ type: 'command', text: 'CREATE TABLE brows1 (name TEXT)' });
+    await session.handleMessage({ type: 'command', text: 'USE brows1' });
+    for (const name of ['Charlie', 'Alice', 'Bob']) {
+      await session.handleMessage({ type: 'command', text: 'APPEND RECORD' });
+      await session.handleMessage({ type: 'command', text: `REPLACE name WITH "${name}"` });
+    }
+    await session.handleMessage({ type: 'command', text: 'INDEX ON NAME TO BYNAME' });
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: 'BROWSE' });
+    const gridMsg = sent.find(m => m.type === 'grid-open') as any;
+    // Column key may be upper or lower case depending on how it was created/stored
+    const names = gridMsg?.rows.map((r: any) => r.name ?? r.NAME);
+    expect(names).toEqual(['Alice', 'Bob', 'Charlie']);
   });
 });

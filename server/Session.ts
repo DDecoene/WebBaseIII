@@ -223,11 +223,41 @@ export class Session {
       this.send({ type: 'output', lines: [{ text: 'No table selected', cls: 'error' }] });
       return;
     }
-    const where = state.filter ? ` WHERE ${state.filter}` : '';
-    const rows = await this.bridge.query(
-      `SELECT rowid as _rowid, * FROM ${q(state.table)}${where} LIMIT 2000`
-    );
     const columns = await this.bridge.getStructure(state.table);
+    const where = state.filter ? ` WHERE ${state.filter}` : '';
+    const idx = state.activeIndex;
+
+    let rows: Record<string, unknown>[];
+    if (idx && /^[A-Z_][A-Z0-9_]*$/i.test(idx.expression.trim())) {
+      // Simple field: use SQL ORDER BY
+      rows = await this.bridge.query(
+        `SELECT rowid as _rowid, * FROM ${q(state.table)}${where} ORDER BY ${q(idx.expression.trim())} LIMIT 2000`
+      );
+    } else if (idx) {
+      // Complex expression: fetch with rowid, then JS-sort using getOrderedRowsPublic order
+      const withRowid = await this.bridge.query(
+        `SELECT rowid as _rowid, * FROM ${q(state.table)}${where} LIMIT 2000`
+      );
+      const ordered = await this.executor.getOrderedRowsPublic(2000);
+      // Build ordered list by matching ordered rows (no rowid) to withRowid rows by field values
+      // Fall back to natural order if matching fails
+      if (ordered.length === withRowid.length) {
+        const fields = columns.filter(c => !c.pk).map(c => c.name);
+        rows = ordered.map(o => {
+          const match = withRowid.find(r =>
+            fields.every(f => String(r[f] ?? '') === String(o[f] ?? ''))
+          );
+          return match ?? o;
+        });
+      } else {
+        rows = withRowid;
+      }
+    } else {
+      rows = await this.bridge.query(
+        `SELECT rowid as _rowid, * FROM ${q(state.table)}${where} LIMIT 2000`
+      );
+    }
+
     this.send({ type: 'grid-open', table: state.table, filter: state.filter, columns, rows });
   }
 
