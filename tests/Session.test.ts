@@ -254,4 +254,17 @@ describe('Session', () => {
     expect(listText).toContain('42');
     expect(listText).toContain('Brussels');
   });
+
+  it.todo('DO CASE — first matching branch executes');
+  it.todo('DO CASE — OTHERWISE executes when no case matches');
+  it.todo('DO CASE — no branch matches and no OTHERWISE is a no-op');
+  it.todo('UPPER() in expression evaluates correctly');
+  it.todo('SUBSTR() via STORE evaluates correctly');
+  it.todo('LEN() in IF condition');
+  it.todo('EOF() is true after SKIP past end');
+  it.todo('BOF() is true after SKIP before beginning');
+  it.todo('FOUND() is true after successful SEEK');
+  it.todo('RECNO() returns current row pointer');
+  it.todo('RECCOUNT() returns total records');
+  it.todo('INDEX ON UPPER(name) sorts case-insensitively');
 });

@@ -27,6 +27,7 @@ export type ASTNode =
   | { type: 'INPUT';       prompt: string; varName: string }
   | { type: 'IF';          cond: Expr; body: ASTNode[]; elseBody: ASTNode[] }
   | { type: 'DO_WHILE';    cond: Expr; body: ASTNode[] }
+  | { type: 'DO_CASE'; cases: Array<{ cond: Expr; body: ASTNode[] }>; otherwise: ASTNode[] }
   | { type: 'CREATE_TABLE'; name: string; cols: ColDef[] }
   | { type: 'DROP_TABLE';  name: string }
   | { type: 'DO_PRG';      name: string }
@@ -46,7 +47,8 @@ export type Expr =
   | { k: 'lit';  v: string | number | boolean }
   | { k: 'var';  name: string }
   | { k: 'bin';  op: string; l: Expr; r: Expr }
-  | { k: 'not';  e: Expr };
+  | { k: 'not';  e: Expr }
+  | { k: 'call'; fn: string; args: Expr[] };
 
 // ── Parser ─────────────────────────────────────────────────────────────────
 
@@ -230,6 +232,9 @@ export class Parser {
 
   private parseDo(): ASTNode {
     this.adv();
+    if (this.peekKw('CASE')) {
+      return this.parseDoCase();
+    }
     if (!this.peekKw('WHILE')) {
       return { type: 'DO_PRG', name: this.ident() };
     }
@@ -244,6 +249,46 @@ export class Parser {
       if (n) body.push(n);
     }
     return { type: 'DO_WHILE', cond, body };
+  }
+
+  private parseDoCase(): ASTNode {
+    this.adv(); // consume CASE
+    this.skipNlSemi();
+    const cases: Array<{ cond: Expr; body: ASTNode[] }> = [];
+    const otherwise: ASTNode[] = [];
+
+    while (!this.end()) {
+      this.skipNlSemi();
+      if (this.peekKw('ENDCASE')) { this.adv(); break; }
+      if (this.peekKw('OTHERWISE')) {
+        this.adv();
+        this.skipNlSemi();
+        while (!this.end()) {
+          this.skipNlSemi();
+          if (this.peekKw('ENDCASE')) { this.adv(); break; }
+          const n = this.stmt();
+          if (n) otherwise.push(n);
+        }
+        break;
+      }
+      if (this.peekKw('CASE')) {
+        this.adv();
+        const cond = this.expr();
+        this.skipNlSemi();
+        const body: ASTNode[] = [];
+        while (!this.end()) {
+          this.skipNlSemi();
+          if (this.peekKw('CASE') || this.peekKw('OTHERWISE') || this.peekKw('ENDCASE')) break;
+          const n = this.stmt();
+          if (n) body.push(n);
+        }
+        cases.push({ cond, body });
+        continue;
+      }
+      // unexpected token inside DO CASE — skip
+      this.adv();
+    }
+    return { type: 'DO_CASE', cases, otherwise };
   }
 
   private parseCreate(): ASTNode {
@@ -368,7 +413,19 @@ export class Parser {
       return e;
     }
     if (t.type === 'ID' || t.type === 'KW') {
-      this.adv(); return { k: 'var', name: t.val };
+      this.adv();
+      // Function call: identifier immediately followed by (
+      if (this.peek().type === 'LPAREN') {
+        this.adv(); // consume (
+        const args: Expr[] = [];
+        while (!this.end() && this.peek().type !== 'RPAREN') {
+          args.push(this.expr());
+          if (this.peek().type === 'COMMA') this.adv();
+        }
+        if (this.peek().type === 'RPAREN') this.adv(); // consume )
+        return { k: 'call', fn: t.val.toUpperCase(), args };
+      }
+      return { k: 'var', name: t.val };
     }
     this.adv(); return { k: 'lit', v: '' };
   }
