@@ -410,4 +410,27 @@ describe('Session', () => {
     expect(dataLines[1]).toMatch(/bob/i);
     expect(dataLines[2]).toMatch(/zara/i);
   });
+
+  it('RECCOUNT() and EOF() are accurate immediately after USE without APPEND', async () => {
+    const { session } = makeSession();
+    const db = uniqueDb();
+    // Seed via one session, then read via a fresh session to simulate re-opening
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    await session.handleMessage({ type: 'command', text: 'CREATE TABLE preloaded (val CHAR(10))' });
+    await session.handleMessage({ type: 'command', text: 'USE preloaded' });
+    await session.handleMessage({ type: 'command', text: 'APPEND RECORD' });
+    await session.handleMessage({ type: 'command', text: 'APPEND RECORD' });
+
+    // Fresh session — open same DB/table without any APPEND
+    const { session: s2 } = makeSession();
+    await s2.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    await s2.handleMessage({ type: 'command', text: 'USE preloaded' });
+    await s2.handleMessage({ type: 'command', text: 'STORE RECCOUNT() TO rc' });
+    await s2.handleMessage({ type: 'command', text: 'GO TOP' });
+    await s2.handleMessage({ type: 'command', text: 'SKIP 99' });
+    await s2.handleMessage({ type: 'command', text: 'STORE EOF() TO ateof' });
+    const exec2 = (s2 as any).executor;
+    expect(exec2.state.vars.get('RC')).toBe(2);
+    expect(exec2.state.vars.get('ATEOF')).toBe(true);
+  });
 });

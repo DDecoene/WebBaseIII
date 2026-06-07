@@ -227,6 +227,7 @@ export class Executor {
 
   private async doReplaceAll(fields: Array<{ field: string; value: Expr }>, scope: 'ALL' | 'CURRENT'): Promise<ExecResult> {
     this.requireTable();
+    await this.refreshRecCount();
     const pairs = fields.map(f => ({ field: f.field, value: this.evalExpr(f.value) }));
     const setClauses = pairs.map(p => `${q(p.field)} = ?`).join(', ');
     const params = pairs.map(p => p.value);
@@ -284,6 +285,7 @@ export class Executor {
   private async doGo(target: 'TOP' | 'BOTTOM' | number): Promise<ExecResult> {
     this.requireTable();
     const cnt = await this.db.getRowCount(this.state.table!, this.state.filter ?? undefined);
+    this.state.cachedRecCount = cnt;
     if (target === 'TOP')         this.state.rowPtr = 1;
     else if (target === 'BOTTOM') this.state.rowPtr = cnt;
     else                          this.state.rowPtr = Math.max(1, Math.min(cnt, target));
@@ -294,6 +296,7 @@ export class Executor {
   private async doSkip(n: number): Promise<ExecResult> {
     this.requireTable();
     const cnt = await this.db.getRowCount(this.state.table!, this.state.filter ?? undefined);
+    this.state.cachedRecCount = cnt;
     // Allow going out of bounds so EOF()/BOF() can be detected
     const newPtr = this.state.rowPtr + n;
     if (newPtr > cnt) this.state.rowPtr = cnt + 1;      // EOF
@@ -326,6 +329,7 @@ export class Executor {
   }
 
   private async doStore(valueExpr: Expr, varName: string): Promise<ExecResult> {
+    await this.refreshRecCount();
     const v = this.evalExpr(valueExpr);
     this.state.vars.set(varName, v);
     return { output: [{ text: `${varName} = ${JSON.stringify(v)}`, cls: 'info' }] };
@@ -340,7 +344,7 @@ export class Executor {
   }
 
   private async doIf(condE: Expr, body: ASTNode[], elseBody: ASTNode[]): Promise<ExecResult> {
-    await this.refreshRecCount();
+    await this.refreshRecCount(true);
     const cond = this.evalExpr(condE);
     return this.run(cond ? body : elseBody);
   }
@@ -349,7 +353,7 @@ export class Executor {
     const out: OutputLine[] = [];
     let iters = startIter;
     while (true) {
-      await this.refreshRecCount();
+      await this.refreshRecCount(true);
       if (!this.evalExpr(condE) || iters++ >= 10000) break;
       const r = await this.run(body);
       out.push(...r.output);
@@ -581,10 +585,10 @@ export class Executor {
     return callStateless(fn, args);
   }
 
-  private async refreshRecCount(): Promise<void> {
+  private async refreshRecCount(loadFields = false): Promise<void> {
     if (this.state.table) {
       this.state.cachedRecCount = await this.db.getRowCount(this.state.table, this.state.filter ?? undefined);
-      if (this.state.rowPtr >= 1) {
+      if (loadFields && this.state.rowPtr >= 1) {
         const filter = this.state.filter;
         const where = filter ? ` WHERE ${filter}` : '';
         const rows = await this.db.query(
@@ -615,7 +619,7 @@ export class Executor {
     cases: Array<{ cond: Expr; body: ASTNode[] }>,
     otherwise: ASTNode[]
   ): Promise<ExecResult> {
-    await this.refreshRecCount();
+    await this.refreshRecCount(true);
     for (const { cond, body } of cases) {
       if (this.evalExpr(cond)) {
         return this.runBlock(body);
