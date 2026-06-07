@@ -255,6 +255,7 @@ export class Executor {
     }
     const cnt = await this.db.getRowCount(this.state.table!);
     this.state.rowPtr = cnt;
+    this.state.cachedRecCount = cnt;
     return { output: [{ text: `Record appended. Total: ${cnt}`, cls: 'ok' }] };
   }
 
@@ -325,7 +326,6 @@ export class Executor {
   }
 
   private async doStore(valueExpr: Expr, varName: string): Promise<ExecResult> {
-    await this.refreshRecCount();
     const v = this.evalExpr(valueExpr);
     this.state.vars.set(varName, v);
     return { output: [{ text: `${varName} = ${JSON.stringify(v)}`, cls: 'info' }] };
@@ -350,8 +350,7 @@ export class Executor {
     let iters = startIter;
     while (true) {
       await this.refreshRecCount();
-      if (!this.evalExpr(condE) || iters >= 10000) break;
-      iters++;
+      if (!this.evalExpr(condE) || iters++ >= 10000) break;
       const r = await this.run(body);
       out.push(...r.output);
       if (r.action === 'QUIT') return { output: out, action: 'QUIT' };
@@ -574,7 +573,7 @@ export class Executor {
   private callBuiltin(fn: string, args: unknown[]): unknown {
     switch (fn) {
       case 'EOF':      return this.state.table ? this.state.rowPtr > this.state.cachedRecCount : true;
-      case 'BOF':      return this.state.rowPtr < 1;
+      case 'BOF':      return this.state.table ? this.state.rowPtr < 1 : false;
       case 'FOUND':    return this.state._found;
       case 'RECNO':    return this.state.rowPtr;
       case 'RECCOUNT': return this.state.cachedRecCount;
@@ -585,23 +584,21 @@ export class Executor {
   private async refreshRecCount(): Promise<void> {
     if (this.state.table) {
       this.state.cachedRecCount = await this.db.getRowCount(this.state.table, this.state.filter ?? undefined);
-      await this.loadCurrentRow();
+      if (this.state.rowPtr >= 1) {
+        const filter = this.state.filter;
+        const where = filter ? ` WHERE ${filter}` : '';
+        const rows = await this.db.query(
+          `SELECT * FROM ${q(this.state.table)} ${where} LIMIT 1 OFFSET ${this.state.rowPtr - 1}`
+        );
+        if (rows[0]) {
+          for (const [k, v] of Object.entries(rows[0])) {
+            this.state.vars.set(k.toUpperCase(), v);
+          }
+        }
+      }
     } else {
       this.state.cachedRecCount = 0;
     }
-  }
-
-  private async loadCurrentRow(): Promise<void> {
-    if (!this.state.table || this.state.rowPtr < 1) return;
-    try {
-      const rows = await this.getOrderedRows(this.state.rowPtr);
-      const row = rows[this.state.rowPtr - 1];
-      if (row) {
-        for (const [k, v] of Object.entries(row)) {
-          this.state.vars.set(k.toUpperCase(), v);
-        }
-      }
-    } catch { /* ignore */ }
   }
 
   private async runBlock(nodes: ASTNode[]): Promise<ExecResult> {
