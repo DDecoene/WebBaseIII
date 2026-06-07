@@ -22,7 +22,7 @@ afterEach(() => {
   const dataDir = path.join(process.cwd(), 'data');
   if (fs.existsSync(dataDir)) {
     fs.readdirSync(dataDir)
-      .filter(f => f.startsWith('test_session_') && f.endsWith('.sqlite3'))
+      .filter(f => f.toLowerCase().startsWith('test_session_') && f.toLowerCase().endsWith('.sqlite3'))
       .forEach(f => fs.unlinkSync(path.join(dataDir, f)));
   }
 });

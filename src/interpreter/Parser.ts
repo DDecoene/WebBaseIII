@@ -55,6 +55,10 @@ export class Parser {
 
   constructor(private toks: Token[]) {}
 
+  parseExprPublic(): Expr {
+    return this.expr();
+  }
+
   parse(): ASTNode[] {
     const nodes: ASTNode[] = [];
     while (!this.end()) {

@@ -16,7 +16,7 @@ afterEach(() => {
   const dataDir = path.join(process.cwd(), 'data');
   if (fs.existsSync(dataDir)) {
     fs.readdirSync(dataDir)
-      .filter(f => f.startsWith('test_idx_') && f.endsWith('.sqlite3'))
+      .filter(f => f.toLowerCase().startsWith('test_idx_') && f.toLowerCase().endsWith('.sqlite3'))
       .forEach(f => fs.unlinkSync(path.join(dataDir, f)));
   }
 });
@@ -209,5 +209,59 @@ describe('Session: INDEX ON and SET INDEX TO', () => {
     await session.handleMessage({ type: 'command', text: 'REINDEX' });
     const output = sent.find(m => m.type === 'output') as any;
     expect(output?.lines.some((l: any) => l.cls === 'ok')).toBe(true);
+  });
+});
+
+describe('Session: ordered queries', () => {
+  async function setupTable(session: any, db: string, name: string) {
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    await session.handleMessage({ type: 'command', text: `CREATE TABLE ${name} (name TEXT, score INTEGER)` });
+    await session.handleMessage({ type: 'command', text: `USE ${name}` });
+    await session.handleMessage({ type: 'command', text: 'APPEND RECORD' });
+    await session.handleMessage({ type: 'command', text: 'REPLACE name WITH "Charlie", score WITH 3' });
+    await session.handleMessage({ type: 'command', text: 'APPEND RECORD' });
+    await session.handleMessage({ type: 'command', text: 'REPLACE name WITH "Alice", score WITH 1' });
+    await session.handleMessage({ type: 'command', text: 'APPEND RECORD' });
+    await session.handleMessage({ type: 'command', text: 'REPLACE name WITH "Bob", score WITH 2' });
+  }
+
+  it('LIST respects active index order', async () => {
+    const { session, sent } = makeSession();
+    const db = uniqueDb();
+    await setupTable(session, db, 'ord1');
+    await session.handleMessage({ type: 'command', text: 'INDEX ON NAME TO BYNAME' });
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: 'LIST' });
+    const output = sent.find(m => m.type === 'output') as any;
+    const names = output.lines.filter((l: any) =>
+      l.text.includes('Alice') || l.text.includes('Bob') || l.text.includes('Charlie')
+    );
+    expect(names[0].text).toContain('Alice');
+    expect(names[1].text).toContain('Bob');
+    expect(names[2].text).toContain('Charlie');
+  });
+
+  it('LIST without active index uses natural order', async () => {
+    const { session, sent } = makeSession();
+    const db = uniqueDb();
+    await setupTable(session, db, 'ord2');
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: 'LIST' });
+    const output = sent.find(m => m.type === 'output') as any;
+    const names = output.lines.filter((l: any) =>
+      l.text.includes('Alice') || l.text.includes('Bob') || l.text.includes('Charlie')
+    );
+    expect(names[0].text).toContain('Charlie');
+  });
+
+  it('GO TOP with active index goes to position 1 in index order', async () => {
+    const { session, sent } = makeSession();
+    const db = uniqueDb();
+    await setupTable(session, db, 'ord3');
+    await session.handleMessage({ type: 'command', text: 'INDEX ON NAME TO BYNAME' });
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: 'GO TOP' });
+    const status = sent.find(m => m.type === 'status') as any;
+    expect(status?.record).toBe(1);
   });
 });

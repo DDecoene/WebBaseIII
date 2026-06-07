@@ -1,5 +1,6 @@
 import { IDatabaseBridge, IIndexStore, OutputLine, FormField } from '../shared/types';
-import { ASTNode, Expr, ColDef } from './Parser';
+import { ASTNode, Expr, ColDef, Parser } from './Parser';
+import { Lexer } from './Lexer';
 
 export type { OutputLine, FormField } from '../shared/types';
 
@@ -173,9 +174,7 @@ export class Executor {
 
   private async doList(): Promise<ExecResult> {
     this.requireTable();
-    const filter = this.state.filter;
-    const sql = `SELECT * FROM ${q(this.state.table!)}${filter ? ' WHERE ' + filter : ''} LIMIT 500`;
-    const rows = await this.db.query(sql);
+    const rows = await this.getOrderedRows(500);
     if (!rows.length) return { output: [{ text: '(No records)', cls: 'info' }] };
 
     const cols = Object.keys(rows[0]);
@@ -183,8 +182,8 @@ export class Executor {
     const out: OutputLine[] = [];
     out.push({ text: cols.map((c, i) => c.padEnd(widths[i])).join('  '), cls: 'hdr' });
     out.push({ text: cols.map((_, i) => '-'.repeat(widths[i])).join('  '), cls: 'sep' });
-    rows.forEach((r, ri) => {
-      out.push({ text: cols.map((c, i) => String(r[c] ?? '').padEnd(widths[i])).join('  '), cls: ri % 2 === 0 ? 'out' : 'out' });
+    rows.forEach(r => {
+      out.push({ text: cols.map((c, i) => String(r[c] ?? '').padEnd(widths[i])).join('  ') });
     });
     out.push({ text: `${rows.length} record(s)`, cls: 'info' });
     return { output: out };
@@ -278,11 +277,12 @@ export class Executor {
 
   private async doGo(target: 'TOP' | 'BOTTOM' | number): Promise<ExecResult> {
     this.requireTable();
-    const cnt = await this.db.getRowCount(this.state.table!);
-    if (target === 'TOP')    this.state.rowPtr = 1;
+    const cnt = await this.db.getRowCount(this.state.table!, this.state.filter ?? undefined);
+    if (target === 'TOP')         this.state.rowPtr = 1;
     else if (target === 'BOTTOM') this.state.rowPtr = cnt;
-    else this.state.rowPtr = Math.max(1, Math.min(cnt, target));
-    return { output: [{ text: `Record pointer: ${this.state.rowPtr} / ${cnt}`, cls: 'info' }] };
+    else                          this.state.rowPtr = Math.max(1, Math.min(cnt, target));
+    const idxNote = this.state.activeIndex ? `  [index: ${this.state.activeIndex.tag}]` : '';
+    return { output: [{ text: `Record pointer: ${this.state.rowPtr} / ${cnt}${idxNote}`, cls: 'info' }] };
   }
 
   private async doSkip(n: number): Promise<ExecResult> {
@@ -515,6 +515,62 @@ export class Executor {
   }
 
   setVar(name: string, value: unknown) { this.state.vars.set(name, value); }
+
+  private async getOrderedRows(limit = 500): Promise<Record<string, unknown>[]> {
+    this.requireTable();
+    const table = this.state.table!;
+    const filter = this.state.filter;
+    const where = filter ? ` WHERE ${filter}` : '';
+    const idx = this.state.activeIndex;
+
+    if (!idx) {
+      return this.db.query(`SELECT * FROM ${q(table)}${where} LIMIT ${limit}`);
+    }
+
+    const expr = idx.expression.trim();
+    const isSimpleField = /^[A-Z_][A-Z0-9_]*$/i.test(expr);
+
+    if (isSimpleField) {
+      return this.db.query(
+        `SELECT * FROM ${q(table)}${where} ORDER BY ${q(expr)} LIMIT ${limit}`
+      );
+    }
+
+    // Complex expression: fetch all, sort in JS using W3Script evaluator
+    const rows = await this.db.query(`SELECT * FROM ${q(table)}${where}`);
+    rows.sort((a, b) => {
+      const va = String(this.evalExprOnRow(idx.expression, a));
+      const vb = String(this.evalExprOnRow(idx.expression, b));
+      return va < vb ? -1 : va > vb ? 1 : 0;
+    });
+    return rows.slice(0, limit);
+  }
+
+  private evalExprOnRow(expression: string, row: Record<string, unknown>): unknown {
+    // Temporarily bind row fields as variables, evaluate expression, then restore
+    const saved = new Map<string, unknown>();
+    for (const [k, v] of Object.entries(row)) {
+      saved.set(k, this.state.vars.get(k));
+      this.state.vars.set(k, v);
+    }
+    let result: unknown = '';
+    try {
+      const toks = new Lexer(expression).tokenize();
+      const exprNode = new Parser(toks).parseExprPublic();
+      result = this.evalExpr(exprNode);
+    } catch {
+      result = String(row[expression.trim()] ?? '');
+    }
+    for (const [k, v] of saved) {
+      if (v === undefined) this.state.vars.delete(k);
+      else this.state.vars.set(k, v);
+    }
+    return result;
+  }
+
+  async getOrderedRowsPublic(limit = 500): Promise<Record<string, unknown>[]> {
+    return this.getOrderedRows(limit);
+  }
 
   private requireTable() {
     if (!this.state.table) throw new Error('No table selected — run: USE <tablename>');
