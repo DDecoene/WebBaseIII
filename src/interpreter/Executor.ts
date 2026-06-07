@@ -574,7 +574,7 @@ export class Executor {
     return rows.slice(0, limit);
   }
 
-  private evalExprOnRowParsed(exprNode: Expr, row: Record<string, unknown>): unknown {
+  evalExprOnRowParsed(exprNode: Expr, row: Record<string, unknown>): unknown {
     const saved = new Map<string, unknown>();
     for (const [k, v] of Object.entries(row)) {
       saved.set(k, this.state.vars.get(k));
@@ -600,6 +600,38 @@ export class Executor {
 
   async getOrderedRowsPublic(limit = 500): Promise<Record<string, unknown>[]> {
     return this.getOrderedRows(limit);
+  }
+
+  async getOrderedRowsWithIds(limit = 2000): Promise<Record<string, unknown>[]> {
+    this.requireTable();
+    const table = this.state.table!;
+    const filter = this.state.filter;
+    const where = filter ? ` WHERE ${filter}` : '';
+    const idx = this.state.activeIndex;
+
+    if (!idx) {
+      return this.db.query(`SELECT rowid as _rowid, * FROM ${q(table)}${where} LIMIT ${limit}`);
+    }
+
+    const expr = idx.expression.trim();
+    const isSimpleField = /^[A-Z_][A-Z0-9_]*$/i.test(expr);
+
+    if (isSimpleField) {
+      return this.db.query(
+        `SELECT rowid as _rowid, * FROM ${q(table)}${where} ORDER BY ${q(expr)} LIMIT ${limit}`
+      );
+    }
+
+    // Complex expression: fetch with rowids, sort in JS
+    const rows = await this.db.query(`SELECT rowid as _rowid, * FROM ${q(table)}${where}`);
+    const exprNode = new Parser(new Lexer(idx.expression).tokenize()).parseExprPublic();
+    rows.sort((a, b) => {
+      const va = this.evalExprOnRowParsed(exprNode, a);
+      const vb = this.evalExprOnRowParsed(exprNode, b);
+      if (typeof va === 'number' && typeof vb === 'number') return va - vb;
+      return String(va) < String(vb) ? -1 : String(va) > String(vb) ? 1 : 0;
+    });
+    return rows.slice(0, limit);
   }
 
   private requireTable() {
