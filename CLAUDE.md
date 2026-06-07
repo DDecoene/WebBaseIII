@@ -1,36 +1,45 @@
 # WebBase-III
 
-Browser-native dBASE III revival. Runs entirely in a single browser tab — no server, no dependencies at runtime. SQLite Wasm + OPFS for persistent storage, custom W3Script interpreter, terminal REPL, editable grid, and form layout engine.
+Feature-complete dBASE III reimagined for the modern web. WebSocket server backed by Node.js + SQLite (`better-sqlite3`), custom W3Script interpreter, terminal REPL, editable grid, form layout engine, program files, and indexes.
 
 ## Stack
 
-- **Vite** — build tool / dev server
-- **TypeScript** — strictly typed throughout
-- **@sqlite.org/sqlite-wasm** — official SQLite compiled to WebAssembly, running in a DedicatedWorker with the OPFS VFS for persistent local storage
+- **Vite** — build tool / dev server (browser frontend)
+- **TypeScript** — strictly typed throughout (server + browser)
+- **better-sqlite3** — synchronous SQLite on the server (WAL mode)
+- **Node.js WebSocket server** — each connection gets an isolated interpreter session
+- **Vitest** — test suite (`npm test`)
 
 ## Running the project
 
 ```bash
-npm install   # also copies public/sqlite3.wasm via postinstall
-npm run dev   # http://localhost:5173
+npm install
+npm run dev        # Vite dev server + Node WS server; browser at http://localhost:5173
+                   # (WS server on :3000, Vite proxy forwards /ws)
 ```
 
-> **Important:** the dev server must send COOP/COEP headers (already configured in `vite.config.ts`) for SharedArrayBuffer and OPFS to work. Do not serve the files with a plain static server.
+Production:
+
+```bash
+npm run serve      # builds frontend, then serves everything on http://localhost:3000
+```
 
 ## Architecture
 
 ```
-src/
-  db/
-    db.worker.ts        SQLite Wasm runs here (DedicatedWorker)
-                        Handles: openDb, exec, query, tables, structure, rowCount
-                        Falls back to in-memory if OPFS is unavailable
-    DatabaseBridge.ts   Main-thread interface — promisified postMessage to the worker
+server/
+  index.ts              Node.js HTTP + WebSocket server (port 3000)
+  Session.ts            Per-connection session: parses commands, drives Executor
+  SessionManager.ts     Tracks all active sessions
+  ServerDatabaseBridge.ts  IDatabaseBridge impl wrapping better-sqlite3
+  ProgramStore.ts       .prg program storage in data/system.sqlite3
+  IndexStore.ts         Index metadata + active index in data/system.sqlite3
 
+src/
   interpreter/
     Lexer.ts            Tokenises W3Script input (case-insensitive)
     Parser.ts           Recursive-descent AST builder
-    Executor.ts         Async AST runner; manages state (db/table/filter/vars/rowPtr)
+    Executor.ts         Async AST runner; manages state (db/table/filter/vars/rowPtr/activeIndex)
 
   terminal/
     Terminal.ts         REPL UI — command history, multi-line block accumulation
@@ -38,46 +47,83 @@ src/
   ui/
     Grid.ts             BROWSE spreadsheet — inline cell editing, keyboard nav
     FormLayout.ts       @ SAY GET form engine — character-cell coordinates
+    ProgramEditor.ts    .prg source editor UI
 
-  main.ts               Boot: init bridge → executor → terminal
-  vite-env.d.ts         Vite client types (needed for ?worker imports)
-  styles/main.css       Classic green-on-black terminal + grid + form styles
+  ws/
+    WsClient.ts         Browser WebSocket client — sends commands, receives messages
 
-public/
-  sqlite3.wasm          Copied from node_modules by postinstall script
+  shared/
+    types.ts            Shared TS types (IDatabaseBridge, IIndexStore, WS message shapes)
 
-scripts/
-  copy-wasm.cjs         postinstall helper — copies the WASM binary to public/
+  main.ts               Boot: connect WS → wire terminal/grid/form/editor
+
+data/
+  system.sqlite3        Server-side system store (programs, index metadata)
+  *.sqlite3             User databases (created by USE DATABASE)
+
+tests/
+  Session.test.ts       Integration tests (full command round-trips)
+  Indexing.test.ts      Index commands (INDEX ON, SEEK, FIND, LIST INDEXES, …)
+  ServerDatabaseBridge.test.ts
+  ProgramStore.test.ts
 ```
 
-## W3Script commands implemented (Phase 1)
+## W3Script commands
 
+### Data & navigation
 | Command | What it does |
 |---|---|
-| `USE <table>` | Open/select a table (opens `webbaseiii.sqlite3` if no DB is active) |
+| `USE <table>` | Select a table; restores any saved active index |
 | `USE DATABASE <name>` | Open a named SQLite database |
-| `LIST` | Print all records (up to 500) |
+| `LIST` | Print records in active index order (up to 500) |
 | `LIST STRUCTURE` | Show column schema |
 | `LIST TABLES` | Show all tables with record counts |
-| `BROWSE` | Open the editable spreadsheet grid |
 | `CLEAR` | Clear terminal output |
-| `CREATE TABLE <n> (col TYPE, ...)` | Create a new table |
+| `CREATE TABLE <n> (col TYPE, ...)` | Create a table |
 | `DROP TABLE <name>` | Delete a table |
 | `APPEND RECORD` | Insert a blank row |
 | `DELETE` / `DELETE ALL` | Delete current or all records |
 | `PACK` | VACUUM the SQLite file |
 | `GO TOP` / `GO BOTTOM` / `GO <n>` | Move record pointer |
 | `SKIP <n>` | Move pointer forward/back |
-| `REPLACE ALL <field> WITH <val>` | UPDATE field on all (or filtered) rows |
-| `SET FILTER TO <expr>` | Set a WHERE clause; empty = clear |
+| `REPLACE <field> WITH <val>, ...` | Update field(s) on current row |
+| `REPLACE ALL <field> WITH <val>, ...` | Update all (filtered) rows |
+| `SET FILTER TO <expr>` | Set a WHERE clause; empty clears it |
+
+### Indexing & search
+| Command | What it does |
+|---|---|
+| `INDEX ON <expr> TO <tag>` | Create index on expression; sets it active |
+| `SET INDEX TO <tag>` | Activate a previously created index |
+| `SET INDEX TO` | Clear active index (natural order) |
+| `REINDEX` | Rebuild SQLite indexes for current table |
+| `LIST INDEXES` | Print all indexes for current table with active marker |
+| `SEEK <expr>` | Position record pointer at first index match |
+| `FIND <string>` | Alias for SEEK (unquoted string — dBASE III legacy) |
+
+### Programs
+| Command | What it does |
+|---|---|
+| `DO <name>` | Run a saved .prg program |
+| `EDIT <name>` | Open .prg source editor |
+| `LIST PROGRAMS` | Show all saved programs |
+
+### Variables & I/O
+| Command | What it does |
+|---|---|
 | `STORE <val> TO <var>` | Assign a variable |
-| `INPUT "prompt" TO <var>` | Collect input via a form |
-| `@ r,c SAY "text" GET <var>` | Build a form field |
-| `READ` | Show the form, pause execution, resume after submit |
+| `INPUT "prompt" TO <var>` | Collect keyboard input |
+| `@ r,c SAY "text" GET <var>` | Define a form field |
+| `READ` | Display form and wait for submit |
+
+### Control flow
+| Command | What it does |
+|---|---|
 | `IF <cond> … ENDIF` | Conditional block |
 | `DO WHILE <cond> … ENDDO` | Loop |
 | `HELP` | Print command reference |
 | `QUIT` | Exit |
+| `BROWSE` | Open the editable spreadsheet grid |
 
 ## BROWSE grid keyboard shortcuts
 
@@ -91,22 +137,18 @@ scripts/
 | F5 | Refresh from DB |
 | Esc | Exit grid, return to terminal |
 
-## Known issues / next steps (Phase 2)
+## Roadmap (in progress)
 
-- **Blank screen on load**: the COOP/COEP headers are required — use `npm run dev`, not a plain file open or static server.
-- **OPFS availability**: Chrome/Edge support OPFS in workers; Firefox requires a flag; Safari 16.4+. If unavailable, data is in-memory (lost on refresh).
-- **Planned**: `.prg` program files, REPORT FORM, INDEX ON, multi-work-area support, PWA service worker, syntax highlighting in the REPL.
+1. ~~Indexing & Search~~ — `INDEX ON`, `SET INDEX TO`, `SEEK`, `FIND`, `REINDEX`, `LIST INDEXES` ✅
+2. **Language Completeness** — `DO CASE/ENDCASE`, built-in functions (`EOF()`, `BOF()`, `FOUND()`, `RECNO()`, `SUBSTR()`, `STR()`, `AT()`, `CTOD()`, `DTOC()`, …), `APPEND FROM` / `COPY TO`
+3. **Report & Label Engine** — `REPORT FORM`, `LABEL FORM` (stored in system.sqlite3)
+4. **The Assistant** — menu-driven UI for non-programmers (dBASE III "assist" mode)
+5. **Multi-Work-Area** — `SELECT 1–10`, `SET RELATION TO`
 
-## Example session
+## Definition of done
 
-```
-CREATE TABLE customers (name CHAR(40), phone CHAR(20), country CHAR(30))
-USE customers
-APPEND RECORD
-REPLACE name WITH "Acme Corp", phone WITH "555-1234", country WITH "BE"
-LIST
-BROWSE
-SET FILTER TO country == "BE"
-LIST
-SET FILTER TO
-```
+A task is not complete until:
+- Tests pass (`npm test`)
+- README.md command table is updated
+- CLAUDE.md is updated (architecture, commands, roadmap)
+- Any relevant design doc in `docs/superpowers/` reflects final implementation
