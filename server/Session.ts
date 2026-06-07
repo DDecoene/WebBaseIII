@@ -4,6 +4,7 @@ import { Executor } from '../src/interpreter/Executor.js';
 import type { ASTNode } from '../src/interpreter/Parser.js';
 import { ServerDatabaseBridge } from './ServerDatabaseBridge.js';
 import { programStore } from './ProgramStore.js';
+import { indexStore } from './IndexStore.js';
 import type { ClientMessage, ServerMessage } from '../src/shared/types.js';
 
 export class Session {
@@ -13,7 +14,7 @@ export class Session {
 
   constructor(private send: (msg: ServerMessage) => void) {
     this.bridge = new ServerDatabaseBridge();
-    this.executor = new Executor(this.bridge);
+    this.executor = new Executor(this.bridge, indexStore);
   }
 
   async handleMessage(msg: ClientMessage): Promise<void> {

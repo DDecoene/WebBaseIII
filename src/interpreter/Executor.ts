@@ -1,4 +1,4 @@
-import { IDatabaseBridge, OutputLine, FormField } from '../shared/types';
+import { IDatabaseBridge, IIndexStore, OutputLine, FormField } from '../shared/types';
 import { ASTNode, Expr, ColDef } from './Parser';
 
 export type { OutputLine, FormField } from '../shared/types';
@@ -20,6 +20,8 @@ export interface State {
   rowPtr: number;
   pendingForm: FormField[];
   opfsAvailable: boolean;
+  activeIndex: { tag: string; expression: string } | null;
+  _found: boolean;
 }
 
 type DbType = 'TEXT' | 'REAL' | 'INTEGER' | 'BLOB';
@@ -36,11 +38,16 @@ function mapType(t: string): DbType {
 export class Executor {
   public state: State;
 
-  constructor(private db: IDatabaseBridge) {
+  constructor(
+    private db: IDatabaseBridge,
+    private indexStore: IIndexStore | null = null,
+  ) {
     this.state = {
       db: null, table: null, filter: null,
       vars: new Map(), rowPtr: 1,
       pendingForm: [], opfsAvailable: false,
+      activeIndex: null,
+      _found: false,
     };
   }
 
@@ -109,6 +116,12 @@ export class Executor {
         case 'DO_PRG':      return { output: [], action: 'DO_PRG', prgName: node.name };
         case 'LIST_PROGRAMS': return { output: [], action: 'LIST_PROGRAMS' };
         case 'EDIT_PRG':    return { output: [], action: 'EDIT_PRG', prgName: node.name };
+        case 'INDEX_ON':    return this.doIndexOn(node.expression, node.tag);
+        case 'SET_INDEX':   return this.doSetIndex(node.tag);
+        case 'REINDEX':     return this.doReindex();
+        case 'LIST_INDEXES':return this.doListIndexes();
+        case 'SEEK':        return this.doSeek(node.value);
+        case 'FIND':        return this.doFind(node.value);
         case 'UNKNOWN':     return { output: [{ text: `Unknown command: ${node.raw}`, cls: 'warn' }] };
       }
     } catch (e: unknown) {
@@ -127,6 +140,7 @@ export class Executor {
     this.state.table = name;
     this.state.filter = null;
     this.state.rowPtr = 1;
+    this.state.activeIndex = this.indexStore?.getActive(name) ?? null;
     const exists = await this.db.tableExists(name);
     const storage = this.state.opfsAvailable ? 'OPFS (persistent)' : 'server-side persistent';
     const lines: OutputLine[] = [
@@ -137,6 +151,9 @@ export class Executor {
       lines.push({ text: `Table    : ${name}  (${cnt} records)`, cls: 'ok' });
     } else {
       lines.push({ text: `Table    : ${name}  (table not found — use CREATE TABLE to create it)`, cls: 'warn' });
+    }
+    if (this.state.activeIndex) {
+      lines.push({ text: `Index    : ${this.state.activeIndex.tag}  (${this.state.activeIndex.expression})`, cls: 'info' });
     }
     return { output: lines };
   }
@@ -374,6 +391,25 @@ export class Executor {
     await this.db.exec(`DROP TABLE IF EXISTS ${q(name)}`);
     if (this.state.table === name) this.state.table = null;
     return { output: [{ text: `Table dropped: ${name}`, cls: 'ok' }] };
+  }
+
+  private async doIndexOn(_expression: string, _tag: string): Promise<ExecResult> {
+    return { output: [{ text: 'INDEX ON: not yet implemented', cls: 'warn' }] };
+  }
+  private async doSetIndex(_tag: string | null): Promise<ExecResult> {
+    return { output: [{ text: 'SET INDEX: not yet implemented', cls: 'warn' }] };
+  }
+  private async doReindex(): Promise<ExecResult> {
+    return { output: [{ text: 'REINDEX: not yet implemented', cls: 'warn' }] };
+  }
+  private async doListIndexes(): Promise<ExecResult> {
+    return { output: [{ text: 'LIST INDEXES: not yet implemented', cls: 'warn' }] };
+  }
+  private async doSeek(_value: import('./Parser').Expr): Promise<ExecResult> {
+    return { output: [{ text: 'SEEK: not yet implemented', cls: 'warn' }] };
+  }
+  private async doFind(_value: string): Promise<ExecResult> {
+    return { output: [{ text: 'FIND: not yet implemented', cls: 'warn' }] };
   }
 
   private doHelp(): ExecResult {
