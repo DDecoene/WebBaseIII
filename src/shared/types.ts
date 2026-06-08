@@ -46,6 +46,7 @@ export interface IIndexStore {
   getActive(tableName: string): IndexDef | null;
   setActive(tableName: string, tag: string): void;
   clearActive(tableName: string): void;
+  dropTable(tableName: string): void;
 }
 
 // ── WebSocket message types ────────────────────────────────────────────────

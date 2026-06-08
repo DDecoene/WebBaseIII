@@ -165,7 +165,7 @@ export class Session {
     if (result.action === 'CLEAR') {
       this.send({ type: 'clear' });
       this.sendStatus();
-      return true;
+      return false;
     }
 
     if (result.action === 'QUIT') {
@@ -235,7 +235,7 @@ export class Session {
       db: s.db,
       table: s.table,
       record: s.rowPtr,
-      total: 0,
+      total: s.cachedRecCount,
     });
   }
 }

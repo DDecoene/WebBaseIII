@@ -67,6 +67,11 @@ export class IndexStore implements IIndexStore {
   clearActive(tableName: string): void {
     this.db.prepare('DELETE FROM active_indexes WHERE table_name = ?').run(tableName);
   }
+
+  dropTable(tableName: string): void {
+    this.db.prepare('DELETE FROM active_indexes WHERE table_name = ?').run(tableName);
+    this.db.prepare('DELETE FROM indexes WHERE table_name = ?').run(tableName);
+  }
 }
 
 export const indexStore = new IndexStore();

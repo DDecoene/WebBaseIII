@@ -332,7 +332,7 @@ export class Executor {
     await this.refreshRecCount();
     const v = this.evalExpr(valueExpr);
     this.state.vars.set(varName, v);
-    return { output: [{ text: `${varName} = ${JSON.stringify(v)}`, cls: 'info' }] };
+    return { output: [{ text: `${varName} = ${fmtVal(v)}`, cls: 'info' }] };
   }
 
   private doInput(prompt: string, varName: string): ExecResult {
@@ -406,7 +406,11 @@ export class Executor {
 
   private async doDropTable(name: string): Promise<ExecResult> {
     await this.db.exec(`DROP TABLE IF EXISTS ${q(name)}`);
-    if (this.state.table === name) this.state.table = null;
+    this.indexStore?.dropTable(name);
+    if (this.state.table === name) {
+      this.state.table = null;
+      this.state.activeIndex = null;
+    }
     return { output: [{ text: `Table dropped: ${name}`, cls: 'ok' }] };
   }
 
@@ -720,6 +724,12 @@ export class Executor {
   private requireTable() {
     if (!this.state.table) throw new Error('No table selected — run: USE <tablename>');
   }
+}
+
+function fmtVal(v: unknown): string {
+  if (typeof v === 'boolean') return v ? '.T.' : '.F.';
+  if (typeof v === 'string') return `"${v}"`;
+  return String(v);
 }
 
 function q(name: string): string {
