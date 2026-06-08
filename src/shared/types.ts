@@ -49,6 +49,22 @@ export interface IIndexStore {
   dropTable(tableName: string): void;
 }
 
+export interface WorkArea {
+  alias: string;
+  db: string | null;
+  table: string | null;
+  filter: string | null;
+  rowPtr: number;
+  cachedRecCount: number;
+  activeIndex: { tag: string; expression: string } | null;
+  _found: boolean;
+  opfsAvailable: boolean;
+  relation: {
+    expression: string;
+    intoAlias: string;
+  } | null;
+}
+
 // ── WebSocket message types ────────────────────────────────────────────────
 
 // Client → Server
