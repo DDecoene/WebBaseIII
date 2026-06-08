@@ -1,5 +1,5 @@
 export type TType =
-  | 'KW' | 'ID' | 'STR' | 'NUM'
+  | 'KW' | 'ID' | 'STR' | 'NUM' | 'BOOL'
   | 'OP' | 'COMMA' | 'SEMI' | 'AT'
   | 'LPAREN' | 'RPAREN' | 'NL' | 'EOF';
 
@@ -48,6 +48,20 @@ export class Lexer {
       if (ch === '"' || ch === "'") { this.toks.push(this.rdStr(ch)); continue; }
       if (this.isDigit(ch)) { this.toks.push(this.rdNum()); continue; }
       if (this.isAlpha(ch) || ch === '_') { this.toks.push(this.rdIdent()); continue; }
+      // dBASE boolean literals: .T. .TRUE. .F. .FALSE.
+      if (ch === '.') {
+        const rest = this.src.slice(this.p + 1).toUpperCase();
+        if (rest.startsWith('T.') || rest.startsWith('TRUE.')) {
+          const len = rest.startsWith('TRUE.') ? 6 : 3;
+          this.toks.push({ type: 'BOOL', val: 'TRUE', line: this.ln, col: this.col });
+          this.p += len; this.col += len; continue;
+        }
+        if (rest.startsWith('F.') || rest.startsWith('FALSE.')) {
+          const len = rest.startsWith('FALSE.') ? 7 : 3;
+          this.toks.push({ type: 'BOOL', val: 'FALSE', line: this.ln, col: this.col });
+          this.p += len; this.col += len; continue;
+        }
+      }
 
       if (ch === '@') { this.emit('AT', '@'); continue; }
       if (ch === ',') { this.emit('COMMA', ','); continue; }

@@ -158,14 +158,19 @@ export class Session {
 
   /** Handles a single ExecResult. Returns true if execution should stop. */
   private async handleExecResult(result: import('../src/interpreter/Executor.js').ExecResult): Promise<boolean> {
+    // Split output on 'clear' sentinels: send clear + flush preceding lines inline
     if (result.output.length > 0) {
-      this.send({ type: 'output', lines: result.output });
-    }
-
-    if (result.action === 'CLEAR') {
-      this.send({ type: 'clear' });
-      this.sendStatus();
-      return false;
+      let batch: typeof result.output = [];
+      for (const line of result.output) {
+        if (line.cls === 'clear') {
+          if (batch.length > 0) { this.send({ type: 'output', lines: batch }); batch = []; }
+          this.send({ type: 'clear' });
+          this.sendStatus();
+        } else {
+          batch.push(line);
+        }
+      }
+      if (batch.length > 0) this.send({ type: 'output', lines: batch });
     }
 
     if (result.action === 'QUIT') {

@@ -413,8 +413,8 @@ export class Parser {
     const t = this.peek();
     if (t.type === 'STR')  { this.adv(); return { k: 'lit', v: t.val }; }
     if (t.type === 'NUM')  { this.adv(); return { k: 'lit', v: parseFloat(t.val) }; }
-    if (t.val === 'TRUE')  { this.adv(); return { k: 'lit', v: true }; }
-    if (t.val === 'FALSE') { this.adv(); return { k: 'lit', v: false }; }
+    if (t.val === 'TRUE'  || (t.type === 'BOOL' && t.val === 'TRUE'))  { this.adv(); return { k: 'lit', v: true }; }
+    if (t.val === 'FALSE' || (t.type === 'BOOL' && t.val === 'FALSE')) { this.adv(); return { k: 'lit', v: false }; }
     if (t.type === 'LPAREN') {
       this.adv(); const e = this.expr();
       if (this.peek().type === 'RPAREN') this.adv();

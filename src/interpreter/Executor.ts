@@ -7,7 +7,7 @@ export type { OutputLine, FormField } from '../shared/types';
 
 export interface ExecResult {
   output: OutputLine[];
-  action?: 'BROWSE' | 'CLEAR' | 'QUIT' | 'FORM_READY' | 'FORM_SUBMIT' | 'DO_PRG' | 'EDIT_PRG' | 'LIST_PROGRAMS';
+  action?: 'BROWSE' | 'QUIT' | 'FORM_READY' | 'FORM_SUBMIT' | 'DO_PRG' | 'EDIT_PRG' | 'LIST_PROGRAMS';
   formFields?: FormField[];
   prgName?: string;
   remainingNodes?: ASTNode[];
@@ -67,16 +67,31 @@ export class Executor {
       if (r.action) {
         action = r.action;
         formFields = r.formFields;
-        if (action === 'QUIT' || action === 'CLEAR') break;
+        if (action === 'QUIT') break;
         if (action === 'FORM_READY' || action === 'BROWSE') {
-          const afterForm = nodes.slice(i + 1);
+          const remaining = nodes.slice(i + 1);
           const innerCont = r.continuation;
           continuation = async () => {
-            const tail = await this.run(afterForm);
-            if (innerCont && (!tail.action || tail.action === 'FORM_READY' || tail.action === 'BROWSE')) {
-              return { output: [...tail.output], action: tail.action, formFields: tail.formFields, continuation: tail.continuation ?? innerCont };
+            // 1. Run code after the READ/BROWSE inside the current block (e.g. APPEND+REPLACE)
+            if (innerCont) {
+              const inner = await innerCont();
+              if (inner.action === 'FORM_READY' || inner.action === 'BROWSE') {
+                // Another form appeared inside — chain remaining nodes after it resolves
+                const outerRemaining = remaining;
+                return {
+                  ...inner,
+                  continuation: async () => {
+                    const afterInner = inner.continuation ? await inner.continuation() : { output: inner.output };
+                    if (afterInner.action === 'FORM_READY' || afterInner.action === 'BROWSE') return afterInner;
+                    const tail = await this.run(outerRemaining);
+                    return { output: [...afterInner.output, ...tail.output], action: tail.action, formFields: tail.formFields, continuation: tail.continuation };
+                  },
+                };
+              }
+              if (inner.action === 'QUIT') return inner;
             }
-            return tail;
+            // 2. Then run remaining nodes at this level (e.g. remaining IF blocks)
+            return this.run(remaining);
           };
           break;
         }
@@ -97,7 +112,7 @@ export class Executor {
         case 'LIST_STRUCT': return this.doListStruct();
         case 'LIST_TABLES': return this.doListTables();
         case 'BROWSE':      return { output: [], action: 'BROWSE' };
-        case 'CLEAR':       return { output: [], action: 'CLEAR' };
+        case 'CLEAR':       return { output: [{ text: '', cls: 'clear' }] };
         case 'QUIT':        return { output: [], action: 'QUIT' };
         case 'HELP':        return this.doHelp();
         case 'SET_FILTER':  return this.doSetFilter(node.expr);
@@ -336,10 +351,11 @@ export class Executor {
   }
 
   private doInput(prompt: string, varName: string): ExecResult {
-    // In terminal mode, INPUT requires interactive input – handled at Terminal level.
-    // For scripted use, we pre-seed with empty string.
     this.state.vars.set(varName, this.state.vars.get(varName) ?? '');
-    const form: FormField[] = [{ row: 10, col: 5, label: prompt || `Enter ${varName}:`, varName }];
+    const pending = [...this.state.pendingForm];
+    this.state.pendingForm = [];
+    const inputRow = pending.length ? Math.max(...pending.map(f => f.row)) + 2 : 10;
+    const form: FormField[] = [...pending, { row: inputRow, col: 5, label: prompt || `Enter ${varName}:`, varName }];
     return { output: [], action: 'FORM_READY', formFields: form };
   }
 
