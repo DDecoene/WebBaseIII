@@ -113,8 +113,8 @@ tests/
 ### Variables & I/O
 | Command | What it does |
 |---|---|
-| `STORE <val> TO <var>` | Assign a variable |
-| `INPUT "prompt" TO <var>` | Collect keyboard input |
+| `STORE <val> TO <var>` | Assign a variable; booleans display as `.T.`/`.F.` |
+| `INPUT "prompt" TO <var>` | Collect keyboard input (shows pending @SAY fields + prompt) |
 | `@ r,c SAY "text" GET <var>` | Define a form field |
 | `READ` | Display form and wait for submit |
 
@@ -147,6 +147,19 @@ tests/
 3. **Report & Label Engine** — `REPORT FORM`, `LABEL FORM` (stored in system.sqlite3)
 4. **The Assistant** — menu-driven UI for non-programmers (dBASE III "assist" mode)
 5. **Multi-Work-Area** — `SELECT 1–10`, `SET RELATION TO`
+
+## Boolean literals
+
+Both styles accepted: `TRUE`/`FALSE` and `.T.`/`.TRUE.`/`.F.`/`.FALSE.` (dBASE III style). Output always uses `.T.`/`.F.`.
+
+## Testing
+
+```bash
+npm test                # Vitest unit + integration (103 tests)
+npx playwright test     # E2E browser tests — requires dev server on :5173/:3000
+```
+
+Playwright suites: `tests/integration.spec.ts` (20 tests — full REPL scenario), `tests/crm.spec.ts` (7 tests — interactive CRM program with DO WHILE, forms, SEEK, BROWSE).
 
 ## Definition of done
 

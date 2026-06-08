@@ -8,3 +8,6 @@ data/*.sqlite3-wal
 webbase-screenshot.png
 .playwright-mcp/
 .superpowers/
+playwright-report/
+test-results/
+out/

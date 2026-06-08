@@ -204,6 +204,18 @@ Functions work anywhere an expression is accepted — `IF`, `DO WHILE`, `STORE`,
 | `DTOC(date)` | Date to display string `MM/DD/YY` |
 | `CTOD(str)` | Display string `MM/DD/YY` to ISO date |
 
+### Boolean literals
+
+W3Script supports both styles:
+
+| Syntax | Value |
+|---|---|
+| `TRUE` / `FALSE` | Boolean true/false |
+| `.T.` / `.TRUE.` | Boolean true (dBASE III style) |
+| `.F.` / `.FALSE.` | Boolean false (dBASE III style) |
+
+Boolean values display as `.T.` / `.F.` in output to match dBASE conventions.
+
 ---
 
 ## BROWSE grid keyboard shortcuts
@@ -255,8 +267,11 @@ src/
 ## Running tests
 
 ```bash
-npm test
+npm test                    # unit + integration tests (Vitest)
+npx playwright test         # end-to-end browser tests (requires dev server running)
 ```
+
+The Playwright suite (`tests/integration.spec.ts`, `tests/crm.spec.ts`) drives a real browser against the running app and covers navigation, filters, indexing, programs, forms, and BROWSE.
 
 ---
 

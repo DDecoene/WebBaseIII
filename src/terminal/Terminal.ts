@@ -258,7 +258,7 @@ export class Terminal {
   private printWelcome() {
     [
       { text: '╔══════════════════════════════════════════════════╗', cls: 'hdr' },
-      { text: '║          W e b B a s e - I I I   v 0.2          ║', cls: 'hdr' },
+      { text: `║        W e b B a s e - I I I   v ${__APP_VERSION__}        ║`, cls: 'hdr' },
       { text: '╚══════════════════════════════════════════════════╝', cls: 'hdr' },
       { text: 'Server-powered dBASE III — multi-user SQLite backend', cls: 'info' },
       { text: 'Type HELP for a list of commands.', cls: 'info' },
