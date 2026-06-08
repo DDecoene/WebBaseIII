@@ -16,7 +16,8 @@ afterEach(() => {
   const dataDir = path.join(process.cwd(), 'data');
   if (fs.existsSync(dataDir)) {
     fs.readdirSync(dataDir)
-      .filter(f => f.toLowerCase().startsWith('test_idx_') && f.toLowerCase().endsWith('.sqlite3'))
+      .filter(f => f.toLowerCase().startsWith('test_idx_') &&
+        (f.toLowerCase().endsWith('.sqlite3') || f.toLowerCase().endsWith('.sqlite3-shm') || f.toLowerCase().endsWith('.sqlite3-wal')))
       .forEach(f => fs.unlinkSync(path.join(dataDir, f)));
   }
 });

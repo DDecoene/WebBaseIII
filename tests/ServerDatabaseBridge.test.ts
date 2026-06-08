@@ -16,7 +16,9 @@ describe('ServerDatabaseBridge', () => {
 
   afterEach(async () => {
     await bridge.closeDatabase();
-    if (fs.existsSync(DB_PATH)) fs.unlinkSync(DB_PATH);
+    for (const f of [DB_PATH, DB_PATH + '-shm', DB_PATH + '-wal']) {
+      if (fs.existsSync(f)) fs.unlinkSync(f);
+    }
   });
 
   it('opens a database and returns dbName', async () => {
