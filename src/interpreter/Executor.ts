@@ -3,14 +3,17 @@ import { ASTNode, Expr, ColDef, Parser } from './Parser';
 import { Lexer } from './Lexer';
 import { callStateless } from './Builtins';
 import { IndexCommands, IndexCommandsHost } from './IndexCommands';
+import { ReportCommands } from './ReportCommands';
 
 export type { OutputLine, FormField } from '../shared/types';
 
 export interface ExecResult {
   output: OutputLine[];
-  action?: 'BROWSE' | 'QUIT' | 'FORM_READY' | 'FORM_SUBMIT' | 'DO_PRG' | 'EDIT_PRG' | 'LIST_PROGRAMS';
+  action?: 'BROWSE' | 'QUIT' | 'FORM_READY' | 'FORM_SUBMIT' | 'DO_PRG' | 'EDIT_PRG' | 'LIST_PROGRAMS' | 'REPORT_PREVIEW';
   formFields?: FormField[];
   prgName?: string;
+  prgContent?: string;
+  reportHtml?: string;
   remainingNodes?: ASTNode[];
   continuation?: () => Promise<ExecResult>;
 }
@@ -56,6 +59,7 @@ export class Executor implements IndexCommandsHost {
   public pendingForm: FormField[];
   private rowCache: Map<string, Record<string, unknown>> = new Map();
   private indexCmds: IndexCommands;
+  private reportCmds: ReportCommands;
 
   constructor(
     public db: IDatabaseBridge,
@@ -66,6 +70,7 @@ export class Executor implements IndexCommandsHost {
     this.vars = new Map();
     this.pendingForm = [];
     this.indexCmds = new IndexCommands(this);
+    this.reportCmds = new ReportCommands(this);
   }
 
   get area(): WorkArea {
@@ -174,7 +179,12 @@ export class Executor implements IndexCommandsHost {
         case 'LIST_INDEXES':return this.indexCmds.doListIndexes();
         case 'SEEK':        return this.indexCmds.doSeek(node.value);
         case 'FIND':        return this.indexCmds.doFind(node.value);
-        case 'DO_CASE':     return this.doCase(node.cases, node.otherwise);
+        case 'DO_CASE':       return this.doCase(node.cases, node.otherwise);
+        case 'CREATE_REPORT': return this.reportCmds.doCreateReport(node.name);
+        case 'MODIFY_REPORT': return this.reportCmds.doModifyReport(node.name);
+        case 'REPORT_FORM':   return this.reportCmds.doReportForm(node.name);
+        case 'LIST_REPORTS':  return this.reportCmds.doListReports();
+        case 'DELETE_REPORT': return this.reportCmds.doDeleteReport(node.name);
         case 'UNKNOWN':     return { output: [{ text: `Unknown command: ${node.raw}`, cls: 'warn' }] };
       }
     } catch (e: unknown) {

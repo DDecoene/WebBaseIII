@@ -4,6 +4,7 @@ import { Executor } from '../src/interpreter/Executor.js';
 import type { ASTNode } from '../src/interpreter/Parser.js';
 import { ServerDatabaseBridge } from './ServerDatabaseBridge.js';
 import { programStore } from './ProgramStore.js';
+import { reportStore } from './ReportStore.js';
 import { indexStore } from './IndexStore.js';
 import type { ClientMessage, ServerMessage } from '../src/shared/types.js';
 
@@ -95,11 +96,24 @@ export class Session {
         case 'save-program': {
           const safeName = msg.name.replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase();
           if (!safeName) break;
-          programStore.save(safeName, msg.content);
-          this.send({ type: 'output', lines: [{ text: `Saved: ${safeName}.prg`, cls: 'ok' }] });
+          if (safeName.startsWith('__report_')) {
+            const reportName = safeName.slice('__report_'.length);
+            reportStore.save(reportName, msg.content);
+            this.send({ type: 'output', lines: [{ text: `Report saved: ${reportName}`, cls: 'ok' }] });
+          } else {
+            programStore.save(safeName, msg.content);
+            this.send({ type: 'output', lines: [{ text: `Saved: ${safeName}.prg`, cls: 'ok' }] });
+          }
           this.send({ type: 'view-terminal' });
           this.sendStatus();
           break;
+        }
+
+        case 'save-report': {
+          const safeName = (msg as any).name.replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase();
+          if (!safeName) break;
+          reportStore.save(safeName, (msg as any).content);
+          return;
         }
       }
     } catch (err: unknown) {
@@ -214,9 +228,15 @@ export class Session {
 
     if (result.action === 'EDIT_PRG' && result.prgName) {
       const safeName = result.prgName.replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase();
-      const content = programStore.load(safeName) ?? '';
+      const content = (result as any).prgContent ?? (safeName.startsWith('__report_')
+        ? reportStore.load(safeName.slice('__report_'.length)) ?? ''
+        : programStore.load(safeName) ?? '');
       this.send({ type: 'program-open', name: safeName, content });
       return true;
+    }
+
+    if (result.action === 'REPORT_PREVIEW' && (result as any).reportHtml) {
+      this.send({ type: 'report-preview', html: (result as any).reportHtml });
     }
 
     return false;

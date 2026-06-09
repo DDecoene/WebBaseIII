@@ -661,4 +661,72 @@ describe('Multi-work-area integration', () => {
     expect(texts.some(t => t.includes(db1.toLowerCase()))).toBe(true);
     expect(texts.some(t => t.includes(db2.toLowerCase()))).toBe(true);
   });
+
+  it('LIST REPORTS returns output', async () => {
+    const { session, sent } = makeSession();
+    await session.handleMessage({ type: 'command', text: 'LIST REPORTS' });
+    const msg = sent.find(m => m.type === 'output');
+    expect(msg).toBeDefined();
+  });
+
+  it('CREATE REPORT opens editor with JSON', async () => {
+    const { session, sent } = makeSession();
+    await session.handleMessage({ type: 'command', text: 'CREATE REPORT sales' });
+    const msg = sent.find(m => m.type === 'program-open') as any;
+    expect(msg).toBeDefined();
+    expect(msg.content).toContain('"title"');
+  });
+
+  it('REPORT FORM returns error when report not found', async () => {
+    const { session, sent } = makeSession();
+    const db = uniqueDb();
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    await session.handleMessage({ type: 'command', text: 'CREATE TABLE t (name CHAR(20))' });
+    await session.handleMessage({ type: 'command', text: 'USE t' });
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: 'REPORT FORM ghost' });
+    const out = sent.find(m => m.type === 'output') as any;
+    expect(out.lines.some((l: any) => l.text.includes('not found'))).toBe(true);
+  });
+
+  it('REPORT FORM renders ASCII and sends report-preview', async () => {
+    const { session, sent } = makeSession();
+    const db = uniqueDb();
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    await session.handleMessage({ type: 'command', text: 'CREATE TABLE employees (name CHAR(40), dept CHAR(20), salary NUM(8,2))' });
+    await session.handleMessage({ type: 'command', text: 'USE employees' });
+    await session.handleMessage({ type: 'command', text: 'APPEND RECORD' });
+    await session.handleMessage({ type: 'command', text: 'REPLACE name WITH "Alice", dept WITH "Eng", salary WITH 90000' });
+
+    const reportDef = JSON.stringify({
+      title: 'Test Report', columns: [
+        { field: 'name', heading: 'Name', width: 20 },
+        { field: 'salary', heading: 'Salary', width: 10, total: true }
+      ]
+    });
+    await session.handleMessage({ type: 'save-report', name: 'testrpt', content: reportDef } as any);
+    sent.length = 0;
+
+    await session.handleMessage({ type: 'command', text: 'REPORT FORM testrpt' });
+    const preview = sent.find(m => m.type === 'report-preview') as any;
+    expect(preview).toBeDefined();
+    expect(preview.html).toContain('Test Report');
+    const output = sent.find(m => m.type === 'output') as any;
+    expect(output.lines.some((l: any) => l.text.includes('Alice'))).toBe(true);
+  });
+
+  it('DELETE REPORT removes the definition', async () => {
+    const { session, sent } = makeSession();
+    await session.handleMessage({ type: 'save-report', name: 'myrpt', content: '{"title":"x","columns":[]}' } as any);
+    await session.handleMessage({ type: 'command', text: 'DELETE REPORT myrpt' });
+    sent.length = 0;
+    const db2 = uniqueDb();
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db2}` });
+    await session.handleMessage({ type: 'command', text: 'CREATE TABLE t2 (x CHAR(1))' });
+    await session.handleMessage({ type: 'command', text: 'USE t2' });
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: 'REPORT FORM myrpt' });
+    const out = sent.find(m => m.type === 'output') as any;
+    expect(out.lines.some((l: any) => l.text.includes('not found'))).toBe(true);
+  });
 });
