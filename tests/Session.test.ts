@@ -491,3 +491,120 @@ describe('Parser: multi-work-area nodes', () => {
     expect(parse('CLOSE ALL')[0]).toMatchObject({ type: 'CLOSE_ALL' });
   });
 });
+
+describe('Multi-work-area integration', () => {
+  async function cmd(session: InstanceType<typeof Session>, text: string): Promise<ServerMessage[]> {
+    const captured: ServerMessage[] = [];
+    const orig = (session as any).send;
+    (session as any).send = (m: ServerMessage) => { captured.push(m); orig(m); };
+    await session.handleMessage({ type: 'command', text });
+    (session as any).send = orig;
+    return captured;
+  }
+
+  function outputText(msgs: ServerMessage[]): string {
+    return msgs.filter(m => m.type === 'output').flatMap((m: any) => m.lines.map((l: any) => l.text)).join('\n');
+  }
+
+  it('SELECT creates and activates a new work area', async () => {
+    const { session } = makeSession();
+    const db = uniqueDb();
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    const msgs = await cmd(session, 'SELECT orders');
+    const exec = (session as any).executor;
+    expect(exec.activeAlias).toBe('ORDERS');
+    expect(exec.areas.has('ORDERS')).toBe(true);
+  });
+
+  it('CLOSE clears active area table', async () => {
+    const { session } = makeSession();
+    const db = uniqueDb();
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    await session.handleMessage({ type: 'command', text: 'CREATE TABLE t (v TEXT)' });
+    await session.handleMessage({ type: 'command', text: 'USE t' });
+    const exec = (session as any).executor;
+    expect(exec.area.table).toBe('T');
+    await session.handleMessage({ type: 'command', text: 'CLOSE' });
+    expect(exec.area.table).toBeNull();
+  });
+
+  it('CLOSE ALL resets to single area 1', async () => {
+    const { session } = makeSession();
+    const db = uniqueDb();
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    await session.handleMessage({ type: 'command', text: 'SELECT a2' });
+    await session.handleMessage({ type: 'command', text: 'SELECT a3' });
+    const exec = (session as any).executor;
+    expect(exec.areas.size).toBeGreaterThan(1);
+    await session.handleMessage({ type: 'command', text: 'CLOSE ALL' });
+    expect(exec.areas.size).toBe(1);
+    expect(exec.activeAlias).toBe('1');
+  });
+
+  it('LIST AREAS shows all open areas', async () => {
+    const { session, sent } = makeSession();
+    const db = uniqueDb();
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    await session.handleMessage({ type: 'command', text: 'SELECT orders' });
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: 'LIST AREAS' });
+    const text = outputText(sent);
+    expect(text).toMatch(/orders/i);
+    expect(text).toMatch(/1\b/);
+  });
+
+  it('SET RELATION TO errors if target area has no index', async () => {
+    const { session, sent } = makeSession();
+    const db = uniqueDb();
+    const tbl = `noindex_${db}`;
+    // Area 1: a table with NO index ever created
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    await session.handleMessage({ type: 'command', text: `CREATE TABLE ${tbl} (id TEXT, name TEXT)` });
+    await session.handleMessage({ type: 'command', text: `USE ${tbl}` });
+    // Area 2: another table
+    await session.handleMessage({ type: 'command', text: 'SELECT 2' });
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    await session.handleMessage({ type: 'command', text: `CREATE TABLE ord_${db} (custno TEXT)` });
+    await session.handleMessage({ type: 'command', text: `USE ord_${db}` });
+    sent.length = 0;
+    // target area 1 has no active index — should error
+    await session.handleMessage({ type: 'command', text: 'SET RELATION TO custno INTO 1' });
+    const text = outputText(sent);
+    expect(text).toMatch(/no active index/i);
+  });
+
+  it('relation auto-seek: navigating orders seeks matching customer', async () => {
+    const { session } = makeSession();
+    const db = uniqueDb();
+    // Setup orders + customers tables
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    await session.handleMessage({ type: 'command', text: 'CREATE TABLE customers (id TEXT, name TEXT)' });
+    await session.handleMessage({ type: 'command', text: 'USE customers' });
+    await session.handleMessage({ type: 'command', text: 'APPEND RECORD' });
+    await session.handleMessage({ type: 'command', text: 'REPLACE id WITH "C1", name WITH "Alice"' });
+    await session.handleMessage({ type: 'command', text: 'APPEND RECORD' });
+    await session.handleMessage({ type: 'command', text: 'REPLACE id WITH "C2", name WITH "Bob"' });
+    await session.handleMessage({ type: 'command', text: 'INDEX ON id TO BYID' });
+
+    await session.handleMessage({ type: 'command', text: 'SELECT 2' });
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    await session.handleMessage({ type: 'command', text: 'CREATE TABLE orders (custno TEXT, amount REAL)' });
+    await session.handleMessage({ type: 'command', text: 'USE orders' });
+    await session.handleMessage({ type: 'command', text: 'APPEND RECORD' });
+    await session.handleMessage({ type: 'command', text: 'REPLACE custno WITH "C2", amount WITH 99' });
+    await session.handleMessage({ type: 'command', text: 'APPEND RECORD' });
+    await session.handleMessage({ type: 'command', text: 'REPLACE custno WITH "C1", amount WITH 50' });
+
+    // Select orders (area 2), set relation into customers (area 1)
+    await session.handleMessage({ type: 'command', text: 'SET RELATION TO custno INTO 1' });
+
+    // Go to order 1 (custno=C2) — customers should auto-seek to Bob
+    await session.handleMessage({ type: 'command', text: 'GO 1' });
+
+    const exec = (session as any).executor;
+    const custArea = exec.areas.get('1');
+    expect(custArea._found).toBe(true);
+    // Bob is the 2nd customer in index order so rowPtr should be 2
+    expect(custArea.rowPtr).toBeGreaterThan(0);
+  });
+});
