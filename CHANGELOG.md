@@ -7,6 +7,23 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
 
 ---
 
+## [0.5.0] — 2026-06-09 — Report Engine
+
+### Added
+- **`CREATE REPORT <name>`** — create a report definition (JSON) in the program editor
+- **`MODIFY REPORT <name>`** — edit an existing report definition
+- **`REPORT FORM <name>`** — run a columnar report: ASCII output to terminal + HTML preview panel in browser
+- **`LIST REPORTS`** — list all saved report definitions
+- **`DELETE REPORT <name>`** — delete a report definition
+- **Report definitions** stored as JSON in `system.sqlite3` (`reports` table)
+- **HTML preview panel** — print-ready iframe panel, Esc to close, Ctrl+P to print
+- **`demos/REPORT.prg`** — report engine showcase, auto-discovered by `demos.spec.ts`
+
+### Changed
+- **Executor refactored** — index commands extracted to `IndexCommands.ts`; report commands in `ReportCommands.ts`; establishes the per-command-group pattern for future sub-projects
+
+---
+
 ## [0.4.1] — 2026-06-09
 
 ### Added

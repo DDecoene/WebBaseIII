@@ -34,12 +34,16 @@ server/
   ServerDatabaseBridge.ts  IDatabaseBridge impl wrapping better-sqlite3
   ProgramStore.ts       .prg program storage in data/system.sqlite3
   IndexStore.ts         Index metadata + active index in data/system.sqlite3
+  ReportStore.ts        Report definition storage in data/system.sqlite3 (reports table)
+  ReportRunner.ts       ASCII and HTML report rendering, group breaks, subtotals, grand totals
 
 src/
   interpreter/
     Lexer.ts            Tokenises W3Script input (case-insensitive)
     Parser.ts           Recursive-descent AST builder
     Executor.ts         Async AST runner; manages state (db/table/filter/vars/rowPtr/activeIndex)
+    IndexCommands.ts    Index command handlers (extracted from Executor)
+    ReportCommands.ts   Report command handlers delegating to ReportRunner
 
   terminal/
     Terminal.ts         REPL UI — command history, multi-line block accumulation
@@ -48,6 +52,7 @@ src/
     Grid.ts             BROWSE spreadsheet — inline cell editing, keyboard nav
     FormLayout.ts       @ SAY GET form engine — character-cell coordinates
     ProgramEditor.ts    .prg source editor UI
+    ReportPreview.ts    iframe-based HTML report preview panel (Esc to close, Ctrl+P to print)
 
   ws/
     WsClient.ts         Browser WebSocket client — sends commands, receives messages
@@ -119,6 +124,15 @@ WebBase-III supports **unlimited work areas** (no DOS 10-area limit). Cross-area
 
 > Index expressions support built-in functions: `INDEX ON UPPER(lastname) TO BYUPPER`
 
+### Reports
+| Command | What it does |
+|---|---|
+| `CREATE REPORT <name>` | Create a new report definition (opens JSON editor) |
+| `MODIFY REPORT <name>` | Edit an existing report definition |
+| `REPORT FORM <name>` | Run report — ASCII to terminal + HTML preview panel |
+| `LIST REPORTS` | List all saved report definitions |
+| `DELETE REPORT <name>` | Delete a report definition |
+
 ### Programs
 | Command | What it does |
 |---|---|
@@ -161,7 +175,7 @@ WebBase-III supports **unlimited work areas** (no DOS 10-area limit). Cross-area
 1. ~~Indexing & Search~~ — `INDEX ON`, `SET INDEX TO`, `SEEK`, `FIND`, `REINDEX`, `LIST INDEXES` ✅
 2. ~~Language Completeness~~ — `DO CASE/ENDCASE`, built-in functions (`EOF()`, `BOF()`, `FOUND()`, `RECNO()`, `RECCOUNT()`, `SUBSTR()`, `STR()`, `AT()`, `UPPER()`, `LOWER()`, and more) ✅
 3. ~~Multi-Work-Area~~ — unlimited `SELECT <alias>`, `SET RELATION TO`, `alias.field` notation ✅
-4. **Report & Label Engine** — `REPORT FORM`, `LABEL FORM` (stored in system.sqlite3)
+4. ~~Report & Label Engine~~ — `REPORT FORM`, group breaks, subtotals, HTML preview ✅
 5. **The Assistant** — menu-driven UI for non-programmers (dBASE III "assist" mode)
 
 ## Boolean literals

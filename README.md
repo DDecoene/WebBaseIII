@@ -169,6 +169,16 @@ WebBase-III supports **unlimited work areas** — each independently holding a t
 | `SEEK <expr>` | Position record pointer at first index match |
 | `FIND <string>` | Alias for SEEK (unquoted string — dBASE III legacy form) |
 
+### Reports
+
+| Command | What it does |
+|---|---|
+| `CREATE REPORT <name>` | Create a new report definition (opens JSON editor) |
+| `MODIFY REPORT <name>` | Edit an existing report definition |
+| `REPORT FORM <name>` | Run report — ASCII to terminal + HTML preview panel |
+| `LIST REPORTS` | List all saved report definitions |
+| `DELETE REPORT <name>` | Delete a report definition |
+
 ### Programs
 
 | Command | What it does |

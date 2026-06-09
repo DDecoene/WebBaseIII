@@ -1,3 +1,5 @@
+> **Status: COMPLETE** — implemented in v0.5.0
+
 # Report Engine Design — v0.5.0
 
 **Date:** 2026-06-09  
