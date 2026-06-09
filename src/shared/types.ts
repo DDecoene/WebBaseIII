@@ -50,6 +50,22 @@ export interface IIndexStore {
   dropTable(tableName: string): void;
 }
 
+export interface ReportColumn {
+  field: string;
+  heading: string;
+  width: number;
+  total?: boolean;
+}
+
+export interface ReportDef {
+  title: string;
+  pageWidth?: number;
+  columns: ReportColumn[];
+  groupBy?: string;
+  pageHeader?: string;
+  pageFooter?: string;
+}
+
 export interface WorkArea {
   alias: string;
   db: string | null;
@@ -90,4 +106,5 @@ export type ServerMessage =
   | { type: 'program-open'; name: string; content: string }
   | { type: 'view-terminal' }
   | { type: 'clear' }
+  | { type: 'report-preview'; html: string }
   | { type: 'error'; message: string };
