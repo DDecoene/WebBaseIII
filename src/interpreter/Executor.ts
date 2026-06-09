@@ -218,6 +218,7 @@ export class Executor implements IndexCommandsHost {
     ];
     if (exists) {
       const cnt = await this.db.getRowCount(name);
+      this.area.cachedRecCount = cnt;
       lines.push({ text: `Table    : ${name}  (${cnt} records)`, cls: 'ok' });
     } else {
       lines.push({ text: `Table    : ${name}  (table not found — use CREATE TABLE to create it)`, cls: 'warn' });
