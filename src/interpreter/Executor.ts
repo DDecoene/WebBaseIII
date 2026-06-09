@@ -570,6 +570,11 @@ export class Executor implements IndexCommandsHost {
       : '"id" INTEGER PRIMARY KEY AUTOINCREMENT';
     const sql = `CREATE TABLE IF NOT EXISTS ${q(name)} (${colsSql})`;
     await this.db.exec(sql);
+    this.area.table = name;
+    this.area.filter = null;
+    this.area.rowPtr = 1;
+    this.area.cachedRecCount = 0;
+    this.area.activeIndex = null;
     return { output: [{ text: `Table created: ${name}`, cls: 'ok' }] };
   }
 
