@@ -7,6 +7,13 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
 
 ---
 
+## [0.5.2] — 2026-06-09
+
+### Fixed
+- **`CREATE TABLE`** now implicitly selects the newly created table in the active work area — `INDEX ON`, `APPEND RECORD`, `REPLACE` etc. work immediately after `CREATE TABLE` without a separate `USE` call. This matches dBASE III behavior and fixes `demos/INVENTORY.prg` first-run seeding.
+
+---
+
 ## [0.5.1] — 2026-06-09
 
 ### Fixed
