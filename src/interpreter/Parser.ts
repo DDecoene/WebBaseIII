@@ -11,8 +11,14 @@ const BUILTIN_FUNCTIONS = new Set([
 // ── AST Node Types ──────────────────────────────────────────────────────────
 
 export type ASTNode =
-  | { type: 'USE';         name: string }
+  | { type: 'USE';         name: string; alias: string | null }
   | { type: 'USE_DB';      name: string }
+  | { type: 'SELECT';      alias: string }
+  | { type: 'SET_RELATION'; expression: string | null; intoAlias: string | null }
+  | { type: 'LIST_AREAS' }
+  | { type: 'LIST_COLS';   cols: string[] }
+  | { type: 'CLOSE' }
+  | { type: 'CLOSE_ALL' }
   | { type: 'LIST' }
   | { type: 'LIST_STRUCT' }
   | { type: 'LIST_TABLES' }
@@ -95,6 +101,8 @@ export class Parser {
     const kw = t.val.toUpperCase();
     switch (kw) {
       case 'USE':      return this.parseUse();
+      case 'SELECT':   return this.parseSelect();
+      case 'CLOSE':    return this.parseClose();
       case 'LIST':     return this.parseList();
       case 'BROWSE':   this.adv(); return { type: 'BROWSE' };
       case 'CLEAR':    this.adv(); return { type: 'CLEAR' };
@@ -135,15 +143,47 @@ export class Parser {
       this.adv();
       return { type: 'USE_DB', name: this.ident() };
     }
-    return { type: 'USE', name: this.ident() };
+    const name = this.ident();
+    let alias: string | null = null;
+    if (this.peekKw('ALIAS')) { this.adv(); alias = this.ident(); }
+    return { type: 'USE', name, alias };
+  }
+
+  private parseSelect(): ASTNode {
+    this.adv();
+    const t = this.peek();
+    let alias: string;
+    if (t.type === 'NUM') { alias = String(t.val); this.adv(); }
+    else alias = this.ident();
+    return { type: 'SELECT', alias };
+  }
+
+  private parseClose(): ASTNode {
+    this.adv();
+    if (this.peekKw('ALL')) { this.adv(); return { type: 'CLOSE_ALL' }; }
+    return { type: 'CLOSE' };
   }
 
   private parseList(): ASTNode {
     this.adv();
     if (this.peekKw('STRUCTURE') || this.peekKw('STRUCT')) { this.adv(); return { type: 'LIST_STRUCT' }; }
-    if (this.peekKw('TABLES')) { this.adv(); return { type: 'LIST_TABLES' }; }
+    if (this.peekKw('TABLES'))   { this.adv(); return { type: 'LIST_TABLES' }; }
     if (this.peekKw('PROGRAMS') || this.peekKw('PROGS')) { this.adv(); return { type: 'LIST_PROGRAMS' }; }
-    if (this.peekKw('INDEXES')) { this.adv(); return { type: 'LIST_INDEXES' }; }
+    if (this.peekKw('INDEXES'))  { this.adv(); return { type: 'LIST_INDEXES' }; }
+    if (this.peekKw('AREAS'))    { this.adv(); return { type: 'LIST_AREAS' }; }
+    // Column list: LIST name, alias.field, ...
+    if (!this.end() && this.peek().type !== 'NL' && this.peek().type !== 'EOF' && this.peek().type !== 'SEMI') {
+      const cols: string[] = [];
+      do {
+        let col = this.peek().val; this.adv();
+        if (!this.end() && this.peek().type === 'DOT') {
+          this.adv();
+          col += '.' + this.peek().val; this.adv();
+        }
+        cols.push(col);
+      } while (!this.end() && this.peek().type === 'COMMA' && (this.adv(), true));
+      if (cols.length) return { type: 'LIST_COLS', cols };
+    }
     return { type: 'LIST' };
   }
 
@@ -156,6 +196,20 @@ export class Parser {
         ? (this.adv(), this.prev().val)
         : null;
       return { type: 'SET_INDEX', tag };
+    }
+    if (this.peekKw('RELATION')) {
+      this.adv();
+      this.expectKw('TO');
+      if (this.end() || this.peek().type === 'NL' || this.peek().type === 'EOF' || this.peek().type === 'SEMI') {
+        return { type: 'SET_RELATION', expression: null, intoAlias: null };
+      }
+      const parts: string[] = [];
+      while (!this.end() && !this.peekKw('INTO') && this.peek().type !== 'NL' && this.peek().type !== 'EOF') {
+        parts.push(this.peek().val); this.adv();
+      }
+      this.expectKw('INTO');
+      const intoAlias = this.ident();
+      return { type: 'SET_RELATION', expression: parts.join(''), intoAlias };
     }
     this.expectKw('FILTER');
     this.expectKw('TO');

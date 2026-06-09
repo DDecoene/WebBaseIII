@@ -1,6 +1,6 @@
 export type TType =
   | 'KW' | 'ID' | 'STR' | 'NUM' | 'BOOL'
-  | 'OP' | 'COMMA' | 'SEMI' | 'AT'
+  | 'OP' | 'COMMA' | 'SEMI' | 'AT' | 'DOT'
   | 'LPAREN' | 'RPAREN' | 'NL' | 'EOF';
 
 export interface Token { type: TType; val: string; line: number; col: number; }
@@ -14,6 +14,8 @@ const KWS = new Set([
   'AND','OR','NOT','TRUE','FALSE','CREATE','TABLE','DROP','INDEX','ON',
   'INPUT','ACCEPT','DISPLAY','DATABASE','FOR','NEXT',
   'SEEK','FIND','REINDEX','INDEXES',
+  // Multi-work-area
+  'SELECT','RELATION','ALIAS','AREAS','INTO',
   // DO CASE control flow
   'CASE','OTHERWISE','ENDCASE',
   // Built-in function names
@@ -61,6 +63,10 @@ export class Lexer {
           this.toks.push({ type: 'BOOL', val: 'FALSE', line: this.ln, col: this.col });
           this.p += len; this.col += len; continue;
         }
+        // Plain dot (alias.field separator)
+        this.toks.push({ type: 'DOT', val: '.', line: this.ln, col: this.col });
+        this.p++; this.col++;
+        continue;
       }
 
       if (ch === '@') { this.emit('AT', '@'); continue; }

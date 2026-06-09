@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import { Lexer } from '../src/interpreter/Lexer';
+import { Parser } from '../src/interpreter/Parser';
 import { Session } from '../server/Session';
 import type { ServerMessage } from '../src/shared/types.js';
 import fs from 'fs';
@@ -433,5 +435,59 @@ describe('Session', () => {
     const exec2 = (s2 as any).executor;
     expect(exec2.state.vars.get('RC')).toBe(2);
     expect(exec2.state.vars.get('ATEOF')).toBe(true);
+  });
+});
+
+describe('Parser: multi-work-area nodes', () => {
+  function parse(src: string) {
+    return new Parser(new Lexer(src).tokenize()).parse();
+  }
+
+  it('parses SELECT alias', () => {
+    const nodes = parse('SELECT customers');
+    expect(nodes[0]).toMatchObject({ type: 'SELECT', alias: 'CUSTOMERS' });
+  });
+
+  it('parses SELECT numeric alias', () => {
+    const nodes = parse('SELECT 2');
+    expect(nodes[0]).toMatchObject({ type: 'SELECT', alias: '2' });
+  });
+
+  it('parses USE table ALIAS name', () => {
+    const nodes = parse('USE orders ALIAS ord');
+    expect(nodes[0]).toMatchObject({ type: 'USE', name: 'ORDERS', alias: 'ORD' });
+  });
+
+  it('parses USE table without ALIAS (alias is null)', () => {
+    const nodes = parse('USE customers');
+    expect(nodes[0]).toMatchObject({ type: 'USE', name: 'CUSTOMERS', alias: null });
+  });
+
+  it('parses SET RELATION TO expr INTO alias', () => {
+    const nodes = parse('SET RELATION TO custid INTO customers');
+    expect(nodes[0]).toMatchObject({ type: 'SET_RELATION', expression: 'CUSTID', intoAlias: 'CUSTOMERS' });
+  });
+
+  it('parses SET RELATION TO (clear)', () => {
+    const nodes = parse('SET RELATION TO');
+    expect(nodes[0]).toMatchObject({ type: 'SET_RELATION', expression: null, intoAlias: null });
+  });
+
+  it('parses LIST AREAS', () => {
+    const nodes = parse('LIST AREAS');
+    expect(nodes[0]).toMatchObject({ type: 'LIST_AREAS' });
+  });
+
+  it('parses LIST with column list', () => {
+    const nodes = parse('LIST name, customers.city');
+    expect(nodes[0]).toMatchObject({ type: 'LIST_COLS', cols: ['NAME', 'CUSTOMERS.CITY'] });
+  });
+
+  it('parses CLOSE', () => {
+    expect(parse('CLOSE')[0]).toMatchObject({ type: 'CLOSE' });
+  });
+
+  it('parses CLOSE ALL', () => {
+    expect(parse('CLOSE ALL')[0]).toMatchObject({ type: 'CLOSE_ALL' });
   });
 });
