@@ -15,6 +15,22 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
 
 ---
 
+## [0.4.0] — 2026-06-09 — Multi-Work-Area
+
+### Added
+- **Unlimited work areas** — `SELECT <alias>` creates or activates a named work area (no DOS 10-area limit)
+- **`USE <table> ALIAS <name>`** — open table with an explicit alias override
+- **`SET RELATION TO <expr> INTO <alias>`** — link active area to another; auto-seeks on every navigation (GO, SKIP, record pointer moves)
+- **`SET RELATION TO`** (no args) — clear relation on active area
+- **`alias.field` dot notation** — cross-area field access in any expression, LIST column list, or @ SAY
+- **`LIST AREAS`** — show all open work areas, record pointers, active indexes, and relations
+- **`LIST <col, alias.col, ...>`** — optional column list with cross-area fields
+- **`CLOSE`** — close active area's table
+- **`CLOSE ALL`** — close all work areas, reset to single empty area `1`
+- Playwright E2E suite for multi-work-area: SELECT, CLOSE ALL, relation auto-seek, alias.field LIST
+
+---
+
 ## [0.3.0] — 2026-06-07 — Language Completeness
 
 ### Added
