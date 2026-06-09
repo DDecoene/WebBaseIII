@@ -72,8 +72,9 @@ DO WHILE running
   @ 8, 10 SAY "4. Browse Active Products"
   @ 9, 10 SAY "5. Stock Report (all areas)"
   @ 10, 10 SAY "6. Deactivate a Product"
-  @ 11, 10 SAY "7. System Info (areas + indexes)"
-  @ 12, 10 SAY "Q. Quit"
+  @ 11, 10 SAY "7. Activate a Product"
+  @ 12, 10 SAY "8. System Info (areas + indexes)"
+  @ 13, 10 SAY "Q. Quit"
   @ 13,  5 SAY "==========================================="
   STORE " " TO choice
   @ 15, 10 SAY "Enter choice: " GET choice
@@ -262,6 +263,39 @@ DO WHILE running
       ENDIF
 
     CASE UPPER(TRIM(choice)) == "7"
+      * ── Activate Product ──────────────────────────────────
+      CLEAR
+      @ 2, 5 SAY "--- ACTIVATE PRODUCT ---"
+      STORE SPACE(40) TO m_act
+      @ 4, 5 SAY "Product name to activate: " GET m_act
+      READ
+
+      SELECT INV
+      SET INDEX TO BYNAME
+      SEEK UPPER(TRIM(m_act))
+
+      IF FOUND()
+        IF ACTIVE
+          @ 6, 5 SAY "Product is already active: " + TRIM(NAME)
+        ELSE
+          @ 6, 5 SAY "Found: " + TRIM(NAME) + "  [" + CAT.CATNAME + "]"
+          STORE " " TO m_confirm
+          @ 7, 5 SAY "Activate? (Y/N): " GET m_confirm
+          READ
+          IF UPPER(TRIM(m_confirm)) == "Y"
+            REPLACE ACTIVE WITH .T.
+            @ 9, 5 SAY "Product activated: " + TRIM(NAME)
+          ELSE
+            @ 9, 5 SAY "Cancelled."
+          ENDIF
+        ENDIF
+        INPUT "Press Enter to continue" TO pause
+      ELSE
+        @ 6, 5 SAY "Not found: " + TRIM(m_act)
+        INPUT "Press Enter to continue" TO pause
+      ENDIF
+
+    CASE UPPER(TRIM(choice)) == "8"
       * ── System Info ───────────────────────────────────────
       CLEAR
       @ 2, 5 SAY "--- SYSTEM INFO ---"
