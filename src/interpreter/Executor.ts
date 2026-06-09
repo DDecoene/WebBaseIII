@@ -398,7 +398,7 @@ export class Executor implements IndexCommandsHost {
     await this.refreshRecCount();
     const pairs = fields.map(f => ({ field: f.field, value: this.evalExpr(f.value) }));
     const setClauses = pairs.map(p => `${q(p.field)} = ?`).join(', ');
-    const params = pairs.map(p => p.value);
+    const params = pairs.map(p => typeof p.value === 'boolean' ? (p.value ? 1 : 0) : p.value);
     let sql: string;
     if (scope === 'ALL') {
       const where = this.area.filter ? ` WHERE ${this.area.filter}` : '';
