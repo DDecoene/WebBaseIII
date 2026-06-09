@@ -2,6 +2,7 @@ import { WsClient } from '../ws/WsClient';
 import { Grid } from '../ui/Grid';
 import { FormLayout } from '../ui/FormLayout';
 import { ProgramEditor } from '../ui/ProgramEditor';
+import { ReportPreview } from '../ui/ReportPreview';
 import type { OutputLine, FormField } from '../shared/types';
 
 const HISTORY_LIMIT = 200;
@@ -20,6 +21,7 @@ export class Terminal {
   private gridView: HTMLElement;
   private formView: HTMLElement;
   private editorView: HTMLElement;
+  private reportView: HTMLElement;
 
   private ws: WsClient;
   private history: string[] = [];
@@ -29,6 +31,7 @@ export class Terminal {
   private grid: Grid | null = null;
   private form: FormLayout | null = null;
   private editor: ProgramEditor | null = null;
+  private report: ReportPreview | null = null;
 
   constructor(ws: WsClient) {
     this.ws = ws;
@@ -43,6 +46,7 @@ export class Terminal {
     this.gridView    = document.getElementById('grid-view')!;
     this.formView    = document.getElementById('form-view')!;
     this.editorView  = document.getElementById('editor-view')!;
+    this.reportView  = document.getElementById('report-preview-view')!;
 
     ws.on('output', (msg) => {
       (msg as any).lines.forEach((l: OutputLine) => this.printLine(l.text, l.cls));
@@ -76,6 +80,11 @@ export class Terminal {
     ws.on('program-open', (msg) => {
       const m = msg as any;
       this.openEditor(m.name, m.content);
+    });
+
+    ws.on('report-preview', (msg) => {
+      const m = msg as any;
+      this.openReport(m.html);
     });
 
     ws.on('error', (msg) => {
@@ -237,11 +246,31 @@ export class Terminal {
     this.editor.open(name, content);
   }
 
+  private openReport(html: string) {
+    if (!this.report) {
+      this.report = new ReportPreview(() => {
+        this.report = null;
+        this.showTerminal();
+      });
+    }
+    this.termView.classList.add('hidden');
+    this.reportView.classList.remove('hidden');
+    this.report.show(html);
+  }
+
+  private closeReport() {
+    this.report?.hide();
+    this.report = null;
+    this.reportView.classList.add('hidden');
+    this.showTerminal();
+  }
+
   showTerminal() {
     this.termView.classList.remove('hidden');
     this.gridView.classList.add('hidden');
     this.formView.classList.add('hidden');
     this.editorView.classList.add('hidden');
+    this.reportView.classList.add('hidden');
     this.input.focus();
   }
 
