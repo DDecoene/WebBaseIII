@@ -700,6 +700,8 @@ export class Executor implements IndexCommandsHost {
 
   private async refreshRecCount(loadFields = false): Promise<void> {
     if (this.area.table) {
+      const tableOk = await this.db.tableExists(this.area.table);
+      if (!tableOk) { this.area.cachedRecCount = 0; return; }
       this.area.cachedRecCount = await this.db.getRowCount(this.area.table, this.area.filter ?? undefined);
       if (loadFields && this.area.rowPtr >= 1) {
         const filter = this.area.filter;
