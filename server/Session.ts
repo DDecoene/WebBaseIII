@@ -38,7 +38,7 @@ export class Session {
 
         case 'grid-edit': {
           const { rowid, col, value } = msg;
-          const table = this.executor.state.table;
+          const table = this.executor.area.table;
           if (table) {
             await this.bridge.exec(
               `UPDATE ${q(table)} SET ${q(col)} = ? WHERE rowid = ?`,
@@ -49,7 +49,7 @@ export class Session {
         }
 
         case 'grid-delete': {
-          const table = this.executor.state.table;
+          const table = this.executor.area.table;
           if (table) {
             await this.bridge.exec(
               `DELETE FROM ${q(table)} WHERE rowid = ?`,
@@ -61,7 +61,7 @@ export class Session {
         }
 
         case 'grid-new-row': {
-          const table = this.executor.state.table;
+          const table = this.executor.area.table;
           if (table) {
             const cols = await this.bridge.getStructure(table);
             const fields = cols.filter(c => !c.pk);
@@ -223,24 +223,24 @@ export class Session {
   }
 
   private async sendGridData(): Promise<void> {
-    const state = this.executor.state;
-    if (!state.table) {
+    const area = this.executor.area;
+    if (!area.table) {
       this.send({ type: 'output', lines: [{ text: 'No table selected', cls: 'error' }] });
       return;
     }
-    const columns = await this.bridge.getStructure(state.table);
+    const columns = await this.bridge.getStructure(area.table);
     const rows = await this.executor.getOrderedRowsWithIds(2000);
-    this.send({ type: 'grid-open', table: state.table, filter: state.filter, columns, rows });
+    this.send({ type: 'grid-open', table: area.table, filter: area.filter, columns, rows });
   }
 
   private sendStatus(): void {
-    const s = this.executor.state;
+    const a = this.executor.area;
     this.send({
       type: 'status',
-      db: s.db,
-      table: s.table,
-      record: s.rowPtr,
-      total: s.cachedRecCount,
+      db: a.db,
+      table: a.table,
+      record: a.rowPtr,
+      total: a.cachedRecCount,
     });
   }
 }
