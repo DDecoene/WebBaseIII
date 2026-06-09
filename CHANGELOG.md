@@ -7,6 +7,13 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
 
 ---
 
+## [0.5.1] — 2026-06-09
+
+### Fixed
+- **`USE <table>` on nonexistent table** no longer causes `RECCOUNT()` to throw `no such table` — `refreshRecCount` now guards with `tableExists` before querying SQLite, so programs that check `IF RECCOUNT() == 0` to decide whether to seed data (e.g. `demos/INVENTORY.prg`) work correctly on first run
+
+---
+
 ## [0.5.0] — 2026-06-09 — Report Engine
 
 ### Added
