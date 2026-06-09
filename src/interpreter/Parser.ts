@@ -23,6 +23,11 @@ export type ASTNode =
   | { type: 'LIST_STRUCT' }
   | { type: 'LIST_TABLES' }
   | { type: 'LIST_DATABASES' }
+  | { type: 'CREATE_REPORT'; name: string }
+  | { type: 'MODIFY_REPORT'; name: string }
+  | { type: 'REPORT_FORM';   name: string }
+  | { type: 'LIST_REPORTS' }
+  | { type: 'DELETE_REPORT'; name: string }
   | { type: 'BROWSE' }
   | { type: 'CLEAR' }
   | { type: 'QUIT' }
@@ -113,7 +118,7 @@ export class Parser {
       case 'SET':      return this.parseSet();
       case 'REPLACE':  return this.parseReplace();
       case 'APPEND':   this.adv(); this.skipKw('RECORD'); this.skipKw('BLANK'); return { type: 'APPEND' };
-      case 'DELETE':   this.adv(); return { type: 'DELETE', scope: this.consumeScope() };
+      case 'DELETE':   { this.adv(); if (this.peekKw('REPORT')) { this.adv(); return { type: 'DELETE_REPORT', name: this.ident() }; } return { type: 'DELETE', scope: this.consumeScope() }; }
       case 'RECALL':   this.adv(); return { type: 'RECALL', scope: this.consumeScope() };
       case 'GO':       return this.parseGo();
       case 'GOTO':     return this.parseGo();
@@ -127,6 +132,16 @@ export class Parser {
       case 'CREATE':   return this.parseCreate();
       case 'DROP':     return this.parseDrop();
       case 'EDIT':     { this.adv(); return { type: 'EDIT_PRG', name: this.ident() }; }
+      case 'MODIFY': {
+        this.adv();
+        if (this.peekKw('REPORT')) { this.adv(); return { type: 'MODIFY_REPORT', name: this.ident() }; }
+        throw new Error('Expected REPORT after MODIFY');
+      }
+      case 'REPORT': {
+        this.adv();
+        if (this.peekKw('FORM')) { this.adv(); return { type: 'REPORT_FORM', name: this.ident() }; }
+        throw new Error('Expected FORM after REPORT');
+      }
       case 'INDEX':    return this.parseIndexOn();
       case 'REINDEX':  this.adv(); return { type: 'REINDEX' };
       case 'SEEK':     this.adv(); return { type: 'SEEK', value: this.expr() };
@@ -172,6 +187,7 @@ export class Parser {
     if (this.peekKw('DATABASES') || this.peekKw('DBS')) { this.adv(); return { type: 'LIST_DATABASES' }; }
     if (this.peekKw('PROGRAMS') || this.peekKw('PROGS')) { this.adv(); return { type: 'LIST_PROGRAMS' }; }
     if (this.peekKw('INDEXES'))  { this.adv(); return { type: 'LIST_INDEXES' }; }
+    if (this.peekKw('REPORTS'))  { this.adv(); return { type: 'LIST_REPORTS' }; }
     if (this.peekKw('AREAS'))    { this.adv(); return { type: 'LIST_AREAS' }; }
     // Column list: LIST name, alias.field, ...
     if (!this.end() && this.peek().type !== 'NL' && this.peek().type !== 'EOF' && this.peek().type !== 'SEMI') {
@@ -357,6 +373,7 @@ export class Parser {
 
   private parseCreate(): ASTNode {
     this.adv();
+    if (this.peekKw('REPORT')) { this.adv(); return { type: 'CREATE_REPORT', name: this.ident() }; }
     this.skipKw('TABLE');
     const name = this.ident();
     const cols: ColDef[] = [];

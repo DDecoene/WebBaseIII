@@ -490,6 +490,41 @@ describe('Parser: multi-work-area nodes', () => {
   it('parses CLOSE ALL', () => {
     expect(parse('CLOSE ALL')[0]).toMatchObject({ type: 'CLOSE_ALL' });
   });
+
+  it('parses CREATE REPORT', () => {
+    const nodes = parse('CREATE REPORT sales');
+    expect(nodes[0]).toEqual({ type: 'CREATE_REPORT', name: 'SALES' });
+  });
+
+  it('parses MODIFY REPORT', () => {
+    const nodes = parse('MODIFY REPORT sales');
+    expect(nodes[0]).toEqual({ type: 'MODIFY_REPORT', name: 'SALES' });
+  });
+
+  it('parses REPORT FORM', () => {
+    const nodes = parse('REPORT FORM sales');
+    expect(nodes[0]).toEqual({ type: 'REPORT_FORM', name: 'SALES' });
+  });
+
+  it('parses LIST REPORTS', () => {
+    const nodes = parse('LIST REPORTS');
+    expect(nodes[0]).toEqual({ type: 'LIST_REPORTS' });
+  });
+
+  it('parses DELETE REPORT', () => {
+    const nodes = parse('DELETE REPORT sales');
+    expect(nodes[0]).toEqual({ type: 'DELETE_REPORT', name: 'SALES' });
+  });
+
+  it('DELETE still works after DELETE REPORT added', () => {
+    const nodes = parse('DELETE');
+    expect(nodes[0]).toEqual({ type: 'DELETE', scope: 'CURRENT' });
+  });
+
+  it('DELETE ALL still works after DELETE REPORT added', () => {
+    const nodes = parse('DELETE ALL');
+    expect(nodes[0]).toEqual({ type: 'DELETE', scope: 'ALL' });
+  });
 });
 
 describe('Multi-work-area integration', () => {
