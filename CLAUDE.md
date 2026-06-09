@@ -179,8 +179,14 @@ Playwright suites: `tests/integration.spec.ts` (20 tests — full REPL scenario)
 
 ## Definition of done
 
-A task is not complete until:
-- Tests pass (`npm test`)
-- README.md command table is updated
-- CLAUDE.md is updated (architecture, commands, roadmap)
-- Any relevant design doc in `docs/superpowers/` reflects final implementation
+Complete these steps **in order** — do not skip or reorder:
+
+1. `npm test` passes — all tests green
+2. `package.json` version bumped — patch for fixes, minor per completed sub-project, 1.0.0 when feature-complete
+3. `CHANGELOG.md` — add entry (Added / Fixed / Changed sections)
+4. `README.md` — command tables and feature list reflect what was built
+5. `CLAUDE.md` — architecture, command tables, and roadmap updated
+6. Screenshots — retake and commit if the UI changed (`docs/screenshots/`)
+7. Any design doc in `docs/superpowers/` — mark completed items, note deviations
+
+Version scheme: 0.1.0 foundation → 0.2.0 indexing → 0.3.0 language completeness → 0.4.0 multi-work-area → 0.5.0 report engine → 0.6.0 assistant → 1.0.0 feature-complete.
