@@ -1,4 +1,4 @@
-import { IDatabaseBridge, IIndexStore, OutputLine, FormField } from '../shared/types';
+import { IDatabaseBridge, IIndexStore, OutputLine, FormField, WorkArea } from '../shared/types';
 import { ASTNode, Expr, ColDef, Parser } from './Parser';
 import { Lexer } from './Lexer';
 import { callStateless } from './Builtins';
@@ -38,20 +38,46 @@ function mapType(t: string): DbType {
   }
 }
 
+function makeArea(alias: string): WorkArea {
+  return {
+    alias,
+    db: null, table: null, filter: null,
+    rowPtr: 1, cachedRecCount: 0,
+    activeIndex: null, _found: false,
+    opfsAvailable: false, relation: null,
+  };
+}
+
 export class Executor {
-  public state: State;
+  public areas: Map<string, WorkArea>;
+  public activeAlias: string;
+  public vars: Map<string, unknown>;
+  public pendingForm: FormField[];
 
   constructor(
     private db: IDatabaseBridge,
     private indexStore: IIndexStore | null = null,
   ) {
-    this.state = {
-      db: null, table: null, filter: null,
-      vars: new Map(), rowPtr: 1,
-      pendingForm: [], opfsAvailable: false,
-      activeIndex: null,
-      _found: false,
-      cachedRecCount: 0,
+    this.areas = new Map([['1', makeArea('1')]]);
+    this.activeAlias = '1';
+    this.vars = new Map();
+    this.pendingForm = [];
+  }
+
+  get area(): WorkArea {
+    return this.areas.get(this.activeAlias)!;
+  }
+
+  /** Backwards-compat shim — Session.ts and legacy tests still read executor.state */
+  get state(): State {
+    const a = this.area;
+    return {
+      db: a.db, table: a.table, filter: a.filter,
+      rowPtr: a.rowPtr, cachedRecCount: a.cachedRecCount,
+      activeIndex: a.activeIndex, _found: a._found,
+      opfsAvailable: a.opfsAvailable,
+      vars: this.vars,
+      pendingForm: this.pendingForm,
     };
   }
 
@@ -72,11 +98,9 @@ export class Executor {
           const remaining = nodes.slice(i + 1);
           const innerCont = r.continuation;
           continuation = async () => {
-            // 1. Run code after the READ/BROWSE inside the current block (e.g. APPEND+REPLACE)
             if (innerCont) {
               const inner = await innerCont();
               if (inner.action === 'FORM_READY' || inner.action === 'BROWSE') {
-                // Another form appeared inside — chain remaining nodes after it resolves
                 const outerRemaining = remaining;
                 return {
                   ...inner,
@@ -90,12 +114,10 @@ export class Executor {
               }
               if (inner.action === 'QUIT') return inner;
             }
-            // 2. Then run remaining nodes at this level (e.g. remaining IF blocks)
             return this.run(remaining);
           };
           break;
         }
-        // propagate loop continuations from inner blocks
         if (r.continuation) continuation = r.continuation;
       }
     }
@@ -106,11 +128,17 @@ export class Executor {
     const out: OutputLine[] = [];
     try {
       switch (node.type) {
-        case 'USE':         return this.doUse(node.name);
+        case 'USE':         return this.doUse(node.name, node.alias);
         case 'USE_DB':      return this.doUseDb(node.name);
+        case 'SELECT':      return this.doSelect(node.alias);
+        case 'CLOSE':       return this.doClose();
+        case 'CLOSE_ALL':   return this.doCloseAll();
+        case 'SET_RELATION':return this.doSetRelation(node.expression, node.intoAlias);
         case 'LIST':        return this.doList();
         case 'LIST_STRUCT': return this.doListStruct();
         case 'LIST_TABLES': return this.doListTables();
+        case 'LIST_AREAS':  return this.doListAreas();
+        case 'LIST_COLS':   return this.doListCols(node.cols);
         case 'BROWSE':      return { output: [], action: 'BROWSE' };
         case 'CLEAR':       return { output: [{ text: '', cls: 'clear' }] };
         case 'QUIT':        return { output: [], action: 'QUIT' };
@@ -150,19 +178,26 @@ export class Executor {
     return { output: out };
   }
 
-  private async doUse(name: string): Promise<ExecResult> {
-    const dbName = this.state.db ?? 'webbaseiii';
-    if (!this.state.db) {
+  private async doUse(name: string, alias: string | null): Promise<ExecResult> {
+    const dbName = this.area.db ?? 'webbaseiii';
+    if (!this.area.db) {
       const r = await this.db.openDatabase(dbName);
-      this.state.db = dbName;
-      this.state.opfsAvailable = r.opfsAvailable;
+      this.area.db = dbName;
+      this.area.opfsAvailable = r.opfsAvailable;
     }
-    this.state.table = name;
-    this.state.filter = null;
-    this.state.rowPtr = 1;
-    this.state.activeIndex = this.indexStore?.getActive(name) ?? null;
+    if (alias) {
+      // Rename the area slot
+      this.areas.delete(this.activeAlias);
+      this.area.alias = alias;
+      this.areas.set(alias, this.area);
+      this.activeAlias = alias;
+    }
+    this.area.table = name;
+    this.area.filter = null;
+    this.area.rowPtr = 1;
+    this.area.activeIndex = this.indexStore?.getActive(name) ?? null;
     const exists = await this.db.tableExists(name);
-    const storage = this.state.opfsAvailable ? 'OPFS (persistent)' : 'server-side persistent';
+    const storage = this.area.opfsAvailable ? 'OPFS (persistent)' : 'server-side persistent';
     const lines: OutputLine[] = [
       { text: `Database : ${dbName}  [${storage}]`, cls: 'info' },
     ];
@@ -172,23 +207,102 @@ export class Executor {
     } else {
       lines.push({ text: `Table    : ${name}  (table not found — use CREATE TABLE to create it)`, cls: 'warn' });
     }
-    if (this.state.activeIndex) {
-      lines.push({ text: `Index    : ${this.state.activeIndex.tag}  (${this.state.activeIndex.expression})`, cls: 'info' });
+    if (this.area.activeIndex) {
+      lines.push({ text: `Index    : ${this.area.activeIndex.tag}  (${this.area.activeIndex.expression})`, cls: 'info' });
     }
     return { output: lines };
   }
 
   private async doUseDb(name: string): Promise<ExecResult> {
     await this.db.openDatabase(name);
-    this.state.db = name;
-    this.state.table = null;
-    this.state.opfsAvailable = this.db.opfsAvailable;
+    this.area.db = name;
+    this.area.table = null;
+    this.area.opfsAvailable = this.db.opfsAvailable;
     const tables = await this.db.getTables();
-    const storage = this.state.opfsAvailable ? 'OPFS (persistent)' : 'server-side persistent';
+    const storage = this.area.opfsAvailable ? 'OPFS (persistent)' : 'server-side persistent';
     return { output: [
       { text: `Opened database: ${name}  [${storage}]`, cls: 'ok' },
       { text: `Tables: ${tables.length ? tables.join(', ') : '(none)'}`, cls: 'info' },
     ]};
+  }
+
+  private doSelect(alias: string): ExecResult {
+    if (!this.areas.has(alias)) {
+      this.areas.set(alias, makeArea(alias));
+    }
+    this.activeAlias = alias;
+    return { output: [{ text: `Work area: ${alias}`, cls: 'info' }] };
+  }
+
+  private doClose(): ExecResult {
+    const a = this.area;
+    a.table = null; a.filter = null; a.rowPtr = 1;
+    a.activeIndex = null; a.relation = null; a.cachedRecCount = 0;
+    return { output: [{ text: 'Work area closed', cls: 'ok' }] };
+  }
+
+  private doCloseAll(): ExecResult {
+    this.areas.clear();
+    this.areas.set('1', makeArea('1'));
+    this.activeAlias = '1';
+    return { output: [{ text: 'All work areas closed', cls: 'ok' }] };
+  }
+
+  private doSetRelation(expression: string | null, intoAlias: string | null): ExecResult {
+    if (expression === null) {
+      this.area.relation = null;
+      return { output: [{ text: 'Relation cleared', cls: 'ok' }] };
+    }
+    if (!intoAlias) return { output: [{ text: '** SET RELATION TO requires INTO <alias>', cls: 'error' }] };
+    const target = this.areas.get(intoAlias);
+    if (!target?.table) {
+      return { output: [{ text: `** Work area '${intoAlias}' has no open table`, cls: 'error' }] };
+    }
+    if (!target.activeIndex) {
+      return { output: [{ text: `** Work area '${intoAlias}' has no active index — use SET INDEX TO first`, cls: 'error' }] };
+    }
+    this.area.relation = { expression, intoAlias };
+    return { output: [{ text: `Relation set: ${expression} → ${intoAlias}`, cls: 'ok' }] };
+  }
+
+  private doListAreas(): ExecResult {
+    const out: OutputLine[] = [
+      { text: `${'Alias'.padEnd(15)}  ${'Table'.padEnd(20)}  ${'Ptr'.padEnd(6)}  ${'Index'.padEnd(15)}  Relation`, cls: 'hdr' },
+      { text: '─'.repeat(80), cls: 'sep' },
+    ];
+    for (const [alias, a] of this.areas) {
+      const active = alias === this.activeAlias ? '*' : ' ';
+      const rel = a.relation ? `${a.relation.expression} → ${a.relation.intoAlias}` : '';
+      out.push({ text: `${active}${alias.padEnd(14)}  ${(a.table ?? '').padEnd(20)}  ${String(a.rowPtr).padEnd(6)}  ${(a.activeIndex?.tag ?? '').padEnd(15)}  ${rel}` });
+    }
+    return { output: out };
+  }
+
+  private async doListCols(cols: string[]): Promise<ExecResult> {
+    this.requireTable();
+    await this.refreshRecCount();
+    const rows = await this.getOrderedRows(500);
+    if (!rows.length) return { output: [{ text: '(No records)', cls: 'info' }] };
+
+    const widths = cols.map(c => c.length);
+    for (const row of rows) {
+      for (let i = 0; i < cols.length; i++) {
+        const col = cols[i];
+        const val = col.includes('.') ? '' : String(row[col] ?? row[col.toUpperCase()] ?? '');
+        widths[i] = Math.max(widths[i], val.length);
+      }
+    }
+    const out: OutputLine[] = [];
+    out.push({ text: cols.map((c, i) => c.padEnd(widths[i])).join('  '), cls: 'hdr' });
+    out.push({ text: cols.map((_, i) => '-'.repeat(widths[i])).join('  '), cls: 'sep' });
+    for (const row of rows) {
+      out.push({ text: cols.map((c, i) => {
+        const val = c.includes('.') ? '' : String(row[c] ?? row[c.toUpperCase()] ?? '');
+        return val.padEnd(widths[i]);
+      }).join('  ') });
+    }
+    out.push({ text: `${rows.length} record(s)`, cls: 'info' });
+    return { output: out };
   }
 
   private async doList(): Promise<ExecResult> {
@@ -211,9 +325,9 @@ export class Executor {
 
   private async doListStruct(): Promise<ExecResult> {
     this.requireTable();
-    const cols = await this.db.getStructure(this.state.table!);
+    const cols = await this.db.getStructure(this.area.table!);
     const out: OutputLine[] = [
-      { text: `Structure of table: ${this.state.table}`, cls: 'hdr' },
+      { text: `Structure of table: ${this.area.table}`, cls: 'hdr' },
       { text: `${'#'.padEnd(4)}  ${'Field'.padEnd(20)}  ${'Type'.padEnd(10)}  ${'Null'.padEnd(5)}  ${'PK'}`, cls: 'hdr' },
       { text: `${'─'.repeat(55)}`, cls: 'sep' },
     ];
@@ -224,7 +338,7 @@ export class Executor {
   }
 
   private async doListTables(): Promise<ExecResult> {
-    if (!this.state.db) return { output: [{ text: 'No database open', cls: 'warn' }] };
+    if (!this.area.db) return { output: [{ text: 'No database open', cls: 'warn' }] };
     const tables = await this.db.getTables();
     if (!tables.length) return { output: [{ text: '(No tables)', cls: 'info' }] };
     const out: OutputLine[] = [{ text: 'Tables in database:', cls: 'hdr' }];
@@ -236,7 +350,7 @@ export class Executor {
   }
 
   private async doSetFilter(expr: string | null): Promise<ExecResult> {
-    this.state.filter = expr;
+    this.area.filter = expr;
     return { output: [{ text: expr ? `Filter set: ${expr}` : 'Filter cleared', cls: 'ok' }] };
   }
 
@@ -248,10 +362,10 @@ export class Executor {
     const params = pairs.map(p => p.value);
     let sql: string;
     if (scope === 'ALL') {
-      const where = this.state.filter ? ` WHERE ${this.state.filter}` : '';
-      sql = `UPDATE ${q(this.state.table!)} SET ${setClauses}${where}`;
+      const where = this.area.filter ? ` WHERE ${this.area.filter}` : '';
+      sql = `UPDATE ${q(this.area.table!)} SET ${setClauses}${where}`;
     } else {
-      sql = `UPDATE ${q(this.state.table!)} SET ${setClauses} WHERE rowid = (SELECT rowid FROM ${q(this.state.table!)} LIMIT 1 OFFSET ${this.state.rowPtr - 1})`;
+      sql = `UPDATE ${q(this.area.table!)} SET ${setClauses} WHERE rowid = (SELECT rowid FROM ${q(this.area.table!)} LIMIT 1 OFFSET ${this.area.rowPtr - 1})`;
     }
     await this.db.exec(sql, params);
     const desc = pairs.map(p => `${p.field} = ${JSON.stringify(p.value)}`).join(', ');
@@ -260,30 +374,30 @@ export class Executor {
 
   private async doAppend(): Promise<ExecResult> {
     this.requireTable();
-    const cols = await this.db.getStructure(this.state.table!);
+    const cols = await this.db.getStructure(this.area.table!);
     const fields = cols.filter(c => !c.pk || c.pk === 0);
     if (!fields.length) {
-      await this.db.exec(`INSERT INTO ${q(this.state.table!)} DEFAULT VALUES`);
+      await this.db.exec(`INSERT INTO ${q(this.area.table!)} DEFAULT VALUES`);
     } else {
       const names = fields.map(c => q(c.name)).join(', ');
       const vals = fields.map(() => 'NULL').join(', ');
-      await this.db.exec(`INSERT INTO ${q(this.state.table!)} (${names}) VALUES (${vals})`);
+      await this.db.exec(`INSERT INTO ${q(this.area.table!)} (${names}) VALUES (${vals})`);
     }
-    const cnt = await this.db.getRowCount(this.state.table!);
-    this.state.rowPtr = cnt;
-    this.state.cachedRecCount = cnt;
+    const cnt = await this.db.getRowCount(this.area.table!);
+    this.area.rowPtr = cnt;
+    this.area.cachedRecCount = cnt;
     return { output: [{ text: `Record appended. Total: ${cnt}`, cls: 'ok' }] };
   }
 
   private async doDelete(scope: 'ALL' | 'CURRENT'): Promise<ExecResult> {
     this.requireTable();
     if (scope === 'ALL') {
-      const where = this.state.filter ? ` WHERE ${this.state.filter}` : '';
-      await this.db.exec(`DELETE FROM ${q(this.state.table!)}${where}`);
+      const where = this.area.filter ? ` WHERE ${this.area.filter}` : '';
+      await this.db.exec(`DELETE FROM ${q(this.area.table!)}${where}`);
       return { output: [{ text: 'Records deleted', cls: 'ok' }] };
     }
     await this.db.exec(
-      `DELETE FROM ${q(this.state.table!)} WHERE rowid = (SELECT rowid FROM ${q(this.state.table!)} LIMIT 1 OFFSET ${this.state.rowPtr - 1})`
+      `DELETE FROM ${q(this.area.table!)} WHERE rowid = (SELECT rowid FROM ${q(this.area.table!)} LIMIT 1 OFFSET ${this.area.rowPtr - 1})`
     );
     return { output: [{ text: 'Current record deleted', cls: 'ok' }] };
   }
@@ -293,38 +407,37 @@ export class Executor {
   }
 
   private async doPack(): Promise<ExecResult> {
-    if (this.state.db) await this.db.exec('VACUUM');
+    if (this.area.db) await this.db.exec('VACUUM');
     return { output: [{ text: 'VACUUM complete', cls: 'ok' }] };
   }
 
   private async doGo(target: 'TOP' | 'BOTTOM' | number): Promise<ExecResult> {
     this.requireTable();
-    const cnt = await this.db.getRowCount(this.state.table!, this.state.filter ?? undefined);
-    this.state.cachedRecCount = cnt;
-    if (target === 'TOP')         this.state.rowPtr = 1;
-    else if (target === 'BOTTOM') this.state.rowPtr = cnt;
-    else                          this.state.rowPtr = Math.max(1, Math.min(cnt, target));
-    const idxNote = this.state.activeIndex ? `  [index: ${this.state.activeIndex.tag}]` : '';
-    return { output: [{ text: `Record pointer: ${this.state.rowPtr} / ${cnt}${idxNote}`, cls: 'info' }] };
+    const cnt = await this.db.getRowCount(this.area.table!, this.area.filter ?? undefined);
+    this.area.cachedRecCount = cnt;
+    if (target === 'TOP')         this.area.rowPtr = 1;
+    else if (target === 'BOTTOM') this.area.rowPtr = cnt;
+    else                          this.area.rowPtr = Math.max(1, Math.min(cnt, target));
+    const idxNote = this.area.activeIndex ? `  [index: ${this.area.activeIndex.tag}]` : '';
+    return { output: [{ text: `Record pointer: ${this.area.rowPtr} / ${cnt}${idxNote}`, cls: 'info' }] };
   }
 
   private async doSkip(n: number): Promise<ExecResult> {
     this.requireTable();
-    const cnt = await this.db.getRowCount(this.state.table!, this.state.filter ?? undefined);
-    this.state.cachedRecCount = cnt;
-    // Allow going out of bounds so EOF()/BOF() can be detected
-    const newPtr = this.state.rowPtr + n;
-    if (newPtr > cnt) this.state.rowPtr = cnt + 1;      // EOF
-    else if (newPtr < 1) this.state.rowPtr = 0;          // BOF
-    else this.state.rowPtr = newPtr;
-    return { output: [{ text: `Record pointer: ${this.state.rowPtr} / ${cnt}`, cls: 'info' }] };
+    const cnt = await this.db.getRowCount(this.area.table!, this.area.filter ?? undefined);
+    this.area.cachedRecCount = cnt;
+    const newPtr = this.area.rowPtr + n;
+    if (newPtr > cnt) this.area.rowPtr = cnt + 1;
+    else if (newPtr < 1) this.area.rowPtr = 0;
+    else this.area.rowPtr = newPtr;
+    return { output: [{ text: `Record pointer: ${this.area.rowPtr} / ${cnt}`, cls: 'info' }] };
   }
 
   private doAtSay(rowE: Expr, colE: Expr, textE: Expr): ExecResult {
     const row = Number(this.evalExpr(rowE));
     const col = Number(this.evalExpr(colE));
     const text = String(this.evalExpr(textE));
-    this.state.pendingForm.push({ row, col, label: text, varName: '' });
+    this.pendingForm.push({ row, col, label: text, varName: '' });
     return { output: [] };
   }
 
@@ -332,13 +445,13 @@ export class Executor {
     const row = Number(this.evalExpr(rowE));
     const col = Number(this.evalExpr(colE));
     const text = String(this.evalExpr(textE));
-    this.state.pendingForm.push({ row, col, label: text, varName });
+    this.pendingForm.push({ row, col, label: text, varName });
     return { output: [] };
   }
 
   private doRead(): ExecResult {
-    const fields = [...this.state.pendingForm];
-    this.state.pendingForm = [];
+    const fields = [...this.pendingForm];
+    this.pendingForm = [];
     if (!fields.length) return { output: [{ text: 'READ: no GET fields defined', cls: 'warn' }] };
     return { output: [], action: 'FORM_READY', formFields: fields };
   }
@@ -346,14 +459,14 @@ export class Executor {
   private async doStore(valueExpr: Expr, varName: string): Promise<ExecResult> {
     await this.refreshRecCount();
     const v = this.evalExpr(valueExpr);
-    this.state.vars.set(varName, v);
+    this.vars.set(varName, v);
     return { output: [{ text: `${varName} = ${fmtVal(v)}`, cls: 'info' }] };
   }
 
   private doInput(prompt: string, varName: string): ExecResult {
-    this.state.vars.set(varName, this.state.vars.get(varName) ?? '');
-    const pending = [...this.state.pendingForm];
-    this.state.pendingForm = [];
+    this.vars.set(varName, this.vars.get(varName) ?? '');
+    const pending = [...this.pendingForm];
+    this.pendingForm = [];
     const inputRow = pending.length ? Math.max(...pending.map(f => f.row)) + 2 : 10;
     const form: FormField[] = [...pending, { row: inputRow, col: 5, label: prompt || `Enter ${varName}:`, varName }];
     return { output: [], action: 'FORM_READY', formFields: form };
@@ -387,8 +500,6 @@ export class Executor {
     return { output: out };
   }
 
-  // Drains the continuation chain from inside a loop, then re-enters the loop.
-  // Threads "re-enter loop" through every level of nested FORM_READY.
   private async resumeAndLoop(
     innerCont: (() => Promise<ExecResult>) | undefined,
     condE: Expr, body: ASTNode[], capturedIter: number,
@@ -407,10 +518,10 @@ export class Executor {
   }
 
   private async doCreateTable(name: string, cols: ColDef[]): Promise<ExecResult> {
-    if (!this.state.db) {
+    if (!this.area.db) {
       await this.db.openDatabase('webbaseiii');
-      this.state.db = 'webbaseiii';
-      this.state.opfsAvailable = this.db.opfsAvailable;
+      this.area.db = 'webbaseiii';
+      this.area.opfsAvailable = this.db.opfsAvailable;
     }
     const colsSql = cols.length
       ? cols.map(c => `${q(c.name)} ${mapType(c.colType)}`).join(', ')
@@ -423,9 +534,9 @@ export class Executor {
   private async doDropTable(name: string): Promise<ExecResult> {
     await this.db.exec(`DROP TABLE IF EXISTS ${q(name)}`);
     this.indexStore?.dropTable(name);
-    if (this.state.table === name) {
-      this.state.table = null;
-      this.state.activeIndex = null;
+    if (this.area.table === name) {
+      this.area.table = null;
+      this.area.activeIndex = null;
     }
     return { output: [{ text: `Table dropped: ${name}`, cls: 'ok' }] };
   }
@@ -433,9 +544,8 @@ export class Executor {
   private async doIndexOn(expression: string, tag: string): Promise<ExecResult> {
     this.requireTable();
     if (!this.indexStore) return { output: [{ text: '** IndexStore not available', cls: 'error' }] };
-    const table = this.state.table!;
+    const table = this.area.table!;
     this.indexStore.saveIndex(table, tag, expression);
-    // For simple single-field: also create a real SQLite index for query performance
     if (/^[A-Z_][A-Z0-9_]*$/i.test(expression.trim())) {
       try {
         await this.db.exec(
@@ -444,33 +554,36 @@ export class Executor {
       } catch { /* ignore — expression may not be a valid SQL column ref */ }
     }
     this.indexStore.setActive(table, tag);
-    this.state.activeIndex = { tag, expression };
+    this.area.activeIndex = { tag, expression };
     return { output: [{ text: `Index created: ${tag}  ON  ${expression}`, cls: 'ok' }] };
   }
+
   private async doSetIndex(tag: string | null): Promise<ExecResult> {
     this.requireTable();
     if (!this.indexStore) return { output: [{ text: '** IndexStore not available', cls: 'error' }] };
-    const table = this.state.table!;
+    const table = this.area.table!;
     if (tag === null) {
       this.indexStore.clearActive(table);
-      this.state.activeIndex = null;
+      this.area.activeIndex = null;
       return { output: [{ text: 'Active index cleared', cls: 'ok' }] };
     }
     const def = this.indexStore.listIndexes(table).find(i => i.tag.toUpperCase() === tag.toUpperCase());
     if (!def) return { output: [{ text: `Index '${tag}' not found — use INDEX ON to create it`, cls: 'warn' }] };
     this.indexStore.setActive(table, def.tag);
-    this.state.activeIndex = { tag: def.tag, expression: def.expression };
+    this.area.activeIndex = { tag: def.tag, expression: def.expression };
     return { output: [{ text: `Index active: ${def.tag}  (${def.expression})`, cls: 'ok' }] };
   }
+
   private async doReindex(): Promise<ExecResult> {
     this.requireTable();
     await this.db.exec('REINDEX');
     return { output: [{ text: 'Indexes rebuilt', cls: 'ok' }] };
   }
+
   private async doListIndexes(): Promise<ExecResult> {
     this.requireTable();
     if (!this.indexStore) return { output: [{ text: '** IndexStore not available', cls: 'error' }] };
-    const table = this.state.table!;
+    const table = this.area.table!;
     const indexes = this.indexStore.listIndexes(table);
     if (!indexes.length) return { output: [{ text: '(No indexes defined)', cls: 'info' }] };
     const out: OutputLine[] = [
@@ -479,19 +592,20 @@ export class Executor {
       { text: '─'.repeat(65), cls: 'sep' },
     ];
     for (const idx of indexes) {
-      const active = this.state.activeIndex?.tag?.toUpperCase() === idx.tag.toUpperCase() ? ' *' : '';
+      const active = this.area.activeIndex?.tag?.toUpperCase() === idx.tag.toUpperCase() ? ' *' : '';
       out.push({ text: `${idx.tag.padEnd(20)}  ${idx.expression.padEnd(40)}${active}` });
     }
     return { output: out };
   }
+
   private async doSeek(valueExpr: Expr): Promise<ExecResult> {
     this.requireTable();
-    if (!this.state.activeIndex) {
+    if (!this.area.activeIndex) {
       return { output: [{ text: 'No index active — use SET INDEX TO <tag> first', cls: 'warn' }] };
     }
     const seekVal = String(this.evalExpr(valueExpr)).toLowerCase();
     const rows = await this.getOrderedRows(100000);
-    const idx = this.state.activeIndex;
+    const idx = this.area.activeIndex;
     const exprNode = new Parser(new Lexer(idx.expression).tokenize()).parseExprPublic();
 
     const pos = rows.findIndex(row => {
@@ -500,17 +614,18 @@ export class Executor {
     });
 
     if (pos === -1) {
-      this.state._found = false;
-      this.state.rowPtr = rows.length + 1;
+      this.area._found = false;
+      this.area.rowPtr = rows.length + 1;
       return { output: [{ text: 'Record not found', cls: 'warn' }] };
     }
 
-    this.state._found = true;
-    this.state.rowPtr = pos + 1;
+    this.area._found = true;
+    this.area.rowPtr = pos + 1;
     const row = rows[pos];
     const preview = Object.entries(row).map(([k, v]) => `${k}: ${v}`).join('  ');
     return { output: [{ text: `Found at position ${pos + 1}: ${preview}`, cls: 'ok' }] };
   }
+
   private async doFind(value: string): Promise<ExecResult> {
     const litExpr: Expr = { k: 'lit', v: value };
     return this.doSeek(litExpr);
@@ -522,6 +637,13 @@ export class Executor {
       { text: '─'.repeat(50), cls: 'sep' },
       { text: 'USE <table>             — open/select a table' },
       { text: 'USE DATABASE <name>     — open a named database' },
+      { text: 'SELECT <alias>          — activate or create work area' },
+      { text: 'USE <table> ALIAS <n>   — open table with alias override' },
+      { text: 'SET RELATION TO <expr> INTO <alias> — link work areas by key' },
+      { text: 'SET RELATION TO         — clear relation' },
+      { text: 'LIST AREAS              — show all open work areas' },
+      { text: 'CLOSE                   — close active work area table' },
+      { text: 'CLOSE ALL               — close all work areas' },
       { text: 'LIST                    — list records' },
       { text: 'LIST STRUCTURE          — show table schema' },
       { text: 'LIST TABLES             — list all tables' },
@@ -566,7 +688,7 @@ export class Executor {
   evalExpr(e: Expr): unknown {
     switch (e.k) {
       case 'lit': return e.v;
-      case 'var': return this.state.vars.get(e.name) ?? e.name;
+      case 'var': return this.vars.get(e.name) ?? e.name;
       case 'not': return !this.evalExpr(e.e);
       case 'bin': {
         const l = this.evalExpr(e.l);
@@ -596,32 +718,32 @@ export class Executor {
 
   private callBuiltin(fn: string, args: unknown[]): unknown {
     switch (fn) {
-      case 'EOF':      return this.state.table ? this.state.rowPtr > this.state.cachedRecCount : true;
-      case 'BOF':      return this.state.table ? this.state.rowPtr < 1 : false;
-      case 'FOUND':    return this.state._found;
-      case 'RECNO':    return this.state.rowPtr;
-      case 'RECCOUNT': return this.state.cachedRecCount;
+      case 'EOF':      return this.area.table ? this.area.rowPtr > this.area.cachedRecCount : true;
+      case 'BOF':      return this.area.table ? this.area.rowPtr < 1 : false;
+      case 'FOUND':    return this.area._found;
+      case 'RECNO':    return this.area.rowPtr;
+      case 'RECCOUNT': return this.area.cachedRecCount;
     }
     return callStateless(fn, args);
   }
 
   private async refreshRecCount(loadFields = false): Promise<void> {
-    if (this.state.table) {
-      this.state.cachedRecCount = await this.db.getRowCount(this.state.table, this.state.filter ?? undefined);
-      if (loadFields && this.state.rowPtr >= 1) {
-        const filter = this.state.filter;
+    if (this.area.table) {
+      this.area.cachedRecCount = await this.db.getRowCount(this.area.table, this.area.filter ?? undefined);
+      if (loadFields && this.area.rowPtr >= 1) {
+        const filter = this.area.filter;
         const where = filter ? ` WHERE ${filter}` : '';
         const rows = await this.db.query(
-          `SELECT * FROM ${q(this.state.table)} ${where} LIMIT 1 OFFSET ${this.state.rowPtr - 1}`
+          `SELECT * FROM ${q(this.area.table)} ${where} LIMIT 1 OFFSET ${this.area.rowPtr - 1}`
         );
         if (rows[0]) {
           for (const [k, v] of Object.entries(rows[0])) {
-            this.state.vars.set(k.toUpperCase(), v);
+            this.vars.set(k.toUpperCase(), v);
           }
         }
       }
     } else {
-      this.state.cachedRecCount = 0;
+      this.area.cachedRecCount = 0;
     }
   }
 
@@ -651,14 +773,14 @@ export class Executor {
     return { output: [] };
   }
 
-  setVar(name: string, value: unknown) { this.state.vars.set(name, value); }
+  setVar(name: string, value: unknown) { this.vars.set(name, value); }
 
   private async getOrderedRows(limit = 500): Promise<Record<string, unknown>[]> {
     this.requireTable();
-    const table = this.state.table!;
-    const filter = this.state.filter;
+    const table = this.area.table!;
+    const filter = this.area.filter;
     const where = filter ? ` WHERE ${filter}` : '';
-    const idx = this.state.activeIndex;
+    const idx = this.area.activeIndex;
 
     if (!idx) {
       return this.db.query(`SELECT * FROM ${q(table)}${where} LIMIT ${limit}`);
@@ -673,9 +795,7 @@ export class Executor {
       );
     }
 
-    // Complex expression: fetch all, sort in JS using W3Script evaluator
     const rows = await this.db.query(`SELECT * FROM ${q(table)}${where}`);
-    // Parse expression once before sort loop
     const exprNode = new Parser(new Lexer(idx.expression).tokenize()).parseExprPublic();
     rows.sort((a, b) => {
       const va = this.evalExprOnRowParsed(exprNode, a);
@@ -689,8 +809,8 @@ export class Executor {
   evalExprOnRowParsed(exprNode: Expr, row: Record<string, unknown>): unknown {
     const saved = new Map<string, unknown>();
     for (const [k, v] of Object.entries(row)) {
-      saved.set(k, this.state.vars.get(k));
-      this.state.vars.set(k, v);
+      saved.set(k, this.vars.get(k));
+      this.vars.set(k, v);
     }
     let result: unknown = '';
     try {
@@ -699,18 +819,18 @@ export class Executor {
       result = '';
     }
     for (const [k, v] of saved) {
-      if (v === undefined) this.state.vars.delete(k);
-      else this.state.vars.set(k, v);
+      if (v === undefined) this.vars.delete(k);
+      else this.vars.set(k, v);
     }
     return result;
   }
 
   async getOrderedRowsWithIds(limit = 2000): Promise<Record<string, unknown>[]> {
     this.requireTable();
-    const table = this.state.table!;
-    const filter = this.state.filter;
+    const table = this.area.table!;
+    const filter = this.area.filter;
     const where = filter ? ` WHERE ${filter}` : '';
-    const idx = this.state.activeIndex;
+    const idx = this.area.activeIndex;
 
     if (!idx) {
       return this.db.query(`SELECT rowid as _rowid, * FROM ${q(table)}${where} LIMIT ${limit}`);
@@ -725,7 +845,6 @@ export class Executor {
       );
     }
 
-    // Complex expression: fetch with rowids, sort in JS
     const rows = await this.db.query(`SELECT rowid as _rowid, * FROM ${q(table)}${where}`);
     const exprNode = new Parser(new Lexer(idx.expression).tokenize()).parseExprPublic();
     rows.sort((a, b) => {
@@ -738,7 +857,7 @@ export class Executor {
   }
 
   private requireTable() {
-    if (!this.state.table) throw new Error('No table selected — run: USE <tablename>');
+    if (!this.area.table) throw new Error('No table selected — run: USE <tablename>');
   }
 }
 
