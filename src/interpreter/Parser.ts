@@ -487,6 +487,12 @@ export class Parser {
         if (this.peek().type === 'RPAREN') this.adv(); // consume )
         return { k: 'call', fn: t.val.toUpperCase(), args };
       }
+      // alias.field dot notation: ID DOT ID
+      if (this.peek().type === 'DOT') {
+        this.adv(); // consume DOT
+        const field = this.peek().val; this.adv();
+        return { k: 'var', name: `${t.val}.${field}` };
+      }
       return { k: 'var', name: t.val };
     }
     this.adv(); return { k: 'lit', v: '' };

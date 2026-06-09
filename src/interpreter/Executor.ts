@@ -53,6 +53,7 @@ export class Executor {
   public activeAlias: string;
   public vars: Map<string, unknown>;
   public pendingForm: FormField[];
+  private rowCache: Map<string, Record<string, unknown>> = new Map();
 
   constructor(
     private db: IDatabaseBridge,
@@ -281,6 +282,7 @@ export class Executor {
   private async doListCols(cols: string[]): Promise<ExecResult> {
     this.requireTable();
     await this.refreshRecCount();
+    await this.primeRowCache();
     const rows = await this.getOrderedRows(500);
     if (!rows.length) return { output: [{ text: '(No records)', cls: 'info' }] };
 
@@ -296,8 +298,19 @@ export class Executor {
     out.push({ text: cols.map((c, i) => c.padEnd(widths[i])).join('  '), cls: 'hdr' });
     out.push({ text: cols.map((_, i) => '-'.repeat(widths[i])).join('  '), cls: 'sep' });
     for (const row of rows) {
+      // Sync alias.field via rowCache — cache the active-area row for this iteration
+      this.rowCache.set(this.activeAlias, row as Record<string, unknown>);
       out.push({ text: cols.map((c, i) => {
-        const val = c.includes('.') ? '' : String(row[c] ?? row[c.toUpperCase()] ?? '');
+        let val: string;
+        if (c.includes('.')) {
+          const dot = c.indexOf('.');
+          const alias = c.slice(0, dot);
+          const field = c.slice(dot + 1);
+          const cachedRow = this.rowCache.get(alias);
+          val = cachedRow ? String(cachedRow[field] ?? cachedRow[field.toUpperCase()] ?? '') : '';
+        } else {
+          val = String(row[c] ?? row[c.toUpperCase()] ?? '');
+        }
         return val.padEnd(widths[i]);
       }).join('  ') });
     }
@@ -386,6 +399,7 @@ export class Executor {
     const cnt = await this.db.getRowCount(this.area.table!);
     this.area.rowPtr = cnt;
     this.area.cachedRecCount = cnt;
+    await this.resolveRelations();
     return { output: [{ text: `Record appended. Total: ${cnt}`, cls: 'ok' }] };
   }
 
@@ -419,6 +433,7 @@ export class Executor {
     else if (target === 'BOTTOM') this.area.rowPtr = cnt;
     else                          this.area.rowPtr = Math.max(1, Math.min(cnt, target));
     const idxNote = this.area.activeIndex ? `  [index: ${this.area.activeIndex.tag}]` : '';
+    await this.resolveRelations();
     return { output: [{ text: `Record pointer: ${this.area.rowPtr} / ${cnt}${idxNote}`, cls: 'info' }] };
   }
 
@@ -430,6 +445,7 @@ export class Executor {
     if (newPtr > cnt) this.area.rowPtr = cnt + 1;
     else if (newPtr < 1) this.area.rowPtr = 0;
     else this.area.rowPtr = newPtr;
+    await this.resolveRelations();
     return { output: [{ text: `Record pointer: ${this.area.rowPtr} / ${cnt}`, cls: 'info' }] };
   }
 
@@ -621,6 +637,7 @@ export class Executor {
 
     this.area._found = true;
     this.area.rowPtr = pos + 1;
+    await this.resolveRelations();
     const row = rows[pos];
     const preview = Object.entries(row).map(([k, v]) => `${k}: ${v}`).join('  ');
     return { output: [{ text: `Found at position ${pos + 1}: ${preview}`, cls: 'ok' }] };
@@ -688,7 +705,20 @@ export class Executor {
   evalExpr(e: Expr): unknown {
     switch (e.k) {
       case 'lit': return e.v;
-      case 'var': return this.vars.get(e.name) ?? e.name;
+      case 'var': {
+        const dot = e.name.indexOf('.');
+        if (dot !== -1) {
+          const alias = e.name.slice(0, dot);
+          const field = e.name.slice(dot + 1);
+          const cachedRow = this.rowCache.get(alias);
+          if (cachedRow) return cachedRow[field] ?? cachedRow[field.toUpperCase()] ?? null;
+          const targetArea = this.areas.get(alias);
+          if (!targetArea) throw new Error(`Unknown work area: '${alias}'`);
+          if (targetArea.rowPtr === 0 || !targetArea.table) return null;
+          return null;
+        }
+        return this.vars.get(e.name) ?? e.name;
+      }
       case 'not': return !this.evalExpr(e.e);
       case 'bin': {
         const l = this.evalExpr(e.l);
@@ -854,6 +884,54 @@ export class Executor {
       return String(va) < String(vb) ? -1 : String(va) > String(vb) ? 1 : 0;
     });
     return rows.slice(0, limit);
+  }
+
+  async primeRowCache(): Promise<void> {
+    this.rowCache.clear();
+    for (const [alias, area] of this.areas) {
+      if (area.table && area.rowPtr >= 1 && area.rowPtr <= area.cachedRecCount) {
+        const filter = area.filter;
+        const where = filter ? ` WHERE ${filter}` : '';
+        const rows = await this.db.query(
+          `SELECT * FROM ${q(area.table)} ${where} LIMIT 1 OFFSET ${area.rowPtr - 1}`
+        );
+        if (rows[0]) this.rowCache.set(alias, rows[0] as Record<string, unknown>);
+      }
+    }
+  }
+
+  private async resolveRelations(): Promise<void> {
+    const activeArea = this.area;
+    if (!activeArea.relation) return;
+    const { expression, intoAlias } = activeArea.relation;
+    const target = this.areas.get(intoAlias);
+    if (!target?.table || !target.activeIndex) return;
+    if (activeArea.rowPtr < 1 || activeArea.rowPtr > activeArea.cachedRecCount) {
+      target.rowPtr = 0; target._found = false; return;
+    }
+    // Fetch current row of active area to evaluate the key expression
+    const filter = activeArea.filter;
+    const where = filter ? ` WHERE ${filter}` : '';
+    const rows = await this.db.query(
+      `SELECT * FROM ${q(activeArea.table!)} ${where} LIMIT 1 OFFSET ${activeArea.rowPtr - 1}`
+    );
+    if (!rows[0]) { target.rowPtr = 0; target._found = false; return; }
+
+    const exprNode = new Parser(new Lexer(expression).tokenize()).parseExprPublic();
+    const keyVal = String(this.evalExprOnRowParsed(exprNode, rows[0] as Record<string, unknown>)).toLowerCase();
+
+    // Seek target area
+    const savedAlias = this.activeAlias;
+    this.activeAlias = intoAlias;
+    const targetRows = await this.getOrderedRows(100000);
+    const idxExpr = target.activeIndex.expression;
+    const idxNode = new Parser(new Lexer(idxExpr).tokenize()).parseExprPublic();
+    const pos = targetRows.findIndex(row =>
+      String(this.evalExprOnRowParsed(idxNode, row)).toLowerCase() === keyVal
+    );
+    if (pos === -1) { target.rowPtr = 0; target._found = false; }
+    else { target.rowPtr = pos + 1; target._found = true; }
+    this.activeAlias = savedAlias;
   }
 
   private requireTable() {
