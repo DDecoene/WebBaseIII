@@ -2,6 +2,7 @@ import { IDatabaseBridge, IIndexStore, OutputLine, FormField, WorkArea } from '.
 import { ASTNode, Expr, ColDef, Parser } from './Parser';
 import { Lexer } from './Lexer';
 import { callStateless } from './Builtins';
+import { IndexCommands, IndexCommandsHost } from './IndexCommands';
 
 export type { OutputLine, FormField } from '../shared/types';
 
@@ -48,21 +49,23 @@ function makeArea(alias: string): WorkArea {
   };
 }
 
-export class Executor {
+export class Executor implements IndexCommandsHost {
   public areas: Map<string, WorkArea>;
   public activeAlias: string;
   public vars: Map<string, unknown>;
   public pendingForm: FormField[];
   private rowCache: Map<string, Record<string, unknown>> = new Map();
+  private indexCmds: IndexCommands;
 
   constructor(
-    private db: IDatabaseBridge,
-    private indexStore: IIndexStore | null = null,
+    public db: IDatabaseBridge,
+    public indexStore: IIndexStore | null = null,
   ) {
     this.areas = new Map([['1', makeArea('1')]]);
     this.activeAlias = '1';
     this.vars = new Map();
     this.pendingForm = [];
+    this.indexCmds = new IndexCommands(this);
   }
 
   get area(): WorkArea {
@@ -165,12 +168,12 @@ export class Executor {
         case 'DO_PRG':      return { output: [], action: 'DO_PRG', prgName: node.name };
         case 'LIST_PROGRAMS': return { output: [], action: 'LIST_PROGRAMS' };
         case 'EDIT_PRG':    return { output: [], action: 'EDIT_PRG', prgName: node.name };
-        case 'INDEX_ON':    return this.doIndexOn(node.expression, node.tag);
-        case 'SET_INDEX':   return this.doSetIndex(node.tag);
-        case 'REINDEX':     return this.doReindex();
-        case 'LIST_INDEXES':return this.doListIndexes();
-        case 'SEEK':        return this.doSeek(node.value);
-        case 'FIND':        return this.doFind(node.value);
+        case 'INDEX_ON':    return this.indexCmds.doIndexOn(node.expression, node.tag);
+        case 'SET_INDEX':   return this.indexCmds.doSetIndex(node.tag);
+        case 'REINDEX':     return this.indexCmds.doReindex();
+        case 'LIST_INDEXES':return this.indexCmds.doListIndexes();
+        case 'SEEK':        return this.indexCmds.doSeek(node.value);
+        case 'FIND':        return this.indexCmds.doFind(node.value);
         case 'DO_CASE':     return this.doCase(node.cases, node.otherwise);
         case 'UNKNOWN':     return { output: [{ text: `Unknown command: ${node.raw}`, cls: 'warn' }] };
       }
@@ -570,97 +573,6 @@ export class Executor {
     return { output: [{ text: `Table dropped: ${name}`, cls: 'ok' }] };
   }
 
-  private async doIndexOn(expression: string, tag: string): Promise<ExecResult> {
-    this.requireTable();
-    if (!this.indexStore) return { output: [{ text: '** IndexStore not available', cls: 'error' }] };
-    const table = this.area.table!;
-    this.indexStore.saveIndex(table, tag, expression);
-    if (/^[A-Z_][A-Z0-9_]*$/i.test(expression.trim())) {
-      try {
-        await this.db.exec(
-          `CREATE INDEX IF NOT EXISTS ${q(`idx_${table}_${tag}`)} ON ${q(table)} (${q(expression.trim())})`
-        );
-      } catch { /* ignore — expression may not be a valid SQL column ref */ }
-    }
-    this.indexStore.setActive(table, tag);
-    this.area.activeIndex = { tag, expression };
-    return { output: [{ text: `Index created: ${tag}  ON  ${expression}`, cls: 'ok' }] };
-  }
-
-  private async doSetIndex(tag: string | null): Promise<ExecResult> {
-    this.requireTable();
-    if (!this.indexStore) return { output: [{ text: '** IndexStore not available', cls: 'error' }] };
-    const table = this.area.table!;
-    if (tag === null) {
-      this.indexStore.clearActive(table);
-      this.area.activeIndex = null;
-      return { output: [{ text: 'Active index cleared', cls: 'ok' }] };
-    }
-    const def = this.indexStore.listIndexes(table).find(i => i.tag.toUpperCase() === tag.toUpperCase());
-    if (!def) return { output: [{ text: `Index '${tag}' not found — use INDEX ON to create it`, cls: 'warn' }] };
-    this.indexStore.setActive(table, def.tag);
-    this.area.activeIndex = { tag: def.tag, expression: def.expression };
-    return { output: [{ text: `Index active: ${def.tag}  (${def.expression})`, cls: 'ok' }] };
-  }
-
-  private async doReindex(): Promise<ExecResult> {
-    this.requireTable();
-    await this.db.exec('REINDEX');
-    return { output: [{ text: 'Indexes rebuilt', cls: 'ok' }] };
-  }
-
-  private async doListIndexes(): Promise<ExecResult> {
-    this.requireTable();
-    if (!this.indexStore) return { output: [{ text: '** IndexStore not available', cls: 'error' }] };
-    const table = this.area.table!;
-    const indexes = this.indexStore.listIndexes(table);
-    if (!indexes.length) return { output: [{ text: '(No indexes defined)', cls: 'info' }] };
-    const out: OutputLine[] = [
-      { text: `Indexes for table: ${table}`, cls: 'hdr' },
-      { text: `${'Tag'.padEnd(20)}  ${'Expression'.padEnd(40)}  Active`, cls: 'hdr' },
-      { text: '─'.repeat(65), cls: 'sep' },
-    ];
-    for (const idx of indexes) {
-      const active = this.area.activeIndex?.tag?.toUpperCase() === idx.tag.toUpperCase() ? ' *' : '';
-      out.push({ text: `${idx.tag.padEnd(20)}  ${idx.expression.padEnd(40)}${active}` });
-    }
-    return { output: out };
-  }
-
-  private async doSeek(valueExpr: Expr): Promise<ExecResult> {
-    this.requireTable();
-    if (!this.area.activeIndex) {
-      return { output: [{ text: 'No index active — use SET INDEX TO <tag> first', cls: 'warn' }] };
-    }
-    const seekVal = String(this.evalExpr(valueExpr)).toLowerCase();
-    const rows = await this.getOrderedRows(100000);
-    const idx = this.area.activeIndex;
-    const exprNode = new Parser(new Lexer(idx.expression).tokenize()).parseExprPublic();
-
-    const pos = rows.findIndex(row => {
-      const v = String(this.evalExprOnRowParsed(exprNode, row)).toLowerCase();
-      return v === seekVal;
-    });
-
-    if (pos === -1) {
-      this.area._found = false;
-      this.area.rowPtr = rows.length + 1;
-      return { output: [{ text: 'Record not found', cls: 'warn' }] };
-    }
-
-    this.area._found = true;
-    this.area.rowPtr = pos + 1;
-    await this.resolveRelations();
-    const row = rows[pos];
-    const preview = Object.entries(row).map(([k, v]) => `${k}: ${v}`).join('  ');
-    return { output: [{ text: `Found at position ${pos + 1}: ${preview}`, cls: 'ok' }] };
-  }
-
-  private async doFind(value: string): Promise<ExecResult> {
-    const litExpr: Expr = { k: 'lit', v: value };
-    return this.doSeek(litExpr);
-  }
-
   private doHelp(): ExecResult {
     return { output: [
       { text: 'WebBase-III — W3Script Command Reference', cls: 'hdr' },
@@ -819,7 +731,7 @@ export class Executor {
 
   setVar(name: string, value: unknown) { this.vars.set(name, value); }
 
-  private async getOrderedRows(limit = 500): Promise<Record<string, unknown>[]> {
+  async getOrderedRows(limit = 500): Promise<Record<string, unknown>[]> {
     this.requireTable();
     const table = this.area.table!;
     const filter = this.area.filter;
@@ -914,7 +826,7 @@ export class Executor {
     }
   }
 
-  private async resolveRelations(): Promise<void> {
+  async resolveRelations(): Promise<void> {
     const activeArea = this.area;
     if (!activeArea.relation) return;
     const { expression, intoAlias } = activeArea.relation;
@@ -948,7 +860,7 @@ export class Executor {
     this.activeAlias = savedAlias;
   }
 
-  private requireTable() {
+  requireTable() {
     if (!this.area.table) throw new Error('No table selected — run: USE <tablename>');
   }
 }
