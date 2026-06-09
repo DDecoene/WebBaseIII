@@ -607,4 +607,23 @@ describe('Multi-work-area integration', () => {
     // Bob is the 2nd customer in index order so rowPtr should be 2
     expect(custArea.rowPtr).toBeGreaterThan(0);
   });
+
+  it('LIST DATABASES shows sqlite3 files in the data directory', async () => {
+    const { session, sent } = makeSession();
+    // Open two distinct databases so there is something to list
+    const db1 = uniqueDb();
+    const db2 = uniqueDb();
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db1}` });
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db2}` });
+    sent.length = 0;
+
+    await session.handleMessage({ type: 'command', text: 'LIST DATABASES' });
+
+    const outputMsg = sent.find(m => m.type === 'output');
+    expect(outputMsg).toBeDefined();
+    const lines = (outputMsg as any).lines as Array<{ text: string }>;
+    const texts = lines.map(l => l.text.toLowerCase());
+    expect(texts.some(t => t.includes(db1.toLowerCase()))).toBe(true);
+    expect(texts.some(t => t.includes(db2.toLowerCase()))).toBe(true);
+  });
 });

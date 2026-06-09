@@ -93,6 +93,7 @@ WebBase-III supports **unlimited work areas** (no DOS 10-area limit). Cross-area
 | `LIST` | Print records in active index order (up to 500) |
 | `LIST STRUCTURE` | Show column schema |
 | `LIST TABLES` | Show all tables with record counts |
+| `LIST DATABASES` | Show all databases on disk (alias: `LIST DBS`) |
 | `CLEAR` | Clear terminal output |
 | `CREATE TABLE <n> (col TYPE, ...)` | Create a table |
 | `DROP TABLE <name>` | Delete a table |

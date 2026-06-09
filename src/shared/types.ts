@@ -26,6 +26,7 @@ export interface IDatabaseBridge {
   opfsAvailable: boolean;
   currentDb: string | null;
   openDatabase(dbName: string): Promise<{ dbName: string; opfsAvailable: boolean }>;
+  listDatabases(): Promise<string[]>;
   closeDatabase(): Promise<void>;
   exec(sql: string, params?: unknown[]): Promise<void>;
   query(sql: string, params?: unknown[]): Promise<Record<string, unknown>[]>;

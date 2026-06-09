@@ -22,6 +22,7 @@ export type ASTNode =
   | { type: 'LIST' }
   | { type: 'LIST_STRUCT' }
   | { type: 'LIST_TABLES' }
+  | { type: 'LIST_DATABASES' }
   | { type: 'BROWSE' }
   | { type: 'CLEAR' }
   | { type: 'QUIT' }
@@ -167,7 +168,8 @@ export class Parser {
   private parseList(): ASTNode {
     this.adv();
     if (this.peekKw('STRUCTURE') || this.peekKw('STRUCT')) { this.adv(); return { type: 'LIST_STRUCT' }; }
-    if (this.peekKw('TABLES'))   { this.adv(); return { type: 'LIST_TABLES' }; }
+    if (this.peekKw('TABLES'))    { this.adv(); return { type: 'LIST_TABLES' }; }
+    if (this.peekKw('DATABASES') || this.peekKw('DBS')) { this.adv(); return { type: 'LIST_DATABASES' }; }
     if (this.peekKw('PROGRAMS') || this.peekKw('PROGS')) { this.adv(); return { type: 'LIST_PROGRAMS' }; }
     if (this.peekKw('INDEXES'))  { this.adv(); return { type: 'LIST_INDEXES' }; }
     if (this.peekKw('AREAS'))    { this.adv(); return { type: 'LIST_AREAS' }; }

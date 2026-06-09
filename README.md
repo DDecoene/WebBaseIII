@@ -143,6 +143,7 @@ WebBase-III supports **unlimited work areas** — each independently holding a t
 | `LIST` | Print records in active index order (up to 500) |
 | `LIST STRUCTURE` | Show column schema |
 | `LIST TABLES` | Show all tables with record counts |
+| `LIST DATABASES` | Show all databases on disk (alias: `LIST DBS`) |
 | `BROWSE` | Open the editable grid |
 | `CLEAR` | Clear terminal output |
 | `CREATE TABLE <n> (col TYPE, ...)` | Create a table |

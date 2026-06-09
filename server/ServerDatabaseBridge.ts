@@ -81,4 +81,12 @@ export class ServerDatabaseBridge implements IDatabaseBridge {
     const tables = await this.getTables();
     return tables.map(t => t.toLowerCase()).includes(name.toLowerCase());
   }
+
+  async listDatabases(): Promise<string[]> {
+    if (!fs.existsSync(DATA_DIR)) return [];
+    return fs.readdirSync(DATA_DIR)
+      .filter(f => f.endsWith('.sqlite3') && f !== 'system.sqlite3')
+      .map(f => f.slice(0, -8))
+      .sort();
+  }
 }

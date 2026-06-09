@@ -137,7 +137,8 @@ export class Executor {
         case 'SET_RELATION':return this.doSetRelation(node.expression, node.intoAlias);
         case 'LIST':        return this.doList();
         case 'LIST_STRUCT': return this.doListStruct();
-        case 'LIST_TABLES': return this.doListTables();
+        case 'LIST_TABLES':     return this.doListTables();
+        case 'LIST_DATABASES':  return this.doListDatabases();
         case 'LIST_AREAS':  return this.doListAreas();
         case 'LIST_COLS':   return this.doListCols(node.cols);
         case 'BROWSE':      return { output: [], action: 'BROWSE' };
@@ -358,6 +359,18 @@ export class Executor {
     for (const t of tables) {
       const n = await this.db.getRowCount(t);
       out.push({ text: `  ${t.padEnd(30)}  ${n} record(s)` });
+    }
+    return { output: out };
+  }
+
+  private async doListDatabases(): Promise<ExecResult> {
+    const dbs = await this.db.listDatabases();
+    if (!dbs.length) return { output: [{ text: '(No databases found)', cls: 'info' }] };
+    const out: OutputLine[] = [{ text: 'Databases:', cls: 'hdr' }];
+    const current = this.area.db?.toLowerCase();
+    for (const name of dbs) {
+      const marker = name.toLowerCase() === current ? ' *' : '';
+      out.push({ text: `  ${name}${marker}` });
     }
     return { output: out };
   }
@@ -664,6 +677,7 @@ export class Executor {
       { text: 'LIST                    — list records' },
       { text: 'LIST STRUCTURE          — show table schema' },
       { text: 'LIST TABLES             — list all tables' },
+      { text: 'LIST DATABASES          — list all databases on disk' },
       { text: 'BROWSE                  — open spreadsheet grid' },
       { text: 'CLEAR                   — clear terminal' },
       { text: 'CREATE TABLE <n> (...)  — create a table' },
