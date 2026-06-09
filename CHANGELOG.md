@@ -7,6 +7,14 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
 
 ---
 
+## [0.4.1] — 2026-06-09
+
+### Added
+- **`LIST DATABASES`** — lists all `.sqlite3` databases in the data directory, marks the currently open one with `*`. Accepts `LIST DBS` as alias.
+- **`demos/` directory** — `.prg` demo programs (`crm.prg`, `INVENTORY.prg`) visible in the repo; Playwright smoke tests auto-discover and run all demos
+
+---
+
 ## [0.3.0] — 2026-06-07 — Language Completeness
 
 ### Added
