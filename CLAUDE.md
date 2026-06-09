@@ -62,13 +62,28 @@ data/
   *.sqlite3             User databases (created by USE DATABASE)
 
 tests/
-  Session.test.ts       Integration tests (full command round-trips)
+  Session.test.ts       Integration tests (full command round-trips, multi-work-area)
   Indexing.test.ts      Index commands (INDEX ON, SEEK, FIND, LIST INDEXES, …)
+  WorkArea.test.ts      WorkAreaManager unit tests
   ServerDatabaseBridge.test.ts
   ProgramStore.test.ts
 ```
 
 ## W3Script commands
+
+### Work areas
+WebBase-III supports **unlimited work areas** (no DOS 10-area limit). Cross-area field access uses `alias.field` dot notation (not `alias->field` like dBASE III).
+
+| Command | What it does |
+|---|---|
+| `SELECT <alias>` | Activate (or create) a work area by name |
+| `USE <table> [ALIAS <name>]` | Open table in active area; optional alias override |
+| `SET RELATION TO <expr> INTO <alias>` | Link active area to another; auto-seeks on navigation |
+| `SET RELATION TO` | Clear relation on active area |
+| `LIST [col, alias.col, ...]` | List records; optional column list with cross-area fields |
+| `LIST AREAS` | Show all open work areas and their relations |
+| `CLOSE` | Close active area's table |
+| `CLOSE ALL` | Close all work areas, reset to single empty area `1` |
 
 ### Data & navigation
 | Command | What it does |
@@ -144,9 +159,9 @@ tests/
 
 1. ~~Indexing & Search~~ — `INDEX ON`, `SET INDEX TO`, `SEEK`, `FIND`, `REINDEX`, `LIST INDEXES` ✅
 2. ~~Language Completeness~~ — `DO CASE/ENDCASE`, built-in functions (`EOF()`, `BOF()`, `FOUND()`, `RECNO()`, `RECCOUNT()`, `SUBSTR()`, `STR()`, `AT()`, `UPPER()`, `LOWER()`, and more) ✅
-3. **Report & Label Engine** — `REPORT FORM`, `LABEL FORM` (stored in system.sqlite3)
-4. **The Assistant** — menu-driven UI for non-programmers (dBASE III "assist" mode)
-5. **Multi-Work-Area** — `SELECT 1–10`, `SET RELATION TO`
+3. ~~Multi-Work-Area~~ — unlimited `SELECT <alias>`, `SET RELATION TO`, `alias.field` notation ✅
+4. **Report & Label Engine** — `REPORT FORM`, `LABEL FORM` (stored in system.sqlite3)
+5. **The Assistant** — menu-driven UI for non-programmers (dBASE III "assist" mode)
 
 ## Boolean literals
 
@@ -155,11 +170,11 @@ Both styles accepted: `TRUE`/`FALSE` and `.T.`/`.TRUE.`/`.F.`/`.FALSE.` (dBASE I
 ## Testing
 
 ```bash
-npm test                # Vitest unit + integration (103 tests)
+npm test                # Vitest unit + integration (124 tests)
 npx playwright test     # E2E browser tests — requires dev server on :5173/:3000
 ```
 
-Playwright suites: `tests/integration.spec.ts` (20 tests — full REPL scenario), `tests/crm.spec.ts` (7 tests — interactive CRM program with DO WHILE, forms, SEEK, BROWSE).
+Playwright suites: `tests/integration.spec.ts` (20 tests — full REPL scenario), `tests/crm.spec.ts` (7 tests — interactive CRM program with DO WHILE, forms, SEEK, BROWSE), `tests/multiarea.spec.ts` (4 tests — multi-work-area, relations, alias.field).
 
 ## Definition of done
 

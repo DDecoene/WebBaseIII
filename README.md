@@ -115,6 +115,25 @@ SET FILTER TO               * clear filter
 
 ## W3Script command reference
 
+### Work areas
+
+WebBase-III supports **unlimited work areas** — each independently holding a table, record pointer, filter, and index. Link areas by key field using `SET RELATION TO` for relational data access. Cross-area field access uses `alias.field` dot notation.
+
+> **Note:** dBASE III supported a maximum of 10 work areas (DOS file handle limit). WebBase-III has no such limit. dBASE III used `alias->field` arrow syntax; WebBase-III uses modern `alias.field` dot notation.
+
+| Command | What it does |
+|---|---|
+| `SELECT <alias>` | Activate (or create) a work area by name |
+| `USE <table> [ALIAS <name>]` | Open table in active area; optional alias override |
+| `SET RELATION TO <expr> INTO <alias>` | Link active area to another; auto-seeks on every navigation |
+| `SET RELATION TO` | Clear relation on active area |
+| `LIST [col, alias.col, ...]` | List records; optional column list with cross-area fields |
+| `LIST AREAS` | Show all open work areas, pointers, indexes, and relations |
+| `CLOSE` | Close active area's table |
+| `CLOSE ALL` | Close all work areas, reset to single empty area `1` |
+
+**Cross-area field access**: use `alias.field` dot notation anywhere an expression is accepted — `SET FILTER TO`, `IF`, `REPLACE`, `LIST`, `INDEX ON`.
+
 ### Data & navigation
 
 | Command | What it does |
