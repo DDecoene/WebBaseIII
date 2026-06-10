@@ -12,6 +12,9 @@ export class Session {
   private bridge: ServerDatabaseBridge;
   private executor: Executor;
   private pendingContinuation: (() => Promise<import('../src/interpreter/Executor.js').ExecResult>) | null = null;
+  // Whether pendingContinuation was captured while a program (DO <name>) was
+  // running — its resumption must re-enter program scope (e.g. silent STORE).
+  private pendingFromProgram = false;
 
   constructor(private send: (msg: ServerMessage) => void) {
     this.bridge = new ServerDatabaseBridge();
@@ -31,9 +34,15 @@ export class Session {
               this.executor.setVar(k, v);
             }
             const cont = this.pendingContinuation;
+            const fromProgram = this.pendingFromProgram;
             this.pendingContinuation = null;
-            const done = await this.handleExecResult(await cont());
-            if (!done) this.sendStatus();
+            if (fromProgram) this.executor.enterProgram();
+            try {
+              const done = await this.handleExecResult(await cont());
+              if (!done) this.sendStatus();
+            } finally {
+              if (fromProgram) this.executor.exitProgram();
+            }
           }
           break;
 
@@ -86,8 +95,14 @@ export class Session {
           this.send({ type: 'view-terminal' });
           if (this.pendingContinuation) {
             const cont = this.pendingContinuation;
+            const fromProgram = this.pendingFromProgram;
             this.pendingContinuation = null;
-            await this.handleExecResult(await cont());
+            if (fromProgram) this.executor.enterProgram();
+            try {
+              await this.handleExecResult(await cont());
+            } finally {
+              if (fromProgram) this.executor.exitProgram();
+            }
           } else {
             this.sendStatus();
           }
@@ -109,12 +124,6 @@ export class Session {
           break;
         }
 
-        case 'save-report': {
-          const safeName = (msg as any).name.replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase();
-          if (!safeName) break;
-          reportStore.save(safeName, (msg as any).content);
-          return;
-        }
       }
     } catch (err: unknown) {
       this.send({ type: 'output', lines: [{ text: `** Error: ${err instanceof Error ? err.message : String(err)}`, cls: 'error' }] });
@@ -194,13 +203,17 @@ export class Session {
     }
 
     if (result.action === 'BROWSE') {
-      if (result.continuation) this.pendingContinuation = result.continuation;
+      if (result.continuation) {
+        this.pendingContinuation = result.continuation;
+        this.pendingFromProgram = this.executor.isInProgram();
+      }
       await this.sendGridData();
       return true;
     }
 
     if (result.action === 'FORM_READY' && result.formFields) {
       this.pendingContinuation = result.continuation ?? null;
+      this.pendingFromProgram = this.executor.isInProgram();
       this.send({ type: 'form-open', fields: result.formFields });
       return true;
     }
@@ -211,7 +224,12 @@ export class Session {
       if (src === null) {
         this.send({ type: 'output', lines: [{ text: `Program not found: ${safeName}`, cls: 'error' }] });
       } else {
-        await this.runCommand(src);
+        this.executor.enterProgram();
+        try {
+          await this.runCommand(src);
+        } finally {
+          this.executor.exitProgram();
+        }
       }
       return false;
     }

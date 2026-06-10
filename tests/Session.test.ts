@@ -194,6 +194,166 @@ describe('Session', () => {
     expect(allText).toContain('beta');
   });
 
+  it('STORE stays silent in program continuations after READ', async () => {
+    const { session, sent } = makeSession();
+    await session.handleMessage({
+      type: 'save-program', name: 'test_silent_store',
+      content: [
+        'STORE "before" TO pre_var',
+        '@ 1,1 SAY "Value:" GET pre_var',
+        'READ',
+        'STORE "after" TO post_var',
+      ].join('\n'),
+    });
+
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: 'DO test_silent_store' });
+    let allText = sent
+      .filter(m => m.type === 'output')
+      .flatMap((m: any) => m.lines.map((l: any) => l.text))
+      .join('\n');
+    expect(allText).not.toContain('PRE_VAR =');
+
+    // Resume past the READ — the STORE after it must stay silent too
+    sent.length = 0;
+    await session.handleMessage({ type: 'form-submit', values: { PRE_VAR: 'x' } });
+    allText = sent
+      .filter(m => m.type === 'output')
+      .flatMap((m: any) => m.lines.map((l: any) => l.text))
+      .join('\n');
+    expect(allText).not.toContain('POST_VAR =');
+  });
+
+  it('dBASE logical operators .NOT./.AND./.OR. work in expressions and loops', async () => {
+    const { session, sent } = makeSession();
+    const db = uniqueDb();
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    await session.handleMessage({ type: 'command', text: 'CREATE TABLE p (NAME CHAR(20), STOCK NUM(6))' });
+    await session.handleMessage({ type: 'command', text: 'INDEX ON NAME TO BYNAME' });
+    await session.handleMessage({ type: 'command', text: 'APPEND RECORD' });
+    await session.handleMessage({ type: 'command', text: 'REPLACE NAME WITH "Drill", STOCK WITH 5' });
+    await session.handleMessage({ type: 'command', text: 'APPEND RECORD' });
+    await session.handleMessage({ type: 'command', text: 'REPLACE NAME WITH "Mouse", STOCK WITH 7' });
+
+    // Stock-report pattern from INVENTORY.prg: DO WHILE .NOT. EOF() ... SKIP
+    const prog = [
+      'GO TOP',
+      'STORE 0 TO total',
+      'DO WHILE .NOT. EOF()',
+      '  STORE total + STOCK TO total',
+      '  SKIP',
+      'ENDDO',
+      'STORE total TO result',
+      'STORE .T. .AND. .F. TO chk_and',
+      'STORE .F. .OR. .T. TO chk_or',
+    ].join('\n');
+
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: prog });
+    const allText = sent
+      .filter(m => m.type === 'output')
+      .flatMap((m: any) => m.lines.map((l: any) => l.text))
+      .join('\n');
+    expect(allText).toContain('RESULT = 12');
+    expect(allText).toContain('CHK_AND = .F.');
+    expect(allText).toContain('CHK_OR = .T.');
+  });
+
+  it('alias.field resolves via relation outside LIST (STORE after SEEK)', async () => {
+    const { session, sent } = makeSession();
+    const db = uniqueDb();
+    await session.handleMessage({ type: 'command', text: 'SELECT CAT' });
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    await session.handleMessage({ type: 'command', text: 'CREATE TABLE cats (CATID CHAR(4), CATNAME CHAR(20))' });
+    await session.handleMessage({ type: 'command', text: 'INDEX ON CATID TO BYCAT' });
+    await session.handleMessage({ type: 'command', text: 'APPEND RECORD' });
+    await session.handleMessage({ type: 'command', text: 'REPLACE CATID WITH "ELEC", CATNAME WITH "Electronics"' });
+    await session.handleMessage({ type: 'command', text: 'APPEND RECORD' });
+    await session.handleMessage({ type: 'command', text: 'REPLACE CATID WITH "TOOL", CATNAME WITH "Tools"' });
+
+    await session.handleMessage({ type: 'command', text: 'SELECT INV' });
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    await session.handleMessage({ type: 'command', text: 'CREATE TABLE prods (PRODID CHAR(6), CATID CHAR(4), NAME CHAR(20))' });
+    await session.handleMessage({ type: 'command', text: 'INDEX ON NAME TO BYNAME' });
+    await session.handleMessage({ type: 'command', text: 'APPEND RECORD' });
+    await session.handleMessage({ type: 'command', text: 'REPLACE PRODID WITH "P1", CATID WITH "TOOL", NAME WITH "Drill"' });
+    await session.handleMessage({ type: 'command', text: 'APPEND RECORD' });
+    await session.handleMessage({ type: 'command', text: 'REPLACE PRODID WITH "P2", CATID WITH "ELEC", NAME WITH "Mouse"' });
+    await session.handleMessage({ type: 'command', text: 'SET RELATION TO CATID INTO CAT' });
+    await session.handleMessage({ type: 'command', text: 'SEEK "Mouse"' });
+
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: 'STORE CAT.CATNAME TO v_cat' });
+    const allText = sent
+      .filter(m => m.type === 'output')
+      .flatMap((m: any) => m.lines.map((l: any) => l.text))
+      .join(' ');
+    expect(allText).toContain('Electronics');
+  });
+
+  it('APPEND + REPLACE seeds correctly while an index is active (INVENTORY seeding pattern)', async () => {
+    const { session, sent } = makeSession();
+    const db = uniqueDb();
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    await session.handleMessage({ type: 'command', text: 'CREATE TABLE seed_tbl (CATID CHAR(4), CATNAME CHAR(30))' });
+    // INDEX ON before seeding — REPLACE must still target the freshly appended row
+    await session.handleMessage({ type: 'command', text: 'INDEX ON CATID TO BYCAT' });
+    await session.handleMessage({ type: 'command', text: 'APPEND RECORD' });
+    await session.handleMessage({ type: 'command', text: 'REPLACE CATID WITH "ELEC", CATNAME WITH "Electronics"' });
+    await session.handleMessage({ type: 'command', text: 'APPEND RECORD' });
+    await session.handleMessage({ type: 'command', text: 'REPLACE CATID WITH "TOOL", CATNAME WITH "Tools"' });
+    await session.handleMessage({ type: 'command', text: 'APPEND RECORD' });
+    await session.handleMessage({ type: 'command', text: 'REPLACE CATID WITH "OFFC", CATNAME WITH "Office"' });
+
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: 'LIST' });
+    const allText = sent
+      .filter(m => m.type === 'output')
+      .flatMap((m: any) => m.lines.map((l: any) => l.text))
+      .join(' ');
+    expect(allText).toContain('Electronics');
+    expect(allText).toContain('Tools');
+    expect(allText).toContain('Office');
+  });
+
+  it('statements after READ inside a DO CASE branch execute after form submit', async () => {
+    const { session, sent } = makeSession();
+    const db = uniqueDb();
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    await session.handleMessage({ type: 'command', text: 'CREATE TABLE case_tbl (val TEXT)' });
+    await session.handleMessage({ type: 'command', text: 'USE case_tbl' });
+
+    // Mirrors INVENTORY.prg: menu choice dispatches into a CASE branch that
+    // collects input via READ, then acts on it after the submit.
+    const prog = [
+      'STORE "1" TO choice',
+      'DO CASE',
+      '  CASE choice == "1"',
+      '    STORE "" TO val',
+      '    @ 1,1 SAY "Value:" GET val',
+      '    READ',
+      '    APPEND RECORD',
+      '    REPLACE val WITH val',
+      '  OTHERWISE',
+      '    STORE "unreached" TO val',
+      'ENDCASE',
+      'LIST',
+    ].join('\n');
+
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: prog });
+    expect(sent.find(m => m.type === 'form-open')).toBeDefined();
+
+    // Submit the form — the APPEND + REPLACE after READ must still run
+    sent.length = 0;
+    await session.handleMessage({ type: 'form-submit', values: { VAL: 'gamma' } });
+    const allText = sent
+      .filter(m => m.type === 'output')
+      .flatMap((m: any) => m.lines.map((l: any) => l.text))
+      .join(' ');
+    expect(allText).toContain('gamma');
+  });
+
   it('BROWSE inside DO WHILE resumes loop after grid-exit', async () => {
     const { session, sent } = makeSession();
     const db = uniqueDb();

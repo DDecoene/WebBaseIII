@@ -63,6 +63,19 @@ export class Lexer {
           this.toks.push({ type: 'BOOL', val: 'FALSE', line: this.ln, col: this.col });
           this.p += len; this.col += len; continue;
         }
+        // dBASE logical operators: .NOT. .AND. .OR. — same tokens as bare keywords
+        if (rest.startsWith('NOT.')) {
+          this.toks.push({ type: 'KW', val: 'NOT', line: this.ln, col: this.col });
+          this.p += 5; this.col += 5; continue;
+        }
+        if (rest.startsWith('AND.')) {
+          this.toks.push({ type: 'KW', val: 'AND', line: this.ln, col: this.col });
+          this.p += 5; this.col += 5; continue;
+        }
+        if (rest.startsWith('OR.')) {
+          this.toks.push({ type: 'KW', val: 'OR', line: this.ln, col: this.col });
+          this.p += 4; this.col += 4; continue;
+        }
         // Plain dot (alias.field separator)
         this.toks.push({ type: 'DOT', val: '.', line: this.ln, col: this.col });
         this.p++; this.col++;

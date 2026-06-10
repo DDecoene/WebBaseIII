@@ -60,6 +60,7 @@ export class Executor implements IndexCommandsHost {
   private rowCache: Map<string, Record<string, unknown>> = new Map();
   private indexCmds: IndexCommands;
   private reportCmds: ReportCommands;
+  private programDepth = 0;
 
   constructor(
     public db: IDatabaseBridge,
@@ -400,14 +401,22 @@ export class Executor implements IndexCommandsHost {
     const pairs = fields.map(f => ({ field: f.field, value: this.evalExpr(f.value) }));
     const setClauses = pairs.map(p => `${q(p.field)} = ?`).join(', ');
     const params = pairs.map(p => typeof p.value === 'boolean' ? (p.value ? 1 : 0) : p.value);
-    let sql: string;
     if (scope === 'ALL') {
       const where = this.area.filter ? ` WHERE ${this.area.filter}` : '';
-      sql = `UPDATE ${q(this.area.table!)} SET ${setClauses}${where}`;
+      await this.db.exec(`UPDATE ${q(this.area.table!)} SET ${setClauses}${where}`, params);
     } else {
-      sql = `UPDATE ${q(this.area.table!)} SET ${setClauses} WHERE rowid = (SELECT rowid FROM ${q(this.area.table!)} LIMIT 1 OFFSET ${this.area.rowPtr - 1})`;
+      const row = await this.fetchCurrentRow();
+      if (!row) return { output: [{ text: 'REPLACE: no current record', cls: 'warn' }] };
+      await this.db.exec(
+        `UPDATE ${q(this.area.table!)} SET ${setClauses} WHERE rowid = ?`,
+        [...params, row._rowid]
+      );
+      // If an indexed field changed, the record may have moved in index order —
+      // keep the pointer on the record, like dBASE does.
+      const rows = await this.getOrderedRowsWithIds(100000);
+      const pos = rows.findIndex(r => r._rowid === row._rowid);
+      if (pos !== -1) this.area.rowPtr = pos + 1;
     }
-    await this.db.exec(sql, params);
     const desc = pairs.map(p => `${p.field} = ${JSON.stringify(p.value)}`).join(', ');
     return { output: [{ text: `Replaced: ${desc} (${scope})`, cls: 'ok' }] };
   }
@@ -424,8 +433,13 @@ export class Executor implements IndexCommandsHost {
       await this.db.exec(`INSERT INTO ${q(this.area.table!)} (${names}) VALUES (${vals})`);
     }
     const cnt = await this.db.getRowCount(this.area.table!);
-    this.area.rowPtr = cnt;
     this.area.cachedRecCount = cnt;
+    // Point at the new record — its position in the active index order, not just cnt
+    const idRows = await this.db.query('SELECT last_insert_rowid() AS id');
+    const newId = idRows[0]?.id;
+    const rows = await this.getOrderedRowsWithIds(100000);
+    const pos = rows.findIndex(r => r._rowid === newId);
+    this.area.rowPtr = pos === -1 ? cnt : pos + 1;
     await this.resolveRelations();
     return { output: [{ text: `Record appended. Total: ${cnt}`, cls: 'ok' }] };
   }
@@ -437,9 +451,9 @@ export class Executor implements IndexCommandsHost {
       await this.db.exec(`DELETE FROM ${q(this.area.table!)}${where}`);
       return { output: [{ text: 'Records deleted', cls: 'ok' }] };
     }
-    await this.db.exec(
-      `DELETE FROM ${q(this.area.table!)} WHERE rowid = (SELECT rowid FROM ${q(this.area.table!)} LIMIT 1 OFFSET ${this.area.rowPtr - 1})`
-    );
+    const row = await this.fetchCurrentRow();
+    if (!row) return { output: [{ text: 'DELETE: no current record', cls: 'warn' }] };
+    await this.db.exec(`DELETE FROM ${q(this.area.table!)} WHERE rowid = ?`, [row._rowid]);
     return { output: [{ text: 'Current record deleted', cls: 'ok' }] };
   }
 
@@ -476,7 +490,8 @@ export class Executor implements IndexCommandsHost {
     return { output: [{ text: `Record pointer: ${this.area.rowPtr} / ${cnt}`, cls: 'info' }] };
   }
 
-  private doAtSay(rowE: Expr, colE: Expr, textE: Expr): ExecResult {
+  private async doAtSay(rowE: Expr, colE: Expr, textE: Expr): Promise<ExecResult> {
+    await this.refreshRecCount(true);
     const row = Number(this.evalExpr(rowE));
     const col = Number(this.evalExpr(colE));
     const text = String(this.evalExpr(textE));
@@ -484,7 +499,8 @@ export class Executor implements IndexCommandsHost {
     return { output: [] };
   }
 
-  private doAtSayGet(rowE: Expr, colE: Expr, textE: Expr, varName: string): ExecResult {
+  private async doAtSayGet(rowE: Expr, colE: Expr, textE: Expr, varName: string): Promise<ExecResult> {
+    await this.refreshRecCount(true);
     const row = Number(this.evalExpr(rowE));
     const col = Number(this.evalExpr(colE));
     const text = String(this.evalExpr(textE));
@@ -499,10 +515,15 @@ export class Executor implements IndexCommandsHost {
     return { output: [], action: 'FORM_READY', formFields: fields };
   }
 
+  enterProgram()  { this.programDepth++; }
+  exitProgram()   { if (this.programDepth > 0) this.programDepth--; }
+  isInProgram()   { return this.programDepth > 0; }
+
   private async doStore(valueExpr: Expr, varName: string): Promise<ExecResult> {
     await this.refreshRecCount();
     const v = this.evalExpr(valueExpr);
     this.vars.set(varName, v);
+    if (this.programDepth > 0) return { output: [] };
     return { output: [{ text: `${varName} = ${fmtVal(v)}`, cls: 'info' }] };
   }
 
@@ -705,18 +726,17 @@ export class Executor implements IndexCommandsHost {
   }
 
   private async refreshRecCount(loadFields = false): Promise<void> {
+    // Keep alias.field lookups (rowCache) in sync before expressions are evaluated
+    await this.primeRowCache();
     if (this.area.table) {
       const tableOk = await this.db.tableExists(this.area.table);
       if (!tableOk) { this.area.cachedRecCount = 0; return; }
       this.area.cachedRecCount = await this.db.getRowCount(this.area.table, this.area.filter ?? undefined);
       if (loadFields && this.area.rowPtr >= 1) {
-        const filter = this.area.filter;
-        const where = filter ? ` WHERE ${filter}` : '';
-        const rows = await this.db.query(
-          `SELECT * FROM ${q(this.area.table)} ${where} LIMIT 1 OFFSET ${this.area.rowPtr - 1}`
-        );
-        if (rows[0]) {
-          for (const [k, v] of Object.entries(rows[0])) {
+        const row = await this.fetchCurrentRow();
+        if (row) {
+          for (const [k, v] of Object.entries(row)) {
+            if (k === '_rowid') continue;
             this.vars.set(k.toUpperCase(), v);
           }
         }
@@ -726,16 +746,6 @@ export class Executor implements IndexCommandsHost {
     }
   }
 
-  private async runBlock(nodes: ASTNode[]): Promise<ExecResult> {
-    const out: OutputLine[] = [];
-    for (const node of nodes) {
-      const r = await this.exec(node);
-      out.push(...r.output);
-      if (r.action) return { output: out, action: r.action, formFields: r.formFields, continuation: r.continuation };
-    }
-    return { output: out };
-  }
-
   private async doCase(
     cases: Array<{ cond: Expr; body: ASTNode[] }>,
     otherwise: ASTNode[]
@@ -743,11 +753,11 @@ export class Executor implements IndexCommandsHost {
     await this.refreshRecCount(true);
     for (const { cond, body } of cases) {
       if (this.evalExpr(cond)) {
-        return this.runBlock(body);
+        return this.run(body);
       }
     }
     if (otherwise.length) {
-      return this.runBlock(otherwise);
+      return this.run(otherwise);
     }
     return { output: [] };
   }
@@ -762,7 +772,7 @@ export class Executor implements IndexCommandsHost {
     const idx = this.area.activeIndex;
 
     if (!idx) {
-      return this.db.query(`SELECT * FROM ${q(table)}${where} LIMIT ${limit}`);
+      return this.db.query(`SELECT * FROM ${q(table)}${where} ORDER BY rowid LIMIT ${limit}`);
     }
 
     const expr = idx.expression.trim();
@@ -770,11 +780,11 @@ export class Executor implements IndexCommandsHost {
 
     if (isSimpleField) {
       return this.db.query(
-        `SELECT * FROM ${q(table)}${where} ORDER BY ${q(expr)} LIMIT ${limit}`
+        `SELECT * FROM ${q(table)}${where} ORDER BY ${q(expr)}, rowid LIMIT ${limit}`
       );
     }
 
-    const rows = await this.db.query(`SELECT * FROM ${q(table)}${where}`);
+    const rows = await this.db.query(`SELECT * FROM ${q(table)}${where} ORDER BY rowid`);
     const exprNode = new Parser(new Lexer(idx.expression).tokenize()).parseExprPublic();
     rows.sort((a, b) => {
       const va = this.evalExprOnRowParsed(exprNode, a);
@@ -812,7 +822,7 @@ export class Executor implements IndexCommandsHost {
     const idx = this.area.activeIndex;
 
     if (!idx) {
-      return this.db.query(`SELECT rowid as _rowid, * FROM ${q(table)}${where} LIMIT ${limit}`);
+      return this.db.query(`SELECT rowid as _rowid, * FROM ${q(table)}${where} ORDER BY rowid LIMIT ${limit}`);
     }
 
     const expr = idx.expression.trim();
@@ -820,11 +830,11 @@ export class Executor implements IndexCommandsHost {
 
     if (isSimpleField) {
       return this.db.query(
-        `SELECT rowid as _rowid, * FROM ${q(table)}${where} ORDER BY ${q(expr)} LIMIT ${limit}`
+        `SELECT rowid as _rowid, * FROM ${q(table)}${where} ORDER BY ${q(expr)}, rowid LIMIT ${limit}`
       );
     }
 
-    const rows = await this.db.query(`SELECT rowid as _rowid, * FROM ${q(table)}${where}`);
+    const rows = await this.db.query(`SELECT rowid as _rowid, * FROM ${q(table)}${where} ORDER BY rowid`);
     const exprNode = new Parser(new Lexer(idx.expression).tokenize()).parseExprPublic();
     rows.sort((a, b) => {
       const va = this.evalExprOnRowParsed(exprNode, a);
@@ -835,16 +845,30 @@ export class Executor implements IndexCommandsHost {
     return rows.slice(0, limit);
   }
 
+  /**
+   * Resolves an area's current record (rowPtr) to the actual row, honouring the
+   * area's active index order — the same order getOrderedRows/SEEK use. The
+   * returned row includes `_rowid` so writes can target it directly.
+   */
+  async fetchCurrentRow(alias: string = this.activeAlias): Promise<Record<string, unknown> | null> {
+    const area = this.areas.get(alias);
+    if (!area?.table || area.rowPtr < 1) return null;
+    const saved = this.activeAlias;
+    this.activeAlias = alias;
+    try {
+      const rows = await this.getOrderedRowsWithIds(100000);
+      return (rows[area.rowPtr - 1] as Record<string, unknown> | undefined) ?? null;
+    } finally {
+      this.activeAlias = saved;
+    }
+  }
+
   async primeRowCache(): Promise<void> {
     this.rowCache.clear();
     for (const [alias, area] of this.areas) {
       if (area.table && area.rowPtr >= 1 && area.rowPtr <= area.cachedRecCount) {
-        const filter = area.filter;
-        const where = filter ? ` WHERE ${filter}` : '';
-        const rows = await this.db.query(
-          `SELECT * FROM ${q(area.table)} ${where} LIMIT 1 OFFSET ${area.rowPtr - 1}`
-        );
-        if (rows[0]) this.rowCache.set(alias, rows[0] as Record<string, unknown>);
+        const row = await this.fetchCurrentRow(alias);
+        if (row) this.rowCache.set(alias, row);
       }
     }
   }
@@ -859,15 +883,11 @@ export class Executor implements IndexCommandsHost {
       target.rowPtr = 0; target._found = false; return;
     }
     // Fetch current row of active area to evaluate the key expression
-    const filter = activeArea.filter;
-    const where = filter ? ` WHERE ${filter}` : '';
-    const rows = await this.db.query(
-      `SELECT * FROM ${q(activeArea.table!)} ${where} LIMIT 1 OFFSET ${activeArea.rowPtr - 1}`
-    );
-    if (!rows[0]) { target.rowPtr = 0; target._found = false; return; }
+    const currentRow = await this.fetchCurrentRow();
+    if (!currentRow) { target.rowPtr = 0; target._found = false; return; }
 
     const exprNode = new Parser(new Lexer(expression).tokenize()).parseExprPublic();
-    const keyVal = String(this.evalExprOnRowParsed(exprNode, rows[0] as Record<string, unknown>)).toLowerCase();
+    const keyVal = String(this.evalExprOnRowParsed(exprNode, currentRow)).toLowerCase();
 
     // Seek target area
     const savedAlias = this.activeAlias;

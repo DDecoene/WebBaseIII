@@ -362,8 +362,11 @@ test.describe('WebBase-III Integration', () => {
     }
     await page.waitForTimeout(500);
 
-    const out = await outputAfter(page, () => cmd(page, 'DO myprog', 1500));
-    console.log('DO myprog output:', out);
+    await cmd(page, 'DO myprog', 1500);
+    // STORE is silent inside a program (dBASE behaviour) — verify the program
+    // ran by echoing the variable it set at the top level, where STORE echoes.
+    const out = await outputAfter(page, () => cmd(page, 'STORE prog_result TO echo_check', 1000));
+    console.log('echo_check output:', out);
     expect(out).toMatch(/from_program/);
   });
 

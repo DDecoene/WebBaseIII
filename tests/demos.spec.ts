@@ -33,8 +33,8 @@ async function typeCmd(page: Page, cmd: string, waitMs = 600): Promise<void> {
 
 async function saveProgram(page: Page, name: string, src: string): Promise<void> {
   await typeCmd(page, `EDIT ${name}`, 1500);
-  await expect(page.locator('#program-editor')).toBeVisible({ timeout: 5000 });
-  const editor = page.locator('#program-editor textarea, #program-editor .cm-content').first();
+  await expect(page.locator('#editor-view')).toBeVisible({ timeout: 5000 });
+  const editor = page.locator('#editor-textarea');
   await editor.fill(src);
   await page.waitForTimeout(300);
   const saveBtn = page.locator('button:has-text("Save"), #editor-save');

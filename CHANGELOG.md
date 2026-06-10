@@ -7,6 +7,23 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
 
 ---
 
+## [0.5.3] — 2026-06-10
+
+### Fixed
+- **`DO CASE` branches now resume after `READ`/`INPUT`/`BROWSE`** — statements following a suspending command inside a `CASE` branch were silently dropped (the branch runner didn't thread remaining statements into the form continuation like `IF`/`DO WHILE` do). This broke every interactive menu option in `demos/INVENTORY.prg`.
+- **Current-record resolution now honours the active index order** — `REPLACE`, `DELETE`, field loading, `SET RELATION` evaluation, and the cross-area row cache resolved the record pointer with an unordered `LIMIT/OFFSET` query, which SQLite may serve from an index scan. With an index active this targeted the wrong row (e.g. seeding `APPEND`+`REPLACE` loops overwrote record 1 repeatedly). All sites now resolve through a single index-order-aware `fetchCurrentRow` helper.
+- **`APPEND RECORD` points at the new record under an active index** — the pointer is now set to the new row's position in index order (via `last_insert_rowid()`), not the raw record count.
+- **`REPLACE` keeps the pointer on the record** if replacing an indexed field moves it in index order (dBASE semantics).
+- **`alias.field` works outside `LIST`** — the cross-area row cache is now primed before expression evaluation (`STORE`, `IF`, `DO WHILE`/`DO CASE` conditions, `@ SAY`), so `CAT.CATNAME` after a relation seek no longer returns `null`.
+- **dBASE III logical operators `.NOT.` / `.AND.` / `.OR.`** are now lexed as their bare keyword equivalents — `DO WHILE .NOT. EOF()` loops work.
+- **Deterministic record order** — ordered row queries break ties by `rowid`.
+
+### Added
+- `STORE` no longer echoes assignments while running inside a program (`DO <name>`), matching dBASE behaviour.
+- Regression tests: `READ` inside `DO CASE`, seeding under an active index, `alias.field` via relation outside `LIST`, `.NOT./.AND./.OR.` operators (vitest), plus Playwright suite `tests/inventory.spec.ts` for `demos/INVENTORY.prg`.
+
+---
+
 ## [0.5.2] — 2026-06-09
 
 ### Fixed

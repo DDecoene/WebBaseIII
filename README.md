@@ -246,6 +246,8 @@ W3Script supports both styles:
 
 Boolean values display as `.T.` / `.F.` in output to match dBASE conventions.
 
+Logical operators are accepted in both styles too: `NOT` / `.NOT.`, `AND` / `.AND.`, `OR` / `.OR.` (e.g. `DO WHILE .NOT. EOF()`).
+
 ---
 
 ## BROWSE grid keyboard shortcuts
