@@ -75,7 +75,7 @@ DO WHILE running
   @ 11, 10 SAY "7. Activate a Product"
   @ 12, 10 SAY "8. System Info (areas + indexes)"
   @ 13, 10 SAY "Q. Quit"
-  @ 13,  5 SAY "==========================================="
+  @ 14,  5 SAY "==========================================="
   STORE " " TO choice
   @ 15, 10 SAY "Enter choice: " GET choice
   READ

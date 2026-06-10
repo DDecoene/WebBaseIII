@@ -36,6 +36,7 @@ server/
   IndexStore.ts         Index metadata + active index in data/system.sqlite3
   ReportStore.ts        Report definition storage in data/system.sqlite3 (reports table)
   ReportRunner.ts       ASCII and HTML report rendering, group breaks, subtotals, grand totals
+  DemoSeeder.ts         Seeds demos/*.prg into the program store at startup (demos win)
 
 src/
   interpreter/
@@ -65,6 +66,10 @@ src/
 data/
   system.sqlite3        Server-side system store (programs, index metadata)
   *.sqlite3             User databases (created by USE DATABASE)
+
+demos/
+  *.prg                 Demo programs — single source of truth; seeded into the
+                        program store on every server start (overwrites store copies)
 
 tests/
   Session.test.ts       Integration tests (full command round-trips, multi-work-area)

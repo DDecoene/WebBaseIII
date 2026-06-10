@@ -33,6 +33,10 @@ export class ProgramStore {
     `).run(name, content);
   }
 
+  delete(name: string): void {
+    this.db.prepare('DELETE FROM programs WHERE name = ?').run(name);
+  }
+
   list(): string[] {
     const rows = this.db.prepare('SELECT name FROM programs ORDER BY name').all() as { name: string }[];
     return rows.map(r => r.name);

@@ -35,4 +35,11 @@ describe('ProgramStore', () => {
     store.save('overwrite', 'v2\n');
     expect(store.load('overwrite')).toBe('v2\n');
   });
+
+  it('deletes a program', () => {
+    store.save('doomed', 'LIST\n');
+    store.delete('doomed');
+    expect(store.load('doomed')).toBeNull();
+    expect(store.list()).not.toContain('doomed');
+  });
 });

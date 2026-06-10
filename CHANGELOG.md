@@ -7,6 +7,18 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
 
 ---
 
+## [0.5.4] — 2026-06-10
+
+### Added
+- **Demo program seeding** — `demos/*.prg` are now the single source of truth: `server/DemoSeeder.ts` seeds them into the program store on every server start, overwriting any drifted store copy (`seedDemoPrograms()`).
+- **`ProgramStore.delete(name)`** — removes a stored program.
+
+### Fixed
+- **INVENTORY.prg menu** — the bottom `===` separator overlapped `Q. Quit` (both on row 13); separator moved to row 14.
+- **Program store pollution** — vitest Session tests now delete the `test_*` programs they save into the shared store.
+
+---
+
 ## [0.5.3] — 2026-06-10
 
 ### Fixed

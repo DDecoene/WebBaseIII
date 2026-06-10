@@ -187,6 +187,10 @@ WebBase-III supports **unlimited work areas** — each independently holding a t
 | `EDIT <name>` | Open `.prg` source editor |
 | `LIST PROGRAMS` | Show all saved programs |
 
+> Demo programs live in `demos/*.prg` and are the single source of truth: they are
+> seeded into the program store on every server start, overwriting any store copy.
+> Try `DO inventory` for a full interactive showcase (work areas, relations, indexes, forms).
+
 ### Variables & I/O
 
 | Command | What it does |

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { Lexer } from '../src/interpreter/Lexer';
 import { Parser } from '../src/interpreter/Parser';
 import { Session } from '../server/Session';
+import { programStore } from '../server/ProgramStore';
 import type { ServerMessage } from '../src/shared/types.js';
 import fs from 'fs';
 import path from 'path';
@@ -27,6 +28,10 @@ afterEach(() => {
       .filter(f => f.toLowerCase().startsWith('test_session_') &&
         (f.toLowerCase().endsWith('.sqlite3') || f.toLowerCase().endsWith('.sqlite3-shm') || f.toLowerCase().endsWith('.sqlite3-wal')))
       .forEach(f => fs.unlinkSync(path.join(dataDir, f)));
+  }
+  // Clean up programs these tests saved into the shared program store
+  for (const name of programStore.list()) {
+    if (name.startsWith('test_')) programStore.delete(name);
   }
 });
 
