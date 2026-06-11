@@ -6,7 +6,7 @@ import { ServerDatabaseBridge } from './ServerDatabaseBridge.js';
 import { programStore } from './ProgramStore.js';
 import { reportStore } from './ReportStore.js';
 import { indexStore } from './IndexStore.js';
-import type { ClientMessage, ServerMessage } from '../src/shared/types.js';
+import type { ClientMessage, ServerMessage, ColInfo } from '../src/shared/types.js';
 
 export class Session {
   private bridge: ServerDatabaseBridge;
@@ -95,7 +95,7 @@ export class Session {
           const area = this.executor.area;
           const databases = await this.bridge.listDatabases();
           let tables: { name: string; count: number }[] = [];
-          let columns: import('../src/shared/types.js').ColInfo[] = [];
+          let columns: ColInfo[] = [];
           let indexes: { tag: string; expression: string; active: boolean }[] = [];
           if (area.db) {
             const names = await this.bridge.getTables();

@@ -907,6 +907,7 @@ describe('Multi-work-area integration', () => {
     await session.handleMessage({ type: 'command', text: 'CREATE TABLE cat_tbl (NAME CHAR(20), QTY NUM(6))' });
     await session.handleMessage({ type: 'command', text: 'INDEX ON NAME TO BYNAME' });
     await session.handleMessage({ type: 'save-program', name: 'test_cat_prog', content: 'LIST\n' });
+    // '__report_' prefix routes save-program to the reportStore (stored name: test_cat_rep)
     await session.handleMessage({
       type: 'save-program', name: '__report_test_cat_rep',
       content: JSON.stringify({ title: 'T', columns: [{ field: 'NAME', heading: 'Name', width: 10 }] }),
