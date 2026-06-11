@@ -17,6 +17,10 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
 
 ### Changed
 - App layout is now sidebar + main area (`#assistant-sidebar` / `#main-area`); all existing view IDs unchanged.
+- Opening a wizard tears down any active main-area view (grid, form, editor, report preview) so views never double-stack.
+
+### Known limitations
+- Opening a wizard while a `DO` program is suspended at `READ` or `BROWSE` silently dismisses the form/grid without resuming or aborting the program; the suspended program is abandoned for the session. Finish or quit a running program before using Assistant wizards.
 
 ---
 
