@@ -7,6 +7,16 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
 
 ---
 
+## [0.5.5] — 2026-06-11
+
+### Added
+- **SessionStart hook for Claude Code on the web** (`.claude/hooks/session-start.sh`) — runs `npm install` and installs Playwright Chromium. Tries `npx playwright install chromium --with-deps` first; if that fails (blocked Playwright CDN, broken apt PPA), falls back to downloading the matching Chrome for Testing build (revision and version read from `playwright-core/browsers.json`) from Google's `chrome-for-testing-public` bucket into `PLAYWRIGHT_BROWSERS_PATH`.
+
+### Fixed
+- **`REPORT FORM` Session test no longer depends on leftover state** — two tests saved their report via a `save-report` message type that `Session.handleMessage` never handled (silently ignored), so they only passed when a stale report row already existed in `data/system.sqlite3`. They now save through the real `save-program` message with the `__report_` name prefix.
+
+---
+
 ## [0.5.4] — 2026-06-10
 
 ### Added

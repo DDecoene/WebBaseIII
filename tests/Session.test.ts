@@ -869,7 +869,7 @@ describe('Multi-work-area integration', () => {
         { field: 'salary', heading: 'Salary', width: 10, total: true }
       ]
     });
-    await session.handleMessage({ type: 'save-report', name: 'testrpt', content: reportDef } as any);
+    await session.handleMessage({ type: 'save-program', name: '__report_testrpt', content: reportDef });
     sent.length = 0;
 
     await session.handleMessage({ type: 'command', text: 'REPORT FORM testrpt' });
@@ -882,7 +882,7 @@ describe('Multi-work-area integration', () => {
 
   it('DELETE REPORT removes the definition', async () => {
     const { session, sent } = makeSession();
-    await session.handleMessage({ type: 'save-report', name: 'myrpt', content: '{"title":"x","columns":[]}' } as any);
+    await session.handleMessage({ type: 'save-program', name: '__report_myrpt', content: '{"title":"x","columns":[]}' });
     await session.handleMessage({ type: 'command', text: 'DELETE REPORT myrpt' });
     sent.length = 0;
     const db2 = uniqueDb();
