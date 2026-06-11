@@ -56,6 +56,22 @@ The command interface — type W3Script and see results instantly.
 
 ---
 
+### The Assistant — sidebar
+
+The permanent left sidebar with category pickers and action buttons.
+
+![The Assistant sidebar](docs/screenshots/screenshot-assistant.png)
+
+---
+
+### The Assistant — New table wizard
+
+Wizards open in the main area with a live W3Script preview.
+
+![New table wizard](docs/screenshots/screenshot-assistant-wizard.png)
+
+---
+
 ## Features
 
 | Feature | Details |
@@ -67,8 +83,19 @@ The command interface — type W3Script and see results instantly.
 | **DO CASE** | Multi-branch conditional, `OTHERWISE` fallback |
 | **Built-in functions** | `EOF()`, `BOF()`, `FOUND()`, `RECNO()`, `SUBSTR()`, `STR()`, `AT()`, `CTOD()`, `DTOC()` and more |
 | **Program files** | Save, edit, and run `.prg` scripts with `DO` / `EDIT` |
+| **The Assistant** | Permanent left sidebar — open databases/tables, browse, filter, index, search, design reports, run programs without typing |
 | **Multi-user** | Each WebSocket connection gets its own isolated interpreter session |
 | **Persistent storage** | `better-sqlite3` with WAL mode — databases survive server restart |
+
+---
+
+## The Assistant
+
+The sidebar on the left drives everything without typing: open or create databases and tables,
+browse and filter data, build indexes, search, design and run reports, and run programs.
+Every click generates a real W3Script command that echoes into the terminal — watch it to
+learn the language. Wizards (New table, Filter, report designer, …) open in the main area
+and show a live preview of the command they will run.
 
 ---
 

@@ -54,6 +54,9 @@ src/
     FormLayout.ts       @ SAY GET form engine — character-cell coordinates
     ProgramEditor.ts    .prg source editor UI
     ReportPreview.ts    iframe-based HTML report preview panel (Esc to close, Ctrl+P to print)
+    Assistant.ts        Permanent left sidebar — 6 categories, catalog-driven pickers, action dispatch
+    wizards/            Wizard panels (take over main area): WizardShell, DatabaseWizard, TableWizard,
+                        FilterWizard, IndexWizard, SearchWizard, ReportWizard, index.ts dispatcher
 
   ws/
     WsClient.ts         Browser WebSocket client — sends commands, receives messages
@@ -77,6 +80,7 @@ tests/
   WorkArea.test.ts      WorkAreaManager unit tests
   ServerDatabaseBridge.test.ts
   ProgramStore.test.ts
+  assistant.spec.ts     Playwright: sidebar, wizards, report designer, program run
 ```
 
 ## W3Script commands
@@ -181,7 +185,7 @@ WebBase-III supports **unlimited work areas** (no DOS 10-area limit). Cross-area
 2. ~~Language Completeness~~ — `DO CASE/ENDCASE`, built-in functions (`EOF()`, `BOF()`, `FOUND()`, `RECNO()`, `RECCOUNT()`, `SUBSTR()`, `STR()`, `AT()`, `UPPER()`, `LOWER()`, and more) ✅
 3. ~~Multi-Work-Area~~ — unlimited `SELECT <alias>`, `SET RELATION TO`, `alias.field` notation ✅
 4. ~~Report & Label Engine~~ — `REPORT FORM`, group breaks, subtotals, HTML preview ✅
-5. **The Assistant** — menu-driven UI for non-programmers (dBASE III "assist" mode)
+5. ~~The Assistant~~ — sidebar GUI, wizards, catalog protocol ✅
 
 ## Boolean literals
 
@@ -190,11 +194,11 @@ Both styles accepted: `TRUE`/`FALSE` and `.T.`/`.TRUE.`/`.F.`/`.FALSE.` (dBASE I
 ## Testing
 
 ```bash
-npm test                # Vitest unit + integration (124 tests)
+npm test                # Vitest unit + integration (164 tests)
 npx playwright test     # E2E browser tests — requires dev server on :5173/:3000
 ```
 
-Playwright suites: `tests/integration.spec.ts` (20 tests — full REPL scenario), `tests/crm.spec.ts` (7 tests — interactive CRM program with DO WHILE, forms, SEEK, BROWSE), `tests/multiarea.spec.ts` (4 tests — multi-work-area, relations, alias.field).
+Playwright suites: `tests/integration.spec.ts` (20 tests — full REPL scenario), `tests/assistant.spec.ts` (8 tests — sidebar, wizards, report designer, program run), `tests/inventory.spec.ts` (5 tests — INVENTORY.prg menu), `tests/multiarea.spec.ts` (4 tests — multi-work-area, relations, alias.field), `tests/demos.spec.ts` (3 tests — demo program seeding), `tests/splash.spec.ts` (1 test — version banner).
 
 ## Definition of done
 

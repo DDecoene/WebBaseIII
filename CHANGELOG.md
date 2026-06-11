@@ -7,6 +7,19 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
 
 ---
 
+## [0.6.0] — 2026-06-11 — The Assistant
+
+### Added
+- **The Assistant** — permanent left-sidebar GUI (roadmap sub-project 5): Database / Tables / Data / Search / Reports / Programs categories. Every action generates a W3Script command and submits it through the normal terminal path — commands echo into the terminal history, teaching the language as a side effect.
+- **Wizards** in the main area (like BROWSE/editor): New database, New table, Filter, New index, Find record, and a 3-step report designer producing the existing `ReportDef` JSON. Each shows a live W3Script preview while you type.
+- **`catalog-request` → `catalog` WS pair** — structured lists (databases, tables+counts, active-table columns, indexes, report definitions, programs) for sidebar pickers.
+- **Report-store test cleanup** — vitest assistant tests clean up their `__report_` entries after each run.
+
+### Changed
+- App layout is now sidebar + main area (`#assistant-sidebar` / `#main-area`); all existing view IDs unchanged.
+
+---
+
 ## [0.5.5] — 2026-06-11
 
 ### Added

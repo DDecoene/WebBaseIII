@@ -1,3 +1,5 @@
+> **Status: COMPLETE** — implemented in v0.6.0
+
 # The Assistant Design — v0.6.0
 
 **Date:** 2026-06-11
@@ -62,7 +64,8 @@ index.html / main.ts       flex wrapper: sidebar + existing main area; wiring
   "tables": [{ "name": "PRODUCTS", "count": 6 }],
   "columns": [{ "name": "NAME", "colType": "TEXT" }],
   "indexes": [{ "tag": "BYNAME", "expression": "UPPER(NAME)", "active": true }],
-  "reports": ["stocklist"],
+  "reports": [{ "name": "stocklist", "content": "{…}" }],
+  // content rides along so Edit-report can prefill the designer without a second round-trip
   "programs": ["inventory", "crm", "report"]
 }
 ```
