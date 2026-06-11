@@ -7,6 +7,9 @@ export interface ShellButtons {
 
 /** Shared wizard chrome: title, body, live W3Script preview, error line, OK/Cancel, Esc. */
 export class WizardShell {
+  private static current: WizardShell | null = null;
+  private closed = false;
+
   readonly view: HTMLElement;
   readonly body: HTMLElement;
   private previewEl: HTMLElement;
@@ -21,6 +24,9 @@ export class WizardShell {
     buttons: ShellButtons,
     private onClose: () => void,
   ) {
+    WizardShell.current?.detach();
+    WizardShell.current = this;
+
     this.view = document.getElementById('wizard-view')!;
     this.view.innerHTML = '';
 
@@ -80,8 +86,16 @@ export class WizardShell {
     return wrap;
   }
 
-  close() {
+  /** Remove the Esc listener without firing onClose — used when a newer shell supersedes this one. */
+  private detach() {
+    this.closed = true;
     document.removeEventListener('keydown', this.keyHandler);
+  }
+
+  close() {
+    if (this.closed) return;
+    this.detach();
+    if (WizardShell.current === this) WizardShell.current = null;
     this.view.innerHTML = '';
     this.onClose();
   }
