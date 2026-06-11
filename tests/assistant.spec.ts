@@ -86,3 +86,49 @@ test.describe('Assistant wizards — table', () => {
     await expect(page.locator('#status-table')).toContainText('WIZ_PRODUCTS', { timeout: 5000 });
   });
 });
+
+test.describe('Assistant wizards — filter / index / search', () => {
+  test.beforeEach(async ({ page }) => {
+    await boot(page);
+    const cmds = [
+      'USE DATABASE ASSISTDEMO',
+      'DROP TABLE wiz_stock',
+      'CREATE TABLE wiz_stock (NAME CHAR(20), QTY NUM(6))',
+      'APPEND RECORD', 'REPLACE NAME WITH "Anvil", QTY WITH 3',
+      'APPEND RECORD', 'REPLACE NAME WITH "Rope", QTY WITH 50',
+    ];
+    for (const c of cmds) {
+      await page.locator('#terminal-input').fill(c);
+      await page.locator('#terminal-input').press('Enter');
+      await page.waitForTimeout(250);
+    }
+  });
+
+  test('Filter wizard emits SET FILTER TO with quoted string value', async ({ page }) => {
+    await clickAction(page, 'Filter…');
+    await expect(page.locator('#wizard-view')).toBeVisible({ timeout: 5000 });
+    await page.locator('#wz-filter-col').selectOption({ value: 'NAME' });
+    await page.locator('#wz-filter-op').selectOption('==');
+    await page.locator('#wz-filter-val').fill('Anvil');
+    await expect(page.locator('.wz-preview')).toContainText('SET FILTER TO NAME == "Anvil"');
+    await page.locator('#wizard-view button', { hasText: 'Apply filter' }).click();
+    await expect(page.locator('#terminal-output')).toContainText('. SET FILTER TO NAME == "Anvil"', { timeout: 5000 });
+  });
+
+  test('Index wizard + Find record positions the pointer via SEEK', async ({ page }) => {
+    await clickAction(page, 'New index…');
+    await expect(page.locator('#wizard-view')).toBeVisible({ timeout: 5000 });
+    await page.locator('#wz-index-expr').fill('NAME');
+    await page.locator('#wz-index-tag').fill('WIZBYNAME');
+    await expect(page.locator('.wz-preview')).toContainText('INDEX ON NAME TO WIZBYNAME');
+    await page.locator('#wizard-view button', { hasText: 'Create index' }).click();
+    await expect(page.locator('#terminal-output')).toContainText('. INDEX ON NAME TO WIZBYNAME', { timeout: 5000 });
+
+    await clickAction(page, 'Find record…');
+    await expect(page.locator('#wizard-view')).toBeVisible({ timeout: 5000 });
+    await page.locator('#wz-search-val').fill('Rope');
+    await expect(page.locator('.wz-preview')).toContainText('SEEK "Rope"');
+    await page.locator('#wizard-view button', { hasText: 'Find' }).click();
+    await expect(page.locator('#terminal-output')).toContainText('Found at position', { timeout: 5000 });
+  });
+});
