@@ -277,7 +277,8 @@ export class Terminal {
     this.input.focus();
   }
 
-  /** Submit a command exactly as if the user typed it: echo + send. Used by the Assistant. */
+  /** Submit a command exactly as if the user typed it: echo + send. Used by the Assistant.
+      Single statements only — bypasses block accumulation and keyboard history. */
   runCommand(raw: string) {
     this.printLine(`. ${raw}`, 'echo');
     this.ws.send({ type: 'command', text: raw });
