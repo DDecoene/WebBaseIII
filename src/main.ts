@@ -1,6 +1,8 @@
 import './styles/main.css';
 import { WsClient } from './ws/WsClient';
 import { Terminal } from './terminal/Terminal';
+import { Assistant } from './ui/Assistant';
+import { openWizard } from './ui/wizards';
 
 async function boot() {
   const versionEl = document.getElementById('status-version');
@@ -20,6 +22,11 @@ async function boot() {
 
   const terminal = new Terminal(ws);
   terminal.mount();
+
+  const assistant = new Assistant(ws, {
+    run: (cmd) => terminal.runCommand(cmd),
+    openWizard: (name, arg) => openWizard(name, arg, ws, terminal, () => assistant.latestCatalog(), () => assistant.refresh()),
+  });
 }
 
 boot().catch(err => {
