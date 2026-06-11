@@ -123,6 +123,7 @@ test.describe('Assistant wizards — filter / index / search', () => {
     await expect(page.locator('.wz-preview')).toContainText('INDEX ON NAME TO WIZBYNAME');
     await page.locator('#wizard-view button', { hasText: 'Create index' }).click();
     await expect(page.locator('#terminal-output')).toContainText('. INDEX ON NAME TO WIZBYNAME', { timeout: 5000 });
+    await page.waitForTimeout(400); // let the catalog refresh round-trip land so Find record sees the new index
 
     await clickAction(page, 'Find record…');
     await expect(page.locator('#wizard-view')).toBeVisible({ timeout: 5000 });

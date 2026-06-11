@@ -6,6 +6,10 @@ const OPS = ['==', '!=', '>', '<', '>=', '<='] as const;
 export function quoteValue(raw: string): { val: string | null; err: string } {
   const v = raw.trim();
   if (!v) return { val: null, err: '' };
+  if (/^-?0\d/.test(v)) {
+    if (v.includes('"')) return { val: null, err: 'Double quotes are not allowed in values.' };
+    return { val: `"${v}"`, err: '' };
+  }
   if (/^-?\d+(\.\d+)?$/.test(v)) return { val: v, err: '' };
   if (v.includes('"')) return { val: null, err: 'Double quotes are not allowed in values.' };
   return { val: `"${v}"`, err: '' };
