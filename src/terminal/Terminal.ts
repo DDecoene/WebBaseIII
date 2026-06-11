@@ -22,6 +22,7 @@ export class Terminal {
   private formView: HTMLElement;
   private editorView: HTMLElement;
   private reportView: HTMLElement;
+  private wizardView: HTMLElement;
 
   private ws: WsClient;
   private history: string[] = [];
@@ -47,6 +48,7 @@ export class Terminal {
     this.formView    = document.getElementById('form-view')!;
     this.editorView  = document.getElementById('editor-view')!;
     this.reportView  = document.getElementById('report-preview-view')!;
+    this.wizardView  = document.getElementById('wizard-view')!;
 
     ws.on('output', (msg) => {
       (msg as any).lines.forEach((l: OutputLine) => this.printLine(l.text, l.cls));
@@ -271,7 +273,14 @@ export class Terminal {
     this.formView.classList.add('hidden');
     this.editorView.classList.add('hidden');
     this.reportView.classList.add('hidden');
+    this.wizardView.classList.add('hidden');
     this.input.focus();
+  }
+
+  /** Submit a command exactly as if the user typed it: echo + send. Used by the Assistant. */
+  runCommand(raw: string) {
+    this.printLine(`. ${raw}`, 'echo');
+    this.ws.send({ type: 'command', text: raw });
   }
 
   // ── Output helpers ─────────────────────────────────────────────────────
