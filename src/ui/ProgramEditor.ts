@@ -23,9 +23,14 @@ export class ProgramEditor {
     this.textarea.focus();
   }
 
-  close() {
-    this.view.classList.add('hidden');
+  /** Detach the key listener and hide the view without invoking onClose. */
+  unmount() {
     document.removeEventListener('keydown', this.boundKey, true);
+    this.view.classList.add('hidden');
+  }
+
+  close() {
+    this.unmount();
     this.onClose();
   }
 

@@ -267,6 +267,32 @@ export class Terminal {
     this.showTerminal();
   }
 
+  /** Tear down whatever main-area view is currently active and return to terminal state.
+   *  Called by the wizard dispatcher before opening a wizard so views never double-stack. */
+  closeActiveView() {
+    if (this.grid) {
+      this.grid.unmount();
+      this.grid = null;
+      this.gridView.classList.add('hidden');
+    }
+    if (this.form) {
+      this.form.unmount();
+      this.form = null;
+      this.formView.classList.add('hidden');
+    }
+    if (this.editor) {
+      // Remove the editor's key listener without triggering its onClose callback.
+      this.editor.unmount();
+      this.editor = null;
+    }
+    if (this.report) {
+      // Hide the report view/iframe without triggering its onClose callback.
+      this.reportView.classList.add('hidden');
+      (document.getElementById('report-iframe') as HTMLIFrameElement | null)?.setAttribute('srcdoc', '');
+      this.report = null;
+    }
+  }
+
   showTerminal() {
     this.termView.classList.remove('hidden');
     this.gridView.classList.add('hidden');

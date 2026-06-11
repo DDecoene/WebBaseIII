@@ -9,7 +9,10 @@ import { openIndexWizard } from './IndexWizard';
 import { openSearchWizard } from './SearchWizard';
 import { openReportWizard } from './ReportWizard';
 
-function showWizardView(): void {
+function showWizardView(terminal: Terminal): void {
+  // Tear down any active main-area view (grid, form, editor, report) before opening
+  // the wizard so views never double-stack and orphaned key listeners are removed.
+  terminal.closeActiveView();
   document.getElementById('terminal-view')!.classList.add('hidden');
   document.getElementById('wizard-view')!.classList.remove('hidden');
 }
@@ -24,7 +27,7 @@ export function openWizard(
 ): void {
   const run = (cmd: string) => { terminal.runCommand(cmd); refresh(); };
   const onClose = () => terminal.showTerminal();
-  showWizardView();
+  showWizardView(terminal);
   switch (name) {
     case 'database': return openDatabaseWizard(run, onClose);
     case 'table':    return openTableWizard(run, onClose);

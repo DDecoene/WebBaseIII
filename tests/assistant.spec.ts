@@ -104,6 +104,23 @@ test.describe('Assistant wizards — filter / index / search', () => {
     }
   });
 
+  test('opening Filter wizard while BROWSE is active tears down the grid', async ({ page }) => {
+    // Open BROWSE via the sidebar action
+    await clickAction(page, 'Browse');
+    await expect(page.locator('#grid-view')).toBeVisible({ timeout: 5000 });
+
+    // Click Filter… while the grid is open — wizard must replace the grid, not stack on top
+    await clickAction(page, 'Filter…');
+    await expect(page.locator('#wizard-view')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('#grid-view')).toBeHidden({ timeout: 2000 });
+
+    // Single Escape should close the wizard and return to terminal — an orphaned grid
+    // listener would intercept Escape first and send a spurious grid-exit message
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#terminal-view')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('#wizard-view')).toBeHidden({ timeout: 2000 });
+  });
+
   test('Filter wizard emits SET FILTER TO with quoted string value', async ({ page }) => {
     await clickAction(page, 'Filter…');
     await expect(page.locator('#wizard-view')).toBeVisible({ timeout: 5000 });
