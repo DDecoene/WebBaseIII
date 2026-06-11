@@ -91,6 +91,29 @@ export class Session {
           await this.sendGridData();
           break;
 
+        case 'catalog-request': {
+          const area = this.executor.area;
+          const databases = await this.bridge.listDatabases();
+          let tables: { name: string; count: number }[] = [];
+          let columns: import('../src/shared/types.js').ColInfo[] = [];
+          let indexes: { tag: string; expression: string; active: boolean }[] = [];
+          if (area.db) {
+            const names = await this.bridge.getTables();
+            for (const n of names) {
+              tables.push({ name: n, count: await this.bridge.getRowCount(n) });
+            }
+            if (area.table && await this.bridge.tableExists(area.table)) {
+              columns = await this.bridge.getStructure(area.table);
+              const active = indexStore.getActive(area.table);
+              indexes = indexStore.listIndexes(area.table)
+                .map(i => ({ tag: i.tag, expression: i.expression, active: active?.tag === i.tag }));
+            }
+          }
+          const reports = reportStore.list().map(name => ({ name, content: reportStore.load(name) ?? '' }));
+          this.send({ type: 'catalog', catalog: { databases, tables, columns, indexes, reports, programs: programStore.list() } });
+          break;
+        }
+
         case 'grid-exit':
           this.send({ type: 'view-terminal' });
           if (this.pendingContinuation) {

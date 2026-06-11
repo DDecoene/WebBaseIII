@@ -3,6 +3,7 @@ import { Lexer } from '../src/interpreter/Lexer';
 import { Parser } from '../src/interpreter/Parser';
 import { Session } from '../server/Session';
 import { programStore } from '../server/ProgramStore';
+import { reportStore } from '../server/ReportStore';
 import type { ServerMessage } from '../src/shared/types.js';
 import fs from 'fs';
 import path from 'path';
@@ -32,6 +33,10 @@ afterEach(() => {
   // Clean up programs these tests saved into the shared program store
   for (const name of programStore.list()) {
     if (name.startsWith('test_')) programStore.delete(name);
+  }
+  // Clean up reports these tests saved into the shared report store
+  for (const name of reportStore.list()) {
+    if (name.startsWith('test_')) reportStore.delete(name);
   }
 });
 
@@ -893,5 +898,40 @@ describe('Multi-work-area integration', () => {
     await session.handleMessage({ type: 'command', text: 'REPORT FORM myrpt' });
     const out = sent.find(m => m.type === 'output') as any;
     expect(out.lines.some((l: any) => l.text.includes('not found'))).toBe(true);
+  });
+
+  it('catalog-request returns databases, tables, columns, indexes, reports, programs', async () => {
+    const { session, sent } = makeSession();
+    const db = uniqueDb();
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    await session.handleMessage({ type: 'command', text: 'CREATE TABLE cat_tbl (NAME CHAR(20), QTY NUM(6))' });
+    await session.handleMessage({ type: 'command', text: 'INDEX ON NAME TO BYNAME' });
+    await session.handleMessage({ type: 'save-program', name: 'test_cat_prog', content: 'LIST\n' });
+    await session.handleMessage({
+      type: 'save-program', name: '__report_test_cat_rep',
+      content: JSON.stringify({ title: 'T', columns: [{ field: 'NAME', heading: 'Name', width: 10 }] }),
+    });
+
+    sent.length = 0;
+    await session.handleMessage({ type: 'catalog-request' });
+    const msg = sent.find(m => m.type === 'catalog') as any;
+    expect(msg).toBeDefined();
+    const c = msg.catalog;
+    expect(c.databases.map((d: string) => d.toUpperCase())).toContain(db.toUpperCase());
+    expect(c.tables.map((t: any) => t.name.toUpperCase())).toContain('CAT_TBL');
+    expect(c.columns.map((col: any) => col.name.toUpperCase())).toContain('NAME');
+    expect(c.indexes).toEqual([{ tag: 'BYNAME', expression: 'NAME', active: true }]);
+    expect(c.reports.map((r: any) => r.name)).toContain('test_cat_rep');
+    expect(c.programs).toContain('test_cat_prog');
+  });
+
+  it('catalog-request with nothing open returns empty lists without error', async () => {
+    const { session, sent } = makeSession();
+    await session.handleMessage({ type: 'catalog-request' });
+    const msg = sent.find(m => m.type === 'catalog') as any;
+    expect(msg).toBeDefined();
+    expect(msg.catalog.tables).toEqual([]);
+    expect(msg.catalog.columns).toEqual([]);
+    expect(msg.catalog.indexes).toEqual([]);
   });
 });

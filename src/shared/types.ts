@@ -82,6 +82,19 @@ export interface WorkArea {
   } | null;
 }
 
+export interface CatalogTable { name: string; count: number; }
+export interface CatalogIndex { tag: string; expression: string; active: boolean; }
+export interface CatalogReport { name: string; content: string; }
+
+export interface Catalog {
+  databases: string[];
+  tables: CatalogTable[];
+  columns: ColInfo[];
+  indexes: CatalogIndex[];
+  reports: CatalogReport[];
+  programs: string[];
+}
+
 // ── WebSocket message types ────────────────────────────────────────────────
 
 // Client → Server
@@ -94,7 +107,8 @@ export type ClientMessage =
   | { type: 'grid-new-row' }
   | { type: 'grid-refresh' }
   | { type: 'grid-exit' }
-  | { type: 'save-program'; name: string; content: string };
+  | { type: 'save-program'; name: string; content: string }
+  | { type: 'catalog-request' };
 
 // Server → Client
 export type ServerMessage =
@@ -107,4 +121,5 @@ export type ServerMessage =
   | { type: 'view-terminal' }
   | { type: 'clear' }
   | { type: 'report-preview'; html: string }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string }
+  | { type: 'catalog'; catalog: Catalog };
