@@ -134,6 +134,20 @@ test.describe('Assistant wizards — filter / index / search', () => {
   });
 });
 
+test.describe('Assistant — programs', () => {
+  test('runs the inventory demo from the sidebar', async ({ page }) => {
+    await boot(page);
+    await clickAction(page, 'Run program…');
+    await page.locator('#assistant-sidebar .as-pick', { hasText: 'inventory' }).click();
+    // Menu form opens (program runs)
+    await expect(page.locator('#form-view')).toBeVisible({ timeout: 8000 });
+    const input = page.locator('#form-view input.f-get').last();
+    await input.fill('Q');
+    await input.press('Enter');
+    await expect(page.locator('#form-view')).toBeHidden({ timeout: 6000 });
+  });
+});
+
 test.describe('Assistant wizards — report designer', () => {
   test('builds, saves, and runs a report', async ({ page }) => {
     await boot(page);
