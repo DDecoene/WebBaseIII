@@ -36,8 +36,76 @@ html, body {
 
 #app {
   width: 100%; height: 100%;
+  display: flex; flex-direction: row;
+}
+
+#main-area {
+  flex: 1; min-width: 0;
   display: flex; flex-direction: column;
 }
+
+/* ── ASSISTANT SIDEBAR ── */
+#assistant-sidebar {
+  width: 220px; flex-shrink: 0;
+  background: #101010;
+  border-right: 1px solid #2a2a2a;
+  overflow-y: auto;
+  font-family: system-ui, sans-serif;
+  font-size: 13px;
+  color: #bbb;
+  display: flex; flex-direction: column;
+}
+#assistant-sidebar.collapsed { width: 28px; overflow: hidden; }
+#assistant-sidebar .as-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 10px; color: #33ff33; font-weight: 600;
+  border-bottom: 1px solid #2a2a2a; cursor: pointer; user-select: none;
+}
+#assistant-sidebar .as-cat {
+  padding: 8px 10px 2px; color: #33ff33;
+  font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+}
+#assistant-sidebar .as-action {
+  padding: 4px 10px 4px 18px; cursor: pointer; user-select: none; border-radius: 3px;
+}
+#assistant-sidebar .as-action:hover { background: #1f3f1f; color: #7dff7d; }
+#assistant-sidebar .as-action.disabled { color: #555; cursor: default; }
+#assistant-sidebar .as-action.disabled:hover { background: none; color: #555; }
+#assistant-sidebar .as-pick {
+  padding: 3px 10px 3px 32px; cursor: pointer; color: #9b9; font-size: 12px;
+}
+#assistant-sidebar .as-pick:hover { background: #1f3f1f; color: #7dff7d; }
+#assistant-sidebar .as-empty { padding: 3px 10px 3px 32px; color: #555; font-size: 12px; }
+
+/* ── WIZARD VIEW ── */
+#wizard-view {
+  flex: 1; overflow-y: auto; padding: 24px;
+  font-family: system-ui, sans-serif; color: #ddd;
+}
+#wizard-view h2 { color: #33ff33; margin: 0 0 4px; font-size: 18px; }
+#wizard-view .wz-sub { color: #888; margin: 0 0 18px; font-size: 13px; }
+#wizard-view .wz-field { margin: 10px 0; }
+#wizard-view .wz-field label { display: block; color: #9b9; font-size: 12px; margin-bottom: 3px; }
+#wizard-view input[type=text], #wizard-view select {
+  background: #0a0a0a; color: #33ff33; border: 1px solid #333;
+  border-radius: 3px; padding: 5px 8px; font-family: 'Courier New', monospace;
+  font-size: 13px; min-width: 260px;
+}
+#wizard-view input[type=checkbox] { accent-color: #33ff33; }
+#wizard-view .wz-row { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
+#wizard-view .wz-preview {
+  margin-top: 18px; padding-top: 12px; border-top: 1px dashed #333;
+  font-family: 'Courier New', monospace; color: #ff6; font-size: 13px;
+  min-height: 18px; white-space: pre-wrap;
+}
+#wizard-view .wz-error { color: #f66; font-size: 12px; margin-top: 8px; min-height: 15px; }
+#wizard-view .wz-buttons { margin-top: 16px; display: flex; gap: 10px; }
+#wizard-view button {
+  background: #1f3f1f; color: #7dff7d; border: 1px solid #33ff33;
+  border-radius: 3px; padding: 6px 16px; cursor: pointer; font-size: 13px;
+}
+#wizard-view button:disabled { opacity: .4; cursor: default; }
+#wizard-view button.secondary { background: #161616; color: #999; border-color: #333; }
 
 .hidden { display: none !important; }
 
