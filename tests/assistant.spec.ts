@@ -58,3 +58,31 @@ test.describe('Assistant sidebar', () => {
     await expect(page.locator('#terminal-view')).toBeVisible({ timeout: 5000 });
   });
 });
+
+test.describe('Assistant wizards — table', () => {
+  test('New table wizard emits CREATE TABLE and the echo lands in the terminal', async ({ page }) => {
+    await boot(page);
+    await page.locator('#terminal-input').fill('USE DATABASE ASSISTDEMO');
+    await page.locator('#terminal-input').press('Enter');
+    await page.waitForTimeout(400);
+    await page.locator('#terminal-input').fill('DROP TABLE wiz_products');
+    await page.locator('#terminal-input').press('Enter');
+    await page.waitForTimeout(400);
+
+    await clickAction(page, 'New table…');
+    await expect(page.locator('#wizard-view')).toBeVisible({ timeout: 5000 });
+
+    await page.locator('#wz-table-name').fill('wiz_products');
+    await page.locator('.wz-col-name').first().fill('NAME');
+    await page.locator('.wz-col-type').first().selectOption('CHAR');
+    await page.locator('.wz-col-len').first().fill('30');
+
+    // live preview shows the exact command
+    await expect(page.locator('.wz-preview')).toContainText('CREATE TABLE wiz_products (NAME CHAR(30))');
+
+    await page.locator('#wizard-view button', { hasText: 'Create table' }).click();
+    await expect(page.locator('#terminal-view')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('#terminal-output')).toContainText('. CREATE TABLE wiz_products (NAME CHAR(30))');
+    await expect(page.locator('#status-table')).toContainText('WIZ_PRODUCTS', { timeout: 5000 });
+  });
+});
