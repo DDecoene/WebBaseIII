@@ -133,3 +133,41 @@ test.describe('Assistant wizards — filter / index / search', () => {
     await expect(page.locator('#terminal-output')).toContainText('Found at position', { timeout: 5000 });
   });
 });
+
+test.describe('Assistant wizards — report designer', () => {
+  test('builds, saves, and runs a report', async ({ page }) => {
+    await boot(page);
+    const cmds = [
+      'USE DATABASE ASSISTDEMO',
+      'DROP TABLE wiz_rep',
+      'CREATE TABLE wiz_rep (NAME CHAR(20), QTY NUM(6))',
+      'APPEND RECORD', 'REPLACE NAME WITH "Anvil", QTY WITH 3',
+    ];
+    for (const c of cmds) {
+      await page.locator('#terminal-input').fill(c);
+      await page.locator('#terminal-input').press('Enter');
+      await page.waitForTimeout(250);
+    }
+
+    await clickAction(page, 'New report…');
+    await expect(page.locator('#wizard-view')).toBeVisible({ timeout: 5000 });
+
+    // Step 1: name + title
+    await page.locator('#wz-rep-name').fill('wizstock');
+    await page.locator('#wz-rep-title').fill('Stock List');
+    await page.locator('#wizard-view button', { hasText: 'Next' }).click();
+
+    // Step 2: include both columns, give QTY a total
+    await page.locator('.wz-rep-include').first().check();
+    await page.locator('.wz-rep-include').nth(1).check();
+    await page.locator('.wz-rep-total').nth(1).check();
+    await page.locator('#wizard-view button', { hasText: 'Next' }).click();
+
+    // Step 3: no grouping — save & run
+    await page.locator('#wizard-view button', { hasText: 'Save & run' }).click();
+
+    await expect(page.locator('#terminal-output')).toContainText('. REPORT FORM wizstock', { timeout: 6000 });
+    await expect(page.locator('#report-preview-view')).toBeVisible({ timeout: 6000 });
+    await page.keyboard.press('Escape');
+  });
+});
