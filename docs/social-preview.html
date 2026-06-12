@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 1280px; height: 640px; overflow: hidden;
+    background: #0a0f0a;
+    font-family: "Menlo", "Consolas", monospace;
+    display: flex; flex-direction: column; justify-content: center;
+    padding: 70px 90px;
+    position: relative;
+  }
+  /* subtle CRT scanlines */
+  body::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(0deg, rgba(0,0,0,0.25) 0 2px, transparent 2px 4px);
+  }
+  /* phosphor glow vignette */
+  body::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse at center, rgba(51,255,102,0.07), transparent 70%);
+  }
+  .title {
+    color: #33ff66; font-size: 84px; font-weight: bold; letter-spacing: 2px;
+    text-shadow: 0 0 18px rgba(51,255,102,0.55);
+    margin-bottom: 28px;
+  }
+  .slogan {
+    color: #b8ffce; font-size: 34px; line-height: 1.45; margin-bottom: 48px;
+  }
+  .slogan b { color: #ffd24d; text-shadow: 0 0 12px rgba(255,210,77,0.45); }
+  .term {
+    color: #33ff66; font-size: 26px; line-height: 1.6;
+    text-shadow: 0 0 8px rgba(51,255,102,0.4);
+  }
+  .dim { color: #1f9c44; }
+  .cursor {
+    display: inline-block; width: 15px; height: 28px; background: #33ff66;
+    vertical-align: text-bottom; box-shadow: 0 0 10px rgba(51,255,102,0.8);
+  }
+  .footer {
+    position: absolute; bottom: 42px; right: 90px;
+    color: #1f9c44; font-size: 22px; letter-spacing: 1px;
+  }
+</style>
+</head>
+<body>
+  <div class="title">WebBase-III</div>
+  <div class="slogan">dBASE III is back. In your browser.<br><b>USE customers</b> like it's 1984.</div>
+  <div class="term">
+    <span class="dim">.</span> USE customers<br>
+    <span class="dim">.</span> LIST<br>
+    <span class="dim">&nbsp;&nbsp;1&nbsp; Acme Corp&nbsp;&nbsp;&nbsp;555-1234&nbsp;&nbsp;BE<br>
+    &nbsp;&nbsp;2&nbsp; Zeta Ltd&nbsp;&nbsp;&nbsp;&nbsp;555-5678&nbsp;&nbsp;NL</span><br>
+    <span class="dim">.</span> <span class="cursor"></span>
+  </div>
+  <div class="footer">github.com/DDecoene/WebBaseIII &nbsp;·&nbsp; TypeScript · SQLite · WebSockets</div>
+</body>
+</html>

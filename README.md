@@ -1,8 +1,16 @@
 # WebBase-III
 
-**dBASE III, reimagined for the modern web.**
+**dBASE III is back. In your browser. `USE customers` like it's 1984.**
 
-Write W3Script commands in a retro terminal REPL, browse and edit records in a spreadsheet grid, build character-cell data-entry forms, run programs with full control flow — all backed by a Node.js WebSocket server and SQLite. Multiple users, persistent databases, no native dependencies beyond Node.
+![WebBase-III demo — USE, LIST, SEEK, BROWSE](docs/screenshots/demo.gif)
+
+Remember the dot prompt? Before SQL won, before ORMs, before anyone said "full-stack" — there was dBASE III. You typed `USE customers`, then `LIST`, and your data was just *there*. WebBase-III brings that whole world back: the terminal, the language, `BROWSE`, `@ SAY GET` forms, `.prg` programs, indexes, reports — rebuilt from scratch as a modern web app with its own interpreter in TypeScript, backed by Node.js, WebSockets, and SQLite.
+
+**Try it in one click — no install:**
+
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/DDecoene/WebBaseIII?quickstart=1)
+
+The Codespace installs dependencies and starts the dev server automatically. Open the forwarded port **5173** and you're at the dot prompt.
 
 ---
 

@@ -1,6 +1,7 @@
 {
   "name": "webbase-iii",
-  "version": "0.6.0",
+  "version": "0.6.1",
+  "description": "dBASE III is back. In your browser. USE customers like it's 1984.",
   "private": true,
   "type": "module",
   "scripts": {

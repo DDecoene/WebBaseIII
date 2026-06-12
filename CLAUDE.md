@@ -74,6 +74,13 @@ demos/
   *.prg                 Demo programs — single source of truth; seeded into the
                         program store on every server start (overwrites store copies)
 
+.devcontainer/
+  devcontainer.json     GitHub Codespaces config — auto npm install + npm run dev
+
+scripts/
+  make-demo-gif.mjs     Records README demo GIF frames (needs server on :3000)
+  make-demo-gif.py      Assembles frames into docs/screenshots/demo.gif (PIL)
+
 tests/
   Session.test.ts       Integration tests (full command round-trips, multi-work-area)
   Indexing.test.ts      Index commands (INDEX ON, SEEK, FIND, LIST INDEXES, …)

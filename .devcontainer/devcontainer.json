@@ -1,0 +1,17 @@
+{
+  "name": "WebBase-III",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:22",
+  "forwardPorts": [5173, 3000],
+  "portsAttributes": {
+    "5173": {
+      "label": "WebBase-III (open this one)",
+      "onAutoForward": "openPreview"
+    },
+    "3000": {
+      "label": "WebSocket server",
+      "onAutoForward": "silent"
+    }
+  },
+  "postCreateCommand": "npm install",
+  "postAttachCommand": "npm run dev"
+}
