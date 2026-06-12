@@ -349,3 +349,5 @@ The Playwright suite (`tests/integration.spec.ts`, `tests/crm.spec.ts`) drives a
 ## License
 
 AGPL-3.0 — see [LICENSE.md](LICENSE.md).
+
+Why AGPL? WebBase-III is a toy, and the license keeps it that way: anyone can use it, fork it, and learn from it, but nobody can take it closed and sell it as a hosted service without giving their changes back. If you want to run it, hack it, or ship features from your dBASE memories — that's exactly what it's for.

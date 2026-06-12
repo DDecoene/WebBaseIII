@@ -32,7 +32,7 @@ No hosted demo. Instead:
 6. **README rewrite** — nostalgia-first opening per Positioning section.
 7. **CONTRIBUTING.md** — how to run, test, and submit PRs; link Definition of Done.
 8. **Seed issues** — 5–10 real issues, several labeled `good first issue`.
-9. **License** — stays AGPL-3.0 unless Dennis explicitly decides otherwise. (Noted: MIT is more conventional for showcase projects and friendlier to casual contributors; open decision, not a blocker.)
+9. **License** — AGPL-3.0, **decided 2026-06-12**: Dennis explicitly wants to prevent closed commercial exploitation (e.g. someone hosting a modified version as a paid SaaS). WebBase-III is and stays a toy/fun project; the AGPL network clause guarantees that. The casual-contributor friction is accepted as the price.
 
 ## Launch sequence
 
