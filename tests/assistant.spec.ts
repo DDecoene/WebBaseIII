@@ -165,6 +165,49 @@ test.describe('Assistant — programs', () => {
   });
 });
 
+test.describe('Assistant wizards — modify structure', () => {
+  test('MODIFY STRUCTURE wizard round-trip: rename a column', async ({ page }) => {
+    await boot(page);
+    const cmds = [
+      'USE DATABASE ASSISTDEMO',
+      'DROP TABLE wiz_modstruct',
+      'CREATE TABLE wiz_modstruct (FIRSTNAME CHAR(20), AGE INT)',
+    ];
+    for (const c of cmds) {
+      await page.locator('#terminal-input').fill(c);
+      await page.locator('#terminal-input').press('Enter');
+      await page.waitForTimeout(300);
+    }
+
+    // Trigger MODIFY STRUCTURE via terminal command
+    await page.locator('#terminal-input').fill('MODIFY STRUCTURE');
+    await page.locator('#terminal-input').press('Enter');
+
+    // Wizard view must appear
+    await expect(page.locator('#wizard-view')).toBeVisible({ timeout: 8000 });
+
+    // Two column name inputs should be pre-filled
+    const colNames = page.locator('.wz-col-name');
+    await expect(colNames).toHaveCount(2, { timeout: 5000 });
+    await expect(colNames.nth(0)).toHaveValue('FIRSTNAME');
+    await expect(colNames.nth(1)).toHaveValue('AGE');
+
+    // Rename the second column
+    await colNames.nth(1).fill('YEARS');
+
+    // Apply changes
+    await page.locator('#wizard-view button', { hasText: 'Apply changes' }).click();
+
+    // Back to terminal
+    await expect(page.locator('#terminal-view')).toBeVisible({ timeout: 5000 });
+
+    // Verify the rename took effect
+    await page.locator('#terminal-input').fill('LIST STRUCTURE');
+    await page.locator('#terminal-input').press('Enter');
+    await expect(page.locator('#terminal-output')).toContainText('YEARS', { timeout: 5000 });
+  });
+});
+
 test.describe('Assistant wizards — report designer', () => {
   test('builds, saves, and runs a report', async ({ page }) => {
     await boot(page);
