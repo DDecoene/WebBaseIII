@@ -2,7 +2,7 @@ import './styles/main.css';
 import { WsClient } from './ws/WsClient';
 import { Terminal } from './terminal/Terminal';
 import { Assistant } from './ui/Assistant';
-import { openWizard } from './ui/wizards';
+import { openWizard, openModStructWizard } from './ui/wizards';
 
 async function boot() {
   const versionEl = document.getElementById('status-version');
@@ -26,6 +26,19 @@ async function boot() {
   const assistant = new Assistant(ws, {
     run: (cmd) => terminal.runCommand(cmd),
     openWizard: (name, arg) => openWizard(name, arg, ws, terminal, () => assistant.latestCatalog(), () => assistant.refresh()),
+  });
+
+  ws.on('modstruct-open', (msg) => {
+    const m = msg as any;
+    terminal.closeActiveView();
+    document.getElementById('terminal-view')!.classList.add('hidden');
+    document.getElementById('wizard-view')!.classList.remove('hidden');
+    openModStructWizard(
+      m.table,
+      m.columns,
+      (cmd: string) => { terminal.runCommand(cmd); assistant.refresh(); },
+      () => terminal.showTerminal(),
+    );
   });
 }
 
