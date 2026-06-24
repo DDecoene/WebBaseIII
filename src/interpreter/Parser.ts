@@ -57,6 +57,7 @@ export type ASTNode =
   | { type: 'SET_INDEX';   tag: string | null }
   | { type: 'REINDEX' }
   | { type: 'LIST_INDEXES' }
+  | { type: 'SORT'; field: string; descending: boolean; target: string }
   | { type: 'SEEK';        value: Expr }
   | { type: 'FIND';        value: string }
   | { type: 'UNKNOWN';     raw: string };
@@ -143,6 +144,7 @@ export class Parser {
         throw new Error('Expected FORM after REPORT');
       }
       case 'INDEX':    return this.parseIndexOn();
+      case 'SORT':     return this.parseSort();
       case 'REINDEX':  this.adv(); return { type: 'REINDEX' };
       case 'SEEK':     this.adv(); return { type: 'SEEK', value: this.expr() };
       case 'FIND':     { this.adv(); const val = this.peek().val; this.adv(); return { type: 'FIND', value: val }; }
@@ -240,6 +242,25 @@ export class Parser {
       this.adv();
     }
     return { type: 'SET_FILTER', expr: parts.length ? parts.join(' ') : null };
+  }
+
+  private parseSort(): ASTNode {
+    this.adv(); // SORT
+    this.expectKw('ON');
+    const field = this.ident();
+    // Optional direction qualifier: /D (descending) or /A (ascending).
+    // The lexer splits `field/D` into ID, OP('/'), ID('D').
+    let descending = false;
+    if (this.peek().type === 'OP' && this.peek().val === '/') {
+      this.adv(); // '/'
+      const dir = this.ident().toUpperCase();
+      descending = dir === 'D';
+    }
+    if (!field) throw new Error('SORT requires a field before TO');
+    this.expectKw('TO');
+    const target = this.ident();
+    if (!target) throw new Error('SORT requires a target table after TO');
+    return { type: 'SORT', field, descending, target };
   }
 
   private parseIndexOn(): ASTNode {

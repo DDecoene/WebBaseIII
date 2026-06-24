@@ -742,6 +742,89 @@ describe('Parser: multi-work-area nodes', () => {
     const nodes = parse('DELETE ALL');
     expect(nodes[0]).toEqual({ type: 'DELETE', scope: 'ALL' });
   });
+
+  it('parses SORT ON field TO target', () => {
+    const nodes = parse('SORT ON name TO sorted');
+    expect(nodes[0]).toEqual({ type: 'SORT', field: 'NAME', descending: false, target: 'SORTED' });
+  });
+
+  it('parses SORT ON field/D TO target as descending', () => {
+    const nodes = parse('SORT ON age/D TO sorted');
+    expect(nodes[0]).toEqual({ type: 'SORT', field: 'AGE', descending: true, target: 'SORTED' });
+  });
+});
+
+describe('SORT TO integration', () => {
+  async function withTable() {
+    const { session, sent } = makeSession();
+    const db = uniqueDb();
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    await session.handleMessage({ type: 'command', text: 'CREATE TABLE people (name TEXT, age NUMERIC)' });
+    await session.handleMessage({ type: 'command', text: 'USE people' });
+    for (const [name, age] of [['Carol', 40], ['Alice', 30], ['Bob', 25]] as const) {
+      await session.handleMessage({ type: 'command', text: 'APPEND RECORD' });
+      await session.handleMessage({ type: 'command', text: `REPLACE name WITH "${name}", age WITH ${age}` });
+    }
+    return { session, sent };
+  }
+
+  function listText(sent: any[]) {
+    return sent.filter(m => m.type === 'output')
+      .flatMap((m: any) => m.lines.map((l: any) => l.text)).join(' | ');
+  }
+
+  it('SORT ON name TO creates a table ordered ascending', async () => {
+    const { session, sent } = await withTable();
+    await session.handleMessage({ type: 'command', text: 'SORT ON name TO people_sorted' });
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: 'USE people_sorted' });
+    await session.handleMessage({ type: 'command', text: 'LIST' });
+    const text = listText(sent);
+    expect(text.indexOf('Alice')).toBeLessThan(text.indexOf('Bob'));
+    expect(text.indexOf('Bob')).toBeLessThan(text.indexOf('Carol'));
+  });
+
+  it('SORT ON field/D produces descending order', async () => {
+    const { session, sent } = await withTable();
+    await session.handleMessage({ type: 'command', text: 'SORT ON age/D TO people_desc' });
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: 'USE people_desc' });
+    await session.handleMessage({ type: 'command', text: 'LIST' });
+    const text = listText(sent);
+    expect(text.indexOf('Carol')).toBeLessThan(text.indexOf('Alice'));
+    expect(text.indexOf('Alice')).toBeLessThan(text.indexOf('Bob'));
+  });
+
+  it('SORT honors the active filter', async () => {
+    const { session, sent } = await withTable();
+    await session.handleMessage({ type: 'command', text: 'SET FILTER TO age > 28' });
+    await session.handleMessage({ type: 'command', text: 'SORT ON name TO people_filtered' });
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: 'USE people_filtered' });
+    await session.handleMessage({ type: 'command', text: 'LIST' });
+    const text = listText(sent);
+    expect(text).toContain('Alice');
+    expect(text).toContain('Carol');
+    expect(text).not.toContain('Bob');
+  });
+
+  it('SORT on a missing field reports an error', async () => {
+    const { session, sent } = await withTable();
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: 'SORT ON nosuch TO people_bad' });
+    const err = sent.filter(m => m.type === 'output')
+      .flatMap((m: any) => m.lines).some((l: any) => l.cls === 'error');
+    expect(err).toBe(true);
+  });
+
+  it('SORT to an existing table reports an error', async () => {
+    const { session, sent } = await withTable();
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: 'SORT ON name TO people' });
+    const err = sent.filter(m => m.type === 'output')
+      .flatMap((m: any) => m.lines).some((l: any) => l.cls === 'error');
+    expect(err).toBe(true);
+  });
 });
 
 describe('Multi-work-area integration', () => {
