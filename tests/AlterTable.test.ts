@@ -184,3 +184,29 @@ describe('Executor: ALTER TABLE ALTER (type change)', () => {
     expect((out?.lines ?? []).map((l: any) => l.text).join(' ')).toContain('42');
   });
 });
+
+describe('Session: MODIFY STRUCTURE', () => {
+  it('sends modstruct-open with table and columns', async () => {
+    const { session, sent } = makeSession();
+    const db = uniqueDb();
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    await session.handleMessage({ type: 'command', text: 'CREATE TABLE t (name CHAR(10), age INT)' });
+    await session.handleMessage({ type: 'command', text: 'USE t' });
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: 'MODIFY STRUCTURE' });
+    const msg = sent.find(m => m.type === 'modstruct-open') as any;
+    expect(msg).toBeDefined();
+    expect(msg.table.toLowerCase()).toBe('t');
+    expect(msg.columns.map((c: any) => c.name.toLowerCase())).toEqual(['name', 'age']);
+  });
+
+  it('errors MODIFY STRUCTURE with no table', async () => {
+    const { session, sent } = makeSession();
+    const db = uniqueDb();
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: 'MODIFY STRUCTURE' });
+    const out = sent.find(m => m.type === 'output') as any;
+    expect((out?.lines ?? []).some((l: any) => l.cls === 'error')).toBe(true);
+  });
+});

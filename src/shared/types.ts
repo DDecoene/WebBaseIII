@@ -117,6 +117,7 @@ export type ServerMessage =
   | { type: 'status'; db: string | null; table: string | null; record: number; total: number }
   | { type: 'input-request'; prompt: string }
   | { type: 'grid-open'; table: string; filter: string | null; columns: ColInfo[]; rows: Record<string, unknown>[] }
+  | { type: 'modstruct-open'; table: string; columns: ColInfo[] }
   | { type: 'form-open'; fields: FormField[] }
   | { type: 'program-open'; name: string; content: string }
   | { type: 'view-terminal' }
