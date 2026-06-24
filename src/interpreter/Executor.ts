@@ -518,6 +518,7 @@ export class Executor implements IndexCommandsHost {
   enterProgram()  { this.programDepth++; }
   exitProgram()   { if (this.programDepth > 0) this.programDepth--; }
   isInProgram()   { return this.programDepth > 0; }
+  resetProgramDepth() { this.programDepth = 0; }
 
   private async doStore(valueExpr: Expr, varName: string): Promise<ExecResult> {
     await this.refreshRecCount();

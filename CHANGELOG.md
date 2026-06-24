@@ -7,6 +7,13 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
 
 ---
 
+## [0.6.2] — 2026-06-24 — Suspended-program fix
+
+### Fixed
+- **Opening a wizard while a `DO` program is suspended no longer silently abandons it** (#7). The wizard tore down the suspended form/grid client-side, but the server kept the orphaned continuation — which could also misfire on a later unrelated `form-submit`. Opening a wizard now sends an `abort-suspended` message; the server drops the pending continuation, resets program depth, and prints `** Program aborted (a wizard was opened).` so the abandonment is explicit rather than silent.
+
+---
+
 ## [0.6.1] — 2026-06-12 — Launch readiness
 
 ### Added
@@ -34,7 +41,7 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
 - Opening a wizard tears down any active main-area view (grid, form, editor, report preview) so views never double-stack.
 
 ### Known limitations
-- Opening a wizard while a `DO` program is suspended at `READ` or `BROWSE` silently dismisses the form/grid without resuming or aborting the program; the suspended program is abandoned for the session. Finish or quit a running program before using Assistant wizards.
+- Opening a wizard while a `DO` program is suspended at `READ` or `BROWSE` silently dismisses the form/grid without resuming or aborting the program; the suspended program is abandoned for the session. Finish or quit a running program before using Assistant wizards. _(Resolved in 0.6.2 — the abort is now explicit and announced.)_
 
 ---
 
