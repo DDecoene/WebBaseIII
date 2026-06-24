@@ -1,0 +1,18 @@
+#!/bin/sh
+# Strip any AI co-author / attribution trailers from commit messages.
+# Commits in this repo are authored solely by humans — no Claude/AI attribution.
+# Enabled via: git config core.hooksPath .githooks  (run scripts/setup-hooks.sh)
+
+msg_file="$1"
+
+# Remove "Co-Authored-By: Claude ..." lines and the "Generated with Claude Code"
+# footer (case-insensitive), plus any blank line left dangling at the end.
+sed -i.bak \
+  -e '/^Co-[Aa]uthored-[Bb]y:.*[Cc]laude/d' \
+  -e '/^Co-[Aa]uthored-[Bb]y:.*anthropic/Id' \
+  -e '/Generated with \[*Claude Code/Id' \
+  -e '/🤖/d' \
+  "$msg_file"
+rm -f "$msg_file.bak"
+
+exit 0
