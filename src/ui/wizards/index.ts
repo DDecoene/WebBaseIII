@@ -8,6 +8,7 @@ import { openFilterWizard } from './FilterWizard';
 import { openIndexWizard } from './IndexWizard';
 import { openSearchWizard } from './SearchWizard';
 import { openReportWizard } from './ReportWizard';
+export { openModStructWizard } from './ModStructWizard';
 
 function showWizardView(terminal: Terminal): void {
   // Tear down any active main-area view (grid, form, editor, report) before opening

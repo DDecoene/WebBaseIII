@@ -7,6 +7,16 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
 
 ---
 
+## [0.7.0] — 2026-06-24 — MODIFY STRUCTURE / ALTER TABLE
+
+### Added
+- `MODIFY STRUCTURE` — alter an existing table's columns without losing data (#6).
+  - Scriptable command family: `ALTER TABLE <t> ADD/DROP/RENAME/ALTER <col> …`.
+  - `MODIFY STRUCTURE` opens an Assistant wizard (diff editor) for the active table; also reachable via the sidebar "Modify structure…" action.
+  - Column ops that can invalidate an index drop the table's indexes and warn to rebuild with `INDEX ON`.
+
+---
+
 ## [0.6.3] — 2026-06-24 — `SORT TO`
 
 ### Added

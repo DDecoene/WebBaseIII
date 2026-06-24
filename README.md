@@ -100,10 +100,10 @@ Wizards open in the main area with a live W3Script preview.
 ## The Assistant
 
 The sidebar on the left drives everything without typing: open or create databases and tables,
-browse and filter data, build indexes, search, design and run reports, and run programs.
-Every click generates a real W3Script command that echoes into the terminal — watch it to
-learn the language. Wizards (New table, Filter, report designer, …) open in the main area
-and show a live preview of the command they will run.
+browse and filter data, build indexes, search, design and run reports, run programs, and modify
+table structure. Every click generates a real W3Script command that echoes into the terminal —
+watch it to learn the language. Wizards (New table, Filter, Modify structure, report designer, …)
+open in the main area and show a live preview of the command they will run.
 
 ---
 
@@ -191,6 +191,13 @@ WebBase-III supports **unlimited work areas** — each independently holding a t
 | `REPLACE <field> WITH <val>, ...` | Update field(s) on current row |
 | `REPLACE ALL <field> WITH <val>, ...` | Update all (filtered) rows |
 | `SET FILTER TO <expr>` | Set a WHERE clause; empty clears it |
+| `MODIFY STRUCTURE` | Open the Modify-structure wizard for the active table |
+| `ALTER TABLE <t> ADD <col> <type>` | Add a column to a table |
+| `ALTER TABLE <t> DROP <col>` | Remove a column from a table |
+| `ALTER TABLE <t> RENAME <col> TO <new>` | Rename a column |
+| `ALTER TABLE <t> ALTER <col> <type>` | Change a column's type (copy-table dance; data preserved) |
+
+> Column ops that can invalidate an index (DROP, RENAME, ALTER type) drop all of the table's indexes and warn you to rebuild with `INDEX ON`.
 
 ### Indexing & search
 

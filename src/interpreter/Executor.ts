@@ -9,7 +9,7 @@ export type { OutputLine, FormField } from '../shared/types';
 
 export interface ExecResult {
   output: OutputLine[];
-  action?: 'BROWSE' | 'QUIT' | 'FORM_READY' | 'FORM_SUBMIT' | 'DO_PRG' | 'EDIT_PRG' | 'LIST_PROGRAMS' | 'REPORT_PREVIEW';
+  action?: 'BROWSE' | 'QUIT' | 'FORM_READY' | 'FORM_SUBMIT' | 'DO_PRG' | 'EDIT_PRG' | 'LIST_PROGRAMS' | 'REPORT_PREVIEW' | 'MODIFY_STRUCTURE';
   formFields?: FormField[];
   prgName?: string;
   prgContent?: string;
@@ -171,6 +171,8 @@ export class Executor implements IndexCommandsHost {
         case 'DO_WHILE':    return this.doWhile(node.cond, node.body);
         case 'CREATE_TABLE':return this.doCreateTable(node.name, node.cols);
         case 'DROP_TABLE':  return this.doDropTable(node.name);
+        case 'ALTER_TABLE': return this.doAlterTable(node);
+        case 'MODIFY_STRUCTURE': return this.doModifyStructure();
         case 'DO_PRG':      return { output: [], action: 'DO_PRG', prgName: node.name };
         case 'LIST_PROGRAMS': return { output: [], action: 'LIST_PROGRAMS' };
         case 'EDIT_PRG':    return { output: [], action: 'EDIT_PRG', prgName: node.name };
@@ -637,6 +639,104 @@ export class Executor implements IndexCommandsHost {
       this.area.activeIndex = null;
     }
     return { output: [{ text: `Table dropped: ${name}`, cls: 'ok' }] };
+  }
+
+  private async doModifyStructure(): Promise<ExecResult> {
+    if (!this.area.table) {
+      return { output: [{ text: 'MODIFY STRUCTURE: no table in use', cls: 'error' }] };
+    }
+    return { output: [], action: 'MODIFY_STRUCTURE' };
+  }
+
+  private async doAlterTable(node: Extract<ASTNode, { type: 'ALTER_TABLE' }>): Promise<ExecResult> {
+    const { name } = node;
+    if (!(await this.db.tableExists(name))) {
+      return { output: [{ text: `ALTER TABLE: no such table: ${name}`, cls: 'error' }] };
+    }
+    const cols = await this.db.getStructure(name);
+    const has = (c: string) => cols.some(col => col.name.toUpperCase() === c.toUpperCase());
+
+    if (node.op === 'ADD') {
+      if (has(node.col)) return { output: [{ text: `ALTER TABLE: column already exists: ${node.col}`, cls: 'error' }] };
+      await this.db.exec(`ALTER TABLE ${q(name)} ADD COLUMN ${q(node.col)} ${mapType(node.colType)}`);
+      await this.refreshIfActive(name);
+      return { output: [{ text: `Added column ${node.col} to ${name}.`, cls: 'ok' }] };
+    }
+    if (node.op === 'DROP') {
+      if (!has(node.col)) return { output: [{ text: `ALTER TABLE: no such column: ${node.col}`, cls: 'error' }] };
+      if (cols.length <= 1) return { output: [{ text: 'ALTER TABLE: cannot drop the only column', cls: 'error' }] };
+      const dropped = await this.dropAllIndexes(name);
+      await this.db.exec(`ALTER TABLE ${q(name)} DROP COLUMN ${q(node.col)}`);
+      await this.refreshIfActive(name);
+      return { output: [
+        { text: `Dropped column ${node.col} from ${name}.`, cls: 'ok' },
+        ...(dropped.length ? [{ text: `Dropped index(es) (rebuild with INDEX ON): ${dropped.join(', ')}`, cls: 'warn' }] : []),
+      ] };
+    }
+
+    if (node.op === 'RENAME') {
+      if (!has(node.col)) return { output: [{ text: `ALTER TABLE: no such column: ${node.col}`, cls: 'error' }] };
+      if (has(node.newName)) return { output: [{ text: `ALTER TABLE: column already exists: ${node.newName}`, cls: 'error' }] };
+      const dropped = await this.dropAllIndexes(name);
+      await this.db.exec(`ALTER TABLE ${q(name)} RENAME COLUMN ${q(node.col)} TO ${q(node.newName)}`);
+      await this.refreshIfActive(name);
+      return { output: [
+        { text: `Renamed ${node.col} to ${node.newName} in ${name}.`, cls: 'ok' },
+        ...(dropped.length ? [{ text: `Dropped index(es) (rebuild with INDEX ON): ${dropped.join(', ')}`, cls: 'warn' }] : []),
+      ] };
+    }
+
+    if (node.op === 'ALTER') {
+      if (!has(node.col)) return { output: [{ text: `ALTER TABLE: no such column: ${node.col}`, cls: 'error' }] };
+      const dropped = await this.dropAllIndexes(name);
+      const tmp = `__alttmp_${name}`;
+      // Build the new schema: same columns, but the target column retyped.
+      const newType = mapType(node.colType);
+      const colDefs = cols.map(c =>
+        c.name.toUpperCase() === node.col.toUpperCase()
+          ? `${q(c.name)} ${newType}`
+          : `${q(c.name)} ${c.type || 'TEXT'}`
+      ).join(', ');
+      const colList = cols.map(c =>
+        c.name.toUpperCase() === node.col.toUpperCase()
+          ? `CAST(${q(c.name)} AS ${newType}) AS ${q(c.name)}`
+          : q(c.name)
+      ).join(', ');
+      await this.db.exec(`DROP TABLE IF EXISTS ${q(tmp)}`);
+      await this.db.exec(`ALTER TABLE ${q(name)} RENAME TO ${q(tmp)}`);
+      await this.db.exec(`CREATE TABLE ${q(name)} (${colDefs})`);
+      await this.db.exec(`INSERT INTO ${q(name)} SELECT ${colList} FROM ${q(tmp)}`);
+      await this.db.exec(`DROP TABLE ${q(tmp)}`);
+      await this.refreshIfActive(name);
+      return { output: [
+        { text: `Changed type of ${node.col} to ${node.colType} in ${name}.`, cls: 'ok' },
+        ...(dropped.length ? [{ text: `Dropped index(es) (rebuild with INDEX ON): ${dropped.join(', ')}`, cls: 'warn' }] : []),
+      ] };
+    }
+
+    return { output: [{ text: 'ALTER TABLE: operation not implemented', cls: 'error' }] };
+  }
+
+  // Refresh cached structure/record count if the altered table is the one in USE.
+  private async refreshIfActive(name: string): Promise<void> {
+    if (this.area.table === name) {
+      this.area.cachedRecCount = await this.db.getRowCount(name, this.area.filter ?? undefined);
+    }
+  }
+
+  // Drop every index on a table — both the SQLite index objects and the
+  // IndexStore metadata. Returns the tags dropped (for a warning line).
+  // Used by column ops that can invalidate an index expression.
+  private async dropAllIndexes(table: string): Promise<string[]> {
+    if (!this.indexStore) return [];
+    const tags = this.indexStore.listIndexes(table).map(i => i.tag);
+    for (const tag of tags) {
+      const sqlName = `idx_${table}_${tag}`.replace(/"/g, '""');
+      await this.db.exec(`DROP INDEX IF EXISTS "${sqlName}"`);
+    }
+    this.indexStore.dropTable(table);          // clears metadata + active marker
+    if (this.area.table === table) this.area.activeIndex = null;
+    return tags;
   }
 
   private doHelp(): ExecResult {

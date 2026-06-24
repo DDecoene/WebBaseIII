@@ -297,6 +297,15 @@ export class Session {
       this.send({ type: 'report-preview', html: (result as any).reportHtml });
     }
 
+    if (result.action === 'MODIFY_STRUCTURE') {
+      const area = this.executor.area;
+      if (area.table) {
+        const columns = await this.bridge.getStructure(area.table);
+        this.send({ type: 'modstruct-open', table: area.table, columns });
+      }
+      return true;
+    }
+
     return false;
   }
 

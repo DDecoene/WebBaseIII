@@ -60,7 +60,8 @@ src/
     ReportPreview.ts    iframe-based HTML report preview panel (Esc to close, Ctrl+P to print)
     Assistant.ts        Permanent left sidebar — 6 categories, catalog-driven pickers, action dispatch
     wizards/            Wizard panels (take over main area): WizardShell, DatabaseWizard, TableWizard,
-                        FilterWizard, IndexWizard, SearchWizard, ReportWizard, index.ts dispatcher
+                        FilterWizard, IndexWizard, SearchWizard, ReportWizard, ModStructWizard,
+                        index.ts dispatcher
 
   ws/
     WsClient.ts         Browser WebSocket client — sends commands, receives messages
@@ -91,6 +92,7 @@ tests/
   WorkArea.test.ts      WorkAreaManager unit tests
   ServerDatabaseBridge.test.ts
   ProgramStore.test.ts
+  AlterTable.test.ts    ALTER TABLE + MODIFY STRUCTURE integration tests
   assistant.spec.ts     Playwright: sidebar, wizards, report designer, program run
 ```
 
@@ -130,6 +132,13 @@ WebBase-III supports **unlimited work areas** (no DOS 10-area limit). Cross-area
 | `REPLACE <field> WITH <val>, ...` | Update field(s) on current row |
 | `REPLACE ALL <field> WITH <val>, ...` | Update all (filtered) rows |
 | `SET FILTER TO <expr>` | Set a WHERE clause; empty clears it |
+| `MODIFY STRUCTURE` | Open the Modify-structure wizard for the active table |
+| `ALTER TABLE <t> ADD <col> <type>` | Add a column to a table |
+| `ALTER TABLE <t> DROP <col>` | Remove a column from a table |
+| `ALTER TABLE <t> RENAME <col> TO <new>` | Rename a column |
+| `ALTER TABLE <t> ALTER <col> <type>` | Change a column's type (copy-table dance; data preserved) |
+
+> Column ops that can invalidate an index (DROP, RENAME, ALTER type) drop all of the table's indexes and warn to rebuild with `INDEX ON`.
 
 ### Indexing & search
 | Command | What it does |
@@ -198,6 +207,7 @@ WebBase-III supports **unlimited work areas** (no DOS 10-area limit). Cross-area
 3. ~~Multi-Work-Area~~ — unlimited `SELECT <alias>`, `SET RELATION TO`, `alias.field` notation ✅
 4. ~~Report & Label Engine~~ — `REPORT FORM`, group breaks, subtotals, HTML preview ✅
 5. ~~The Assistant~~ — sidebar GUI, wizards, catalog protocol ✅
+6. ~~Modify Structure~~ — `MODIFY STRUCTURE`, `ALTER TABLE` ADD/DROP/RENAME/ALTER, ModStructWizard, sidebar action ✅
 
 ## Boolean literals
 
