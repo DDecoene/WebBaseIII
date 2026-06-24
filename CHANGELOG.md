@@ -7,6 +7,16 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
 
 ---
 
+## [0.6.3] — 2026-06-24 — `SORT TO`
+
+### Added
+- **`SORT ON <field>[/D] TO <newtable>`** (#8) — writes a sorted copy of the active table to a new table. `/D` sorts descending (default ascending), and the active `SET FILTER` is honoured. Errors if no table is in use, the field doesn't exist, or the target table already exists.
+
+### Notes
+- Implemented as a thin alias over SQLite's `CREATE TABLE … AS SELECT … ORDER BY`. The new table is therefore a plain snapshot — column affinities are inferred and the source PK/constraints are **not** carried over. `SORT` is largely redundant given live indexes + `ORDER BY`; it exists for dBASE III dialect fidelity.
+
+---
+
 ## [0.6.2] — 2026-06-24 — Suspended-program fix
 
 ### Fixed

@@ -178,6 +178,7 @@ export class Executor implements IndexCommandsHost {
         case 'SET_INDEX':   return this.indexCmds.doSetIndex(node.tag);
         case 'REINDEX':     return this.indexCmds.doReindex();
         case 'LIST_INDEXES':return this.indexCmds.doListIndexes();
+        case 'SORT':        return this.doSort(node.field, node.descending, node.target);
         case 'SEEK':        return this.indexCmds.doSeek(node.value);
         case 'FIND':        return this.indexCmds.doFind(node.value);
         case 'DO_CASE':       return this.doCase(node.cases, node.otherwise);
@@ -601,6 +602,33 @@ export class Executor implements IndexCommandsHost {
     return { output: [{ text: `Table created: ${name}`, cls: 'ok' }] };
   }
 
+  private async doSort(field: string, descending: boolean, target: string): Promise<ExecResult> {
+    const source = this.area.table;
+    if (!source) {
+      return { output: [{ text: 'SORT: no table in use', cls: 'error' }] };
+    }
+    // Validate the sort field against the table's columns (also guards the
+    // column name we splice into the ORDER BY clause). SQLite column matching
+    // is case-insensitive, so compare uppercased names.
+    const cols = await this.db.getStructure(source);
+    const col = cols.find(c => c.name.toUpperCase() === field.toUpperCase());
+    if (!col) {
+      return { output: [{ text: `SORT: no such field: ${field}`, cls: 'error' }] };
+    }
+    if (await this.db.tableExists(target)) {
+      return { output: [{ text: `SORT: target table already exists: ${target}`, cls: 'error' }] };
+    }
+    // Thin alias: lean on SQLite's CREATE TABLE ... AS SELECT ... ORDER BY.
+    // Honors the active filter; ignores any active index (SORT defines its own order).
+    const where = this.area.filter ? ` WHERE ${this.area.filter}` : '';
+    const dir = descending ? ' DESC' : '';
+    await this.db.exec(
+      `CREATE TABLE ${q(target)} AS SELECT * FROM ${q(source)}${where} ORDER BY ${q(col.name)}${dir}`
+    );
+    const count = await this.db.getRowCount(target);
+    return { output: [{ text: `Sorted ${count} record(s) into ${target}.`, cls: 'ok' }] };
+  }
+
   private async doDropTable(name: string): Promise<ExecResult> {
     await this.db.exec(`DROP TABLE IF EXISTS ${q(name)}`);
     this.indexStore?.dropTable(name);
@@ -645,6 +673,7 @@ export class Executor implements IndexCommandsHost {
       { text: 'REINDEX                  — rebuild SQLite indexes' },
       { text: 'SEEK <value>             — position to first match in active index' },
       { text: 'FIND <string>            — same as SEEK (legacy string form)' },
+      { text: 'SORT ON <field>[/D] TO <newtable> — sorted copy of the table' },
       { text: 'CREATE REPORT <name>    — create a new report definition (opens editor)' },
       { text: 'MODIFY REPORT <name>    — edit an existing report definition' },
       { text: 'REPORT FORM <name>      — run report: ASCII + HTML preview' },

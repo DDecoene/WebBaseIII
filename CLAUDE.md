@@ -137,6 +137,7 @@ WebBase-III supports **unlimited work areas** (no DOS 10-area limit). Cross-area
 | `LIST INDEXES` | Print all indexes for current table with active marker |
 | `SEEK <expr>` | Position record pointer at first index match |
 | `FIND <string>` | Alias for SEEK (unquoted string — dBASE III legacy) |
+| `SORT ON <field>[/D] TO <newtable>` | Sorted copy of the table into a new table (`/D` descending); honours active filter. Thin alias over `CREATE TABLE AS SELECT … ORDER BY` |
 
 > Index expressions support built-in functions: `INDEX ON UPPER(lastname) TO BYUPPER`
 

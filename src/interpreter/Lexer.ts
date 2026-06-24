@@ -13,7 +13,7 @@ const KWS = new Set([
   'COUNT','LOCATE','CONTINUE','QUIT','FIELDS','HELP',
   'AND','OR','NOT','TRUE','FALSE','CREATE','TABLE','DROP','INDEX','ON',
   'INPUT','ACCEPT','DISPLAY','DATABASE','FOR','NEXT',
-  'SEEK','FIND','REINDEX','INDEXES',
+  'SEEK','FIND','REINDEX','INDEXES','SORT',
   // Multi-work-area
   'SELECT','RELATION','ALIAS','AREAS','INTO',
   // DO CASE control flow

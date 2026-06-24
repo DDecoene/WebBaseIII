@@ -203,6 +203,7 @@ WebBase-III supports **unlimited work areas** — each independently holding a t
 | `LIST INDEXES` | Print all indexes for current table with `*` active marker |
 | `SEEK <expr>` | Position record pointer at first index match |
 | `FIND <string>` | Alias for SEEK (unquoted string — dBASE III legacy form) |
+| `SORT ON <field>[/D] TO <newtable>` | Write a sorted copy of the table to a new table; `/D` = descending; honours the active filter |
 
 ### Reports
 
