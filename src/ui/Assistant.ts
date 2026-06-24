@@ -31,6 +31,8 @@ const CATEGORIES: { name: string; actions: ActionDef[] }[] = [
     { label: 'Open table…', needs: 'db', picker: 'tables', onPick: (n, h) => h.run(`USE ${n}`) },
     { label: 'New table…', needs: 'db', wizard: 'table' },
     { label: 'Structure', needs: 'table', command: 'LIST STRUCTURE' },
+    { label: 'Modify structure…', needs: 'db', picker: 'tables',
+      onPick: (n, h) => { h.run(`USE ${n}`); h.run('MODIFY STRUCTURE'); } },
     { label: 'Drop table…', needs: 'db', picker: 'tables',
       confirm: n => `Drop table ${n}? This permanently deletes the table and all its data.`,
       onPick: (n, h) => h.run(`DROP TABLE ${n}`) },
