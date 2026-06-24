@@ -50,6 +50,11 @@ export type ASTNode =
   | { type: 'DO_CASE'; cases: Array<{ cond: Expr; body: ASTNode[] }>; otherwise: ASTNode[] }
   | { type: 'CREATE_TABLE'; name: string; cols: ColDef[] }
   | { type: 'DROP_TABLE';  name: string }
+  | { type: 'MODIFY_STRUCTURE' }
+  | { type: 'ALTER_TABLE'; name: string; op: 'ADD'; col: string; colType: string }
+  | { type: 'ALTER_TABLE'; name: string; op: 'ALTER'; col: string; colType: string }
+  | { type: 'ALTER_TABLE'; name: string; op: 'DROP'; col: string }
+  | { type: 'ALTER_TABLE'; name: string; op: 'RENAME'; col: string; newName: string }
   | { type: 'DO_PRG';      name: string }
   | { type: 'LIST_PROGRAMS' }
   | { type: 'EDIT_PRG';    name: string }
@@ -133,10 +138,12 @@ export class Parser {
       case 'CREATE':   return this.parseCreate();
       case 'DROP':     return this.parseDrop();
       case 'EDIT':     { this.adv(); return { type: 'EDIT_PRG', name: this.ident() }; }
+      case 'ALTER':    return this.parseAlter();
       case 'MODIFY': {
         this.adv();
         if (this.peekKw('REPORT')) { this.adv(); return { type: 'MODIFY_REPORT', name: this.ident() }; }
-        throw new Error('Expected REPORT after MODIFY');
+        if (this.peekKw('STRUCTURE') || this.peekKw('STRUCT')) { this.adv(); return { type: 'MODIFY_STRUCTURE' }; }
+        throw new Error('Expected REPORT or STRUCTURE after MODIFY');
       }
       case 'REPORT': {
         this.adv();
@@ -421,6 +428,27 @@ export class Parser {
     this.adv();
     this.skipKw('TABLE');
     return { type: 'DROP_TABLE', name: this.ident() };
+  }
+
+  private parseAlter(): ASTNode {
+    this.adv();                       // ALTER
+    this.skipKw('TABLE');
+    const name = this.ident();
+    if (this.peekKw('ADD'))    { this.adv(); this.skipKw('COLUMN'); const col = this.ident(); const colType = this.ident(); this.skipTypeSize(); return { type: 'ALTER_TABLE', name, op: 'ADD', col, colType }; }
+    if (this.peekKw('ALTER'))  { this.adv(); this.skipKw('COLUMN'); const col = this.ident(); const colType = this.ident(); this.skipTypeSize(); return { type: 'ALTER_TABLE', name, op: 'ALTER', col, colType }; }
+    if (this.peekKw('DROP'))   { this.adv(); this.skipKw('COLUMN'); const col = this.ident(); return { type: 'ALTER_TABLE', name, op: 'DROP', col }; }
+    if (this.peekKw('RENAME')) { this.adv(); this.skipKw('COLUMN'); const col = this.ident(); this.skipKw('TO'); const newName = this.ident(); return { type: 'ALTER_TABLE', name, op: 'RENAME', col, newName }; }
+    throw new Error('Expected ADD, DROP, RENAME, or ALTER after ALTER TABLE <name>');
+  }
+
+  // Consume an optional "(n)" length suffix on a type (e.g. CHAR(20)); the
+  // length is ignored — SQLite types are not length-bound (matches CREATE TABLE).
+  private skipTypeSize(): void {
+    if (this.peek().type === 'LPAREN') {
+      this.adv();
+      this.tryNum();
+      if (this.peek().type === 'RPAREN') this.adv();
+    }
   }
 
   private parseAt(): ASTNode {
