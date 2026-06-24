@@ -131,6 +131,23 @@ export class Session {
           }
           break;
 
+        case 'abort-suspended': {
+          // A wizard was opened while a form/grid was suspended. The client has
+          // already torn down the view, so the pending continuation can never be
+          // resumed — drop it cleanly so a later form-submit can't misfire it.
+          if (this.pendingContinuation !== null) {
+            const wasProgram = this.pendingFromProgram;
+            this.pendingContinuation = null;
+            this.pendingFromProgram = false;
+            this.executor.resetProgramDepth();
+            if (wasProgram) {
+              this.send({ type: 'output', lines: [{ text: '** Program aborted (a wizard was opened).', cls: 'warn' }] });
+            }
+            this.sendStatus();
+          }
+          break;
+        }
+
         case 'save-program': {
           const safeName = msg.name.replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase();
           if (!safeName) break;

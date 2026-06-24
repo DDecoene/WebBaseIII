@@ -204,6 +204,53 @@ describe('Session', () => {
     expect(allText).toContain('beta');
   });
 
+  it('abort-suspended cleanly abandons a program suspended at READ', async () => {
+    const { session, sent } = makeSession();
+    const db = uniqueDb();
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    await session.handleMessage({ type: 'command', text: 'CREATE TABLE abort_tbl (val TEXT)' });
+    await session.handleMessage({ type: 'command', text: 'USE abort_tbl' });
+
+    // Program suspends at READ, then would append a record on resume.
+    await session.handleMessage({
+      type: 'save-program', name: 'test_abort_prog',
+      content: [
+        'STORE "" TO val',
+        '@ 1,1 SAY "Value:" GET val',
+        'READ',
+        'APPEND RECORD',
+        'REPLACE val WITH "resumed"',
+      ].join('\n'),
+    });
+
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: 'DO test_abort_prog' });
+    expect(sent.find(m => m.type === 'form-open')).toBeDefined();
+
+    // Open a wizard → client tears down the form and tells the server to abort.
+    sent.length = 0;
+    await session.handleMessage({ type: 'abort-suspended' });
+    // A notice should be emitted that the program was aborted.
+    const noticeText = sent
+      .filter(m => m.type === 'output')
+      .flatMap((m: any) => m.lines.map((l: any) => l.text))
+      .join(' ');
+    expect(noticeText.toLowerCase()).toContain('abort');
+
+    // A stale form-submit must NOT resume the abandoned program.
+    sent.length = 0;
+    await session.handleMessage({ type: 'form-submit', values: { VAL: 'resumed' } });
+
+    // No record should have been appended — the program was abandoned.
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: 'LIST' });
+    const listText = sent
+      .filter(m => m.type === 'output')
+      .flatMap((m: any) => m.lines.map((l: any) => l.text))
+      .join(' ');
+    expect(listText).not.toContain('resumed');
+  });
+
   it('STORE stays silent in program continuations after READ', async () => {
     const { session, sent } = makeSession();
     await session.handleMessage({

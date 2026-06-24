@@ -27,6 +27,10 @@ export function openWizard(
 ): void {
   const run = (cmd: string) => { terminal.runCommand(cmd); refresh(); };
   const onClose = () => terminal.showTerminal();
+  // If a form/grid was suspended (e.g. a DO program paused at READ/BROWSE),
+  // showWizardView tears it down client-side; tell the server to abandon the
+  // orphaned continuation so a later form-submit can't misfire it.
+  ws.send({ type: 'abort-suspended' });
   showWizardView(terminal);
   switch (name) {
     case 'database': return openDatabaseWizard(run, onClose);

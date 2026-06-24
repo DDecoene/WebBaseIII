@@ -107,6 +107,7 @@ export type ClientMessage =
   | { type: 'grid-new-row' }
   | { type: 'grid-refresh' }
   | { type: 'grid-exit' }
+  | { type: 'abort-suspended' }
   | { type: 'save-program'; name: string; content: string }
   | { type: 'catalog-request' };
 
