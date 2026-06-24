@@ -2,6 +2,9 @@
 
 Issue: #8 — `SORT TO` — physically sorted copy of a table.
 
+**Status:** Implemented in v0.6.3 (PR #14). Built as designed; the thin-alias
+trade-off below is the one accepted deviation from faithful dBASE behaviour.
+
 ## Decision
 
 `SORT` is authentic dBASE III but largely redundant in WebBase-III's SQLite model
