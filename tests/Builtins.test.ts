@@ -83,6 +83,47 @@ describe('CTOD', () => {
   it('MM/DD/YY to ISO', () => expect(callStateless('CTOD', ['06/07/26'])).toBe('2026-06-07'));
 });
 
+describe('ROUND', () => {
+  it('rounds to specified decimals', () => expect(callStateless('ROUND', [3.14159, 2])).toBe(3.14));
+  it('defaults to 0 decimals', () => expect(callStateless('ROUND', [3.9])).toBe(4));
+});
+
+describe('MOD', () => {
+  it('calculates remainder', () => expect(callStateless('MOD', [10, 3])).toBe(1));
+});
+
+describe('MAX', () => {
+  it('returns the larger number', () => expect(callStateless('MAX', [10, 20])).toBe(20));
+  it('handles negatives', () => expect(callStateless('MAX', [-5, -1])).toBe(-1));
+});
+
+describe('MIN', () => {
+  it('returns the smaller number', () => expect(callStateless('MIN', [10, 20])).toBe(10));
+  it('handles negatives', () => expect(callStateless('MIN', [-5, -1])).toBe(-5));
+});
+
+describe('TIME', () => {
+  it('returns HH:MM:SS format', () => {
+    const result = callStateless('TIME', []) as string;
+    expect(result).toMatch(/^\d{2}:\d{2}:\d{2}$/);
+  });
+});
+
+describe('YEAR', () => {
+  it('extracts year from ISO date', () => expect(callStateless('YEAR', ['2024-05-12'])).toBe(2024));
+  it('invalid date returns 0', () => expect(callStateless('YEAR', ['not-a-date'])).toBe(0));
+});
+
+describe('MONTH', () => {
+  it('extracts month from ISO date', () => expect(callStateless('MONTH', ['2024-05-12'])).toBe(5));
+  it('invalid date returns 0', () => expect(callStateless('MONTH', ['not-a-date'])).toBe(0));
+});
+
+describe('DAY', () => {
+  it('extracts day from ISO date', () => expect(callStateless('DAY', ['2024-05-12'])).toBe(12));
+  it('invalid date returns 0', () => expect(callStateless('DAY', ['not-a-date'])).toBe(0));
+});
+
 describe('unknown function', () => {
   it('throws', () => expect(() => callStateless('FOOBAR', [])).toThrow('Unknown function: FOOBAR'));
 });

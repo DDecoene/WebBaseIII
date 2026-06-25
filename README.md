@@ -280,6 +280,14 @@ Functions work anywhere an expression is accepted — `IF`, `DO WHILE`, `STORE`,
 | `DATE()` | Today as `MM/DD/YY` |
 | `DTOC(date)` | Date to display string `MM/DD/YY` |
 | `CTOD(str)` | Display string `MM/DD/YY` to ISO date |
+| `ROUND(num, dec)` | Rounds number to `dec` decimal places (default 0) |
+| `MOD(a, b)` | Remainder of `a` divided by `b` |
+| `MAX(a, b)` | Maximum of `a` and `b` |
+| `MIN(a, b)` | Minimum of `a` and `b` |
+| `TIME()` | Current time as `HH:MM:SS` |
+| `YEAR(date)` | Numeric year from ISO date string |
+| `MONTH(date)` | Numeric month from ISO date string |
+| `DAY(date)` | Numeric day from ISO date string |
 
 ### Boolean literals
 
