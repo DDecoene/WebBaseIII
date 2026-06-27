@@ -147,6 +147,8 @@ WebBase-III supports **unlimited work areas** (no DOS 10-area limit). Cross-area
 | `SET FILTER TO <expr>` | Set a WHERE clause; empty clears it |
 | `SUM <field> [FOR <cond>]` | Total a numeric field over the current table (honours active filter) |
 | `AVERAGE <field> [FOR <cond>]` | Mean of a numeric field over the current table (honours active filter) |
+| `COPY TO <file>.csv` | Export current table to a CSV the browser downloads (header CSV, honours filter + index order; max 50k rows) |
+| `APPEND FROM <file>.csv` | Import a header CSV (browser file picker) into the current table; lenient ≤10 bad rows, else abort; max 5 MB |
 | `MODIFY STRUCTURE` | Open the Modify-structure wizard for the active table |
 | `ALTER TABLE <t> ADD <col> <type>` | Add a column to a table |
 | `ALTER TABLE <t> DROP <col>` | Remove a column from a table |
@@ -237,7 +239,7 @@ npm test                # Vitest unit + integration (164 tests)
 npx playwright test     # E2E browser tests — requires dev server on :5173/:3000
 ```
 
-Playwright suites: `tests/integration.spec.ts` (20 tests — full REPL scenario), `tests/assistant.spec.ts` (8 tests — sidebar, wizards, report designer, program run), `tests/inventory.spec.ts` (5 tests — INVENTORY.prg menu), `tests/multiarea.spec.ts` (4 tests — multi-work-area, relations, alias.field), `tests/demos.spec.ts` (3 tests — demo program seeding), `tests/splash.spec.ts` (1 test — version banner).
+Playwright suites: `tests/integration.spec.ts` (20 tests — full REPL scenario), `tests/assistant.spec.ts` (8 tests — sidebar, wizards, report designer, program run), `tests/inventory.spec.ts` (5 tests — INVENTORY.prg menu), `tests/multiarea.spec.ts` (4 tests — multi-work-area, relations, alias.field), `tests/demos.spec.ts` (3 tests — demo program seeding), `tests/splash.spec.ts` (1 test — version banner), `tests/copycsv.spec.ts` (2 tests — COPY TO download + APPEND FROM upload).
 
 ## Definition of done
 

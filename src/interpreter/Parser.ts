@@ -41,6 +41,8 @@ export type ASTNode =
   | { type: 'SET_FILTER';  expr: string | null }
   | { type: 'REPLACE_ALL'; fields: Array<{ field: string; value: Expr }>; scope: 'ALL' | 'CURRENT' }
   | { type: 'APPEND' }
+  | { type: 'COPY_TO';     file: string }
+  | { type: 'APPEND_FROM'; file: string }
   | { type: 'DELETE';      scope: 'CURRENT' | 'ALL' }
   | { type: 'RECALL';      scope: 'CURRENT' | 'ALL' }
   | { type: 'GO';          target: 'TOP' | 'BOTTOM' | number }
@@ -133,7 +135,8 @@ export class Parser {
       case 'PACK':     this.adv(); return { type: 'PACK' };
       case 'SET':      return this.parseSet();
       case 'REPLACE':  return this.parseReplace();
-      case 'APPEND':   this.adv(); this.skipKw('RECORD'); this.skipKw('BLANK'); return { type: 'APPEND' };
+      case 'APPEND':   { this.adv(); if (this.peekKw('FROM')) { this.adv(); return { type: 'APPEND_FROM', file: this.parseFilename() }; } this.skipKw('RECORD'); this.skipKw('BLANK'); return { type: 'APPEND' }; }
+      case 'COPY':     { this.adv(); this.expectKw('TO'); return { type: 'COPY_TO', file: this.parseFilename() }; }
       case 'DELETE':   { this.adv(); if (this.peekKw('REPORT')) { this.adv(); return { type: 'DELETE_REPORT', name: this.ident() }; } return { type: 'DELETE', scope: this.consumeScope() }; }
       case 'RECALL':   this.adv(); return { type: 'RECALL', scope: this.consumeScope() };
       case 'GO':       return this.parseGo();
@@ -596,6 +599,18 @@ export class Parser {
       forCond = parts.length ? parts.join(' ') : null;
     }
     return { type: 'AGGREGATE', op, field, forCond };
+  }
+
+  // A filename like customers.csv lexes as ID '.' ID; rebuild it by joining the raw
+  // token values until end of statement. The lexer upper-cases identifiers (it is
+  // case-insensitive), so filenames are normalised to lower case — dBASE filenames
+  // were case-insensitive, and lower-case .csv is the web-friendly convention.
+  private parseFilename(): string {
+    let name = '';
+    while (!this.end() && this.peek().type !== 'NL' && this.peek().type !== 'SEMI' && this.peek().type !== 'EOF') {
+      name += this.adv().val;
+    }
+    return name.trim().toLowerCase();
   }
 
   private parsePrint(): ASTNode {

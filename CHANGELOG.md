@@ -20,6 +20,14 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
   Playwright e2e coverage for the parity commands.
 
 ### Added
+- **`COPY TO` / `APPEND FROM` CSV import/export** (#5). `COPY TO <file>.csv` downloads
+  the current table (honouring the active `SET FILTER` and index order, max 50,000
+  rows); `APPEND FROM <file>.csv` opens a browser file picker and bulk-imports
+  (max 5 MB). **Deliberate deviation from dBASE III:** dBASE used headerless,
+  positional `DELIMITED`/`SDF` formats; WebBase-III uses modern header-based CSV
+  (RFC-4180), mapped by column name. Import is lenient — up to 10 malformed rows are
+  skipped and reported with line number + reason; more than 10 aborts (no rows
+  appended).
 - **`SUM` / `AVERAGE` commands** (#3) — `SUM <field> [FOR <cond>]` and
   `AVERAGE <field> [FOR <cond>]` aggregate a numeric field over the current table,
   honouring the active `SET FILTER` plus an optional `FOR` condition. SQLite does

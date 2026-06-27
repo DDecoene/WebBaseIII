@@ -109,7 +109,8 @@ export type ClientMessage =
   | { type: 'grid-exit' }
   | { type: 'abort-suspended' }
   | { type: 'save-program'; name: string; content: string }
-  | { type: 'catalog-request' };
+  | { type: 'catalog-request' }
+  | { type: 'csv-upload'; filename: string; content: string };
 
 // Server → Client
 export type ServerMessage =
@@ -124,4 +125,6 @@ export type ServerMessage =
   | { type: 'clear' }
   | { type: 'report-preview'; html: string }
   | { type: 'error'; message: string }
-  | { type: 'catalog'; catalog: Catalog };
+  | { type: 'catalog'; catalog: Catalog }
+  | { type: 'csv-download'; filename: string; content: string }
+  | { type: 'csv-upload-open'; table: string; filename: string };
