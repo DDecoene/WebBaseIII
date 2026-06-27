@@ -792,6 +792,9 @@ export class Executor implements IndexCommandsHost {
     if (await this.db.tableExists(target)) {
       return { output: [{ text: `JOIN: target table already exists: ${target}`, cls: 'error' }] };
     }
+    if (fields && fields.length === 0) {
+      return { output: [{ text: 'JOIN: FIELDS clause is empty — list at least one field or omit FIELDS', cls: 'error' }] };
+    }
 
     const aQ = q(activeArea.alias);
     const bQ = q(withArea.alias);
@@ -825,7 +828,12 @@ export class Executor implements IndexCommandsHost {
       `CREATE TABLE ${q(target)} AS SELECT ${projection} ` +
       `FROM ${q(activeTable)} AS ${aQ} ` +
       `JOIN ${q(withArea.table)} AS ${bQ} ON (${forCond})${where}`;
-    await this.db.exec(sql);
+    try {
+      await this.db.exec(sql);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return { output: [{ text: `JOIN failed: ${msg}`, cls: 'error' }] };
+    }
 
     const count = await this.db.getRowCount(target);
     return { output: [...warnings, { text: `Joined ${count} record(s) into ${target}.`, cls: 'ok' }] };

@@ -154,6 +154,40 @@ describe('JOIN integration', () => {
     expect(listText(sent)).toMatch(/already exists: CUSTORD/i);
   });
 
+  it('errors on an empty FIELDS clause', async () => {
+    const { sent, run } = await seedTwoAreas();
+    await run('JOIN WITH ORD TO custord FOR CUST.id = ORD.custid FIELDS');
+    expect(listText(sent)).toMatch(/FIELDS .*empty|empty FIELDS|requires at least one field/i);
+  });
+
+  it('reports a friendly error when the FOR references an unknown column', async () => {
+    const { sent, run } = await seedTwoAreas();
+    await run('JOIN WITH ORD TO custord FOR CUST.nope = ORD.custid');
+    const out = listText(sent);
+    expect(out).toMatch(/JOIN failed/i);
+    expect(out).not.toMatch(/Joined/i);
+  });
+
+  it('errors when the two areas are in different databases', async () => {
+    const { session, sent } = makeSession();
+    const run = (text: string) => session.handleMessage({ type: 'command', text });
+    const dbA = `test_join_${++dbCounter}`;
+    const dbB = `test_join_${++dbCounter}`;
+    await run(`USE DATABASE ${dbA}`);
+    await run('CREATE TABLE a (id NUMERIC, name TEXT)');
+    await run('USE a');
+    await run('APPEND RECORD'); await run('REPLACE id WITH 1, name WITH "Alice"');
+    await run('SELECT OTHER');
+    await run(`USE DATABASE ${dbB}`);
+    await run('CREATE TABLE b (id NUMERIC, qty NUMERIC)');
+    await run('USE b');
+    await run('APPEND RECORD'); await run('REPLACE id WITH 1, qty WITH 5');
+    // Back to area 1 (db A, table a) as active:
+    await run('SELECT 1');
+    await run('JOIN WITH OTHER TO ab FOR id = OTHER.id');
+    expect(listText(sent)).toMatch(/different database|cross-database/i);
+  });
+
   it('warns and drops the alias duplicate on a column-name clash', async () => {
     const { session, sent } = makeSession();
     const db = `test_join_${++dbCounter}`;
