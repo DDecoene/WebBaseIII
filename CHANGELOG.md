@@ -12,6 +12,10 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
 > Parity milestone. Accumulates on `release/v1.0.0`; tagged when it merges to `main`.
 
 ### Added
+- **`SUM` / `AVERAGE` commands** (#3) — `SUM <field> [FOR <cond>]` and
+  `AVERAGE <field> [FOR <cond>]` aggregate a numeric field over the current table,
+  honouring the active `SET FILTER` plus an optional `FOR` condition. SQLite does
+  the aggregation server-side; the result prints right-justified like `?`.
 - **`?` / `??` print command** (#2) — evaluate an expression (or a comma-separated
   list) and print the result. Strings print unquoted, booleans as `.T.`/`.F.`, and
   numbers right-justified in a 10-wide field (dBASE III numeric display). A bare
