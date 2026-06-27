@@ -7,6 +7,19 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
 
 ---
 
+## [1.0.0] — unreleased — feature-complete
+
+> Parity milestone. Accumulates on `release/v1.0.0`; tagged when it merges to `main`.
+
+### Added
+- **`?` / `??` print command** (#2) — evaluate an expression (or a comma-separated
+  list) and print the result. Strings print unquoted, booleans as `.T.`/`.F.`, and
+  numbers right-justified in a 10-wide field (dBASE III numeric display). A bare
+  `?` prints a blank line. `??` is accepted; its "no leading newline" semantics are
+  not expressible in the line-based web terminal, so it shares `?`'s formatting.
+
+---
+
 ## [0.8.0] — 2026-06-27 — More built-in functions
 
 ### Added

@@ -82,6 +82,13 @@ export class Lexer {
         continue;
       }
 
+      // dBASE print command: ? (with leading newline) and ?? (no newline)
+      if (ch === '?') {
+        if (this.src[this.p + 1] === '?') { this.emit('OP', '??'); }
+        else { this.emit('OP', '?'); }
+        continue;
+      }
+
       if (ch === '@') { this.emit('AT', '@'); continue; }
       if (ch === ',') { this.emit('COMMA', ','); continue; }
       if (ch === ';') { this.emit('SEMI', ';'); continue; }

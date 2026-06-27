@@ -238,6 +238,7 @@ WebBase-III supports **unlimited work areas** — each independently holding a t
 
 | Command | What it does |
 |---|---|
+| `? <expr>[, <expr>...]` | Evaluate expression(s) and print the result (numbers right-justified; bare `?` prints a blank line; `??` also accepted) |
 | `STORE <val> TO <var>` | Assign a variable |
 | `INPUT "prompt" TO <var>` | Collect keyboard input |
 | `@ r,c SAY "text" GET <var>` | Define a form field |

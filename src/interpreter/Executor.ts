@@ -151,6 +151,7 @@ export class Executor implements IndexCommandsHost {
         case 'LIST_AREAS':  return this.doListAreas();
         case 'LIST_COLS':   return this.doListCols(node.cols);
         case 'BROWSE':      return { output: [], action: 'BROWSE' };
+        case 'PRINT':       return this.doPrint(node.exprs);
         case 'CLEAR':       return { output: [{ text: '', cls: 'clear' }] };
         case 'QUIT':        return { output: [], action: 'QUIT' };
         case 'HELP':        return this.doHelp();
@@ -529,6 +530,17 @@ export class Executor implements IndexCommandsHost {
     this.vars.set(varName, v);
     if (this.programDepth > 0) return { output: [] };
     return { output: [{ text: `${varName} = ${fmtVal(v)}`, cls: 'info' }] };
+  }
+
+  // dBASE ? / ?? — evaluate expression(s) and print the result. A bare ? prints a
+  // blank line. Multiple comma-separated expressions are joined by a single space.
+  // (?? "no leading newline" semantics aren't expressible in the line-based web
+  // terminal, so ?? shares ?'s formatting.)
+  private async doPrint(exprs: Expr[]): Promise<ExecResult> {
+    await this.refreshRecCount();
+    if (exprs.length === 0) return { output: [{ text: '', cls: 'info' }] };
+    const text = exprs.map(e => fmtPrint(this.evalExpr(e))).join(' ');
+    return { output: [{ text, cls: 'info' }] };
   }
 
   private doInput(prompt: string, varName: string): ExecResult {
@@ -1041,6 +1053,16 @@ export class Executor implements IndexCommandsHost {
 function fmtVal(v: unknown): string {
   if (typeof v === 'boolean') return v ? '.T.' : '.F.';
   if (typeof v === 'string') return `"${v}"`;
+  return String(v);
+}
+
+// Formatting for the ? / ?? print command: strings unquoted, booleans as .T./.F.,
+// numbers right-justified in a 10-wide field (dBASE III numeric display, matching
+// STR()'s default width).
+function fmtPrint(v: unknown): string {
+  if (typeof v === 'boolean') return v ? '.T.' : '.F.';
+  if (typeof v === 'number') return String(v).padStart(10);
+  if (v === null || v === undefined) return '';
   return String(v);
 }
 
