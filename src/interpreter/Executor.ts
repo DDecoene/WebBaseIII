@@ -806,8 +806,18 @@ export class Executor implements IndexCommandsHost {
         return q(f);
       }).join(', ');
     } else {
-      // Default projection arrives in Task 3.
-      projection = '*';
+      const activeCols = await this.db.getStructure(activeTable);
+      const withCols = await this.db.getStructure(withArea.table);
+      const activeNames = new Set(activeCols.map(c => c.name.toUpperCase()));
+      const parts = activeCols.map(c => `${aQ}.${q(c.name)}`);
+      for (const c of withCols) {
+        if (activeNames.has(c.name.toUpperCase())) {
+          warnings.push({ text: `JOIN: dropped duplicate column '${c.name}' from ${withArea.alias} (active wins)`, cls: 'warn' });
+          continue;
+        }
+        parts.push(`${bQ}.${q(c.name)}`);
+      }
+      projection = parts.join(', ');
     }
 
     const where = activeArea.filter ? ` WHERE (${activeArea.filter})` : '';

@@ -115,4 +115,35 @@ describe('JOIN integration', () => {
     // Alice (id 1) matches 2 orders, Bob (id 2) matches 1 → 3 rows, never 6 (cross product).
     expect(listText(sent)).toMatch(/Joined 3 record/i);
   });
+
+  it('default projection takes active columns then non-clashing alias columns', async () => {
+    const { sent, run } = await seedTwoAreas();
+    await run('JOIN WITH ORD TO custord FOR CUST.id = ORD.custid');
+    sent.length = 0;
+    await run('USE custord');
+    await run('LIST STRUCTURE');
+    const out = listText(sent).toUpperCase();
+    // Active (customers) columns present: ID, NAME, CITY. Alias-only column: AMOUNT.
+    expect(out).toMatch(/NAME/);
+    expect(out).toMatch(/CITY/);
+    expect(out).toMatch(/AMOUNT/);
+  });
+
+  it('warns and drops the alias duplicate on a column-name clash', async () => {
+    const { session, sent } = makeSession();
+    const db = `test_join_${++dbCounter}`;
+    const run = (text: string) => session.handleMessage({ type: 'command', text });
+    await run(`USE DATABASE ${db}`);
+    // Both tables have a column named CODE → clash on default projection.
+    await run('CREATE TABLE a (code NUMERIC, label TEXT)');
+    await run('CREATE TABLE b (code NUMERIC, qty NUMERIC)');
+    await run('SELECT BB'); await run(`USE DATABASE ${db}`); await run('USE b');
+    await run('APPEND RECORD'); await run('REPLACE code WITH 1, qty WITH 9');
+    await run('SELECT AA'); await run(`USE DATABASE ${db}`); await run('USE a');
+    await run('APPEND RECORD'); await run('REPLACE code WITH 1, label WITH "x"');
+    await run('JOIN WITH BB TO ab FOR AA.code = BB.code');
+    const out = listText(sent);
+    expect(out).toMatch(/dropped.*code/i);     // warning mentions the dropped column
+    expect(out).toMatch(/Joined 1 record/i);
+  });
 });
