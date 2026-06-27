@@ -7,6 +7,26 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
 
 ---
 
+## [1.1.0] — 2026-06-27 — Live multiuser data propagation
+
+### Added
+- Live multiuser data propagation (#11): when one session mutates a table, every
+  other session currently BROWSE-ing that same table refreshes automatically — no
+  manual re-query. Type in one browser window, watch another repaint.
+  - New `data-changed` WebSocket message and `SessionManager.broadcast(db, table)`
+    with server-side relevance filtering (only sessions viewing the affected
+    table are notified) and per-table debounce (a burst coalesces into one
+    refresh).
+  - Mutation chokepoint: `ServerDatabaseBridge.exec()` fires an `onMutate` hook,
+    so every write path (`REPLACE`, `APPEND`, `DELETE`, `PACK`, grid edits, …)
+    triggers propagation with no per-command bookkeeping.
+
+### Fixed
+- `closeDatabase` no longer closes the SQLite handle shared across sessions — one
+  user closing a database no longer breaks everyone else's queries.
+
+---
+
 ## [0.8.0] — 2026-06-27 — More built-in functions
 
 ### Added

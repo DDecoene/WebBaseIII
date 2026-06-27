@@ -8,6 +8,15 @@ const DATA_DIR = path.join(process.cwd(), 'data');
 // Shared across sessions — one Database instance per named DB file
 const openDbs = new Map<string, Database.Database>();
 
+/** FOR TESTS ONLY — close and evict a named DB from the shared pool. */
+export function __closeAndEvictForTest(dbName: string): void {
+  const db = openDbs.get(dbName);
+  if (db) {
+    db.close();
+    openDbs.delete(dbName);
+  }
+}
+
 function getDb(dbName: string): Database.Database {
   if (!openDbs.has(dbName)) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -21,6 +30,7 @@ function getDb(dbName: string): Database.Database {
 export class ServerDatabaseBridge implements IDatabaseBridge {
   public opfsAvailable = false;
   public currentDb: string | null = null;
+  public onMutate: (() => void) | null = null;
   private db: Database.Database | null = null;
 
   async openDatabase(dbName: string): Promise<{ dbName: string; opfsAvailable: boolean }> {
@@ -33,12 +43,9 @@ export class ServerDatabaseBridge implements IDatabaseBridge {
   }
 
   async closeDatabase(): Promise<void> {
-    if (this.db) {
-      this.db.close();
-    }
-    if (this.currentDb) {
-      openDbs.delete(this.currentDb);
-    }
+    // The handle in `openDbs` is shared across all sessions, so we must NOT
+    // close it here — that would break every other session using the same DB.
+    // WAL handles stay open for the process lifetime; just detach this session.
     this.db = null;
     this.currentDb = null;
   }
@@ -46,6 +53,7 @@ export class ServerDatabaseBridge implements IDatabaseBridge {
   async exec(sql: string, params?: unknown[]): Promise<void> {
     if (!this.db) throw new Error('No database open — run: USE <tablename>');
     this.db.prepare(sql).run(...(params ?? []));
+    this.onMutate?.();
   }
 
   async query(sql: string, params?: unknown[]): Promise<Record<string, unknown>[]> {

@@ -93,6 +93,7 @@ Wizards open in the main area with a live W3Script preview.
 | **Program files** | Save, edit, and run `.prg` scripts with `DO` / `EDIT` |
 | **The Assistant** | Permanent left sidebar — open databases/tables, browse, filter, index, search, design reports, run programs without typing |
 | **Multi-user** | Each WebSocket connection gets its own isolated interpreter session |
+| **Live propagation** | Edit a record in one session and every other session BROWSE-ing that table refreshes automatically — no re-query |
 | **Persistent storage** | `better-sqlite3` with WAL mode — databases survive server restart |
 
 ---

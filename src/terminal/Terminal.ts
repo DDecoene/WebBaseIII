@@ -70,6 +70,14 @@ export class Terminal {
       this.openGrid(m.table, m.filter, m.columns, m.rows);
     });
 
+    ws.on('data-changed', (msg) => {
+      const m = msg as any;
+      // Only refresh if we're currently BROWSE-ing the affected table.
+      if (this.grid && this.grid.tableName.toLowerCase() === String(m.table).toLowerCase()) {
+        this.ws.send({ type: 'grid-refresh' });
+      }
+    });
+
     ws.on('form-open', (msg) => {
       const m = msg as any;
       this.openForm(m.fields);
