@@ -245,6 +245,7 @@ Complete these steps **in order** — do not skip or reorder:
 
 1. **Branch correctly** — work sits on a `feature/<name>` branched off the milestone's `release/vX.Y.Z`; the PR is based on that release branch, **not** `main` (see Git conventions → GitFlow). Confirm the issue is assigned to the matching milestone.
 2. `npm test` passes — all tests green
+   - **Every user-facing command/feature gets a Playwright e2e case, not just a vitest unit/integration test.** A REPL command needs at least one `tests/*.spec.ts` case that types it and asserts the rendered terminal/UI result; browser-only behavior (downloads, uploads, grid, wizards) must be exercised in a real browser. Unit coverage alone is not "done".
 3. `package.json` version = the milestone's version (set on the `release/vX.Y.Z` branch); patch bumps for hotfixes
 4. `CHANGELOG.md` — add entry (Added / Fixed / Changed sections) under the milestone version heading
 5. `README.md` — command tables and feature list reflect what was built

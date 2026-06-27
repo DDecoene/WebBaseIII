@@ -11,6 +11,14 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
 
 > Parity milestone. Accumulates on `release/v1.0.0`; tagged when it merges to `main`.
 
+### Fixed
+- The #4 built-ins (`ROUND`, `MOD`, `MAX`, `MIN`, `TIME`, `YEAR`, `MONTH`, `DAY`,
+  shipped in 0.8.0) were implemented in `Builtins.ts` but never registered in the
+  parser's `BUILTIN_FUNCTIONS` whitelist, so calling them from the REPL failed with
+  `Unknown command: (`. They are now registered and reachable. The unit tests
+  passed only because they called the implementation directly — caught by adding
+  Playwright e2e coverage for the parity commands.
+
 ### Added
 - **`SUM` / `AVERAGE` commands** (#3) — `SUM <field> [FOR <cond>]` and
   `AVERAGE <field> [FOR <cond>]` aggregate a numeric field over the current table,
