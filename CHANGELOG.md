@@ -27,6 +27,42 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
 
 ---
 
+## [1.0.0] — 2026-06-27 — dBASE III parity complete
+
+> The feature-complete parity milestone: `?`/`??`, `SUM`/`AVERAGE`, the extra
+> built-ins (#4), `SORT ON … TO` (#8), `COPY TO`/`APPEND FROM` CSV (#5), on top of
+> indexing, language completeness, multi-work-area, reports, the Assistant, and
+> MODIFY STRUCTURE. Backed by 239 vitest + 49 Playwright tests, CI-gated.
+
+### Fixed
+- The #4 built-ins (`ROUND`, `MOD`, `MAX`, `MIN`, `TIME`, `YEAR`, `MONTH`, `DAY`,
+  shipped in 0.8.0) were implemented in `Builtins.ts` but never registered in the
+  parser's `BUILTIN_FUNCTIONS` whitelist, so calling them from the REPL failed with
+  `Unknown command: (`. They are now registered and reachable. The unit tests
+  passed only because they called the implementation directly — caught by adding
+  Playwright e2e coverage for the parity commands.
+
+### Added
+- **`COPY TO` / `APPEND FROM` CSV import/export** (#5). `COPY TO <file>.csv` downloads
+  the current table (honouring the active `SET FILTER` and index order, max 50,000
+  rows); `APPEND FROM <file>.csv` opens a browser file picker and bulk-imports
+  (max 5 MB). **Deliberate deviation from dBASE III:** dBASE used headerless,
+  positional `DELIMITED`/`SDF` formats; WebBase-III uses modern header-based CSV
+  (RFC-4180), mapped by column name. Import is lenient — up to 10 malformed rows are
+  skipped and reported with line number + reason; more than 10 aborts (no rows
+  appended).
+- **`SUM` / `AVERAGE` commands** (#3) — `SUM <field> [FOR <cond>]` and
+  `AVERAGE <field> [FOR <cond>]` aggregate a numeric field over the current table,
+  honouring the active `SET FILTER` plus an optional `FOR` condition. SQLite does
+  the aggregation server-side; the result prints right-justified like `?`.
+- **`?` / `??` print command** (#2) — evaluate an expression (or a comma-separated
+  list) and print the result. Strings print unquoted, booleans as `.T.`/`.F.`, and
+  numbers right-justified in a 10-wide field (dBASE III numeric display). A bare
+  `?` prints a blank line. `??` is accepted; its "no leading newline" semantics are
+  not expressible in the line-based web terminal, so it shares `?`'s formatting.
+
+---
+
 ## [0.8.0] — 2026-06-27 — More built-in functions
 
 ### Added

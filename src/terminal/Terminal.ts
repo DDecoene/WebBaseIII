@@ -78,6 +78,40 @@ export class Terminal {
       }
     });
 
+    ws.on('csv-download', (msg) => {
+      const m = msg as any;
+      const blob = new Blob([m.content], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = m.filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    });
+
+    ws.on('csv-upload-open', () => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.csv,text/csv';
+      input.style.display = 'none';
+      input.addEventListener('change', () => {
+        const file = input.files?.[0];
+        input.remove();
+        if (!file) return;
+        if (file.size > 5 * 1024 * 1024) { // keep in sync with MAX_IMPORT_BYTES in src/shared/csv.ts
+          this.printLine(`** ${file.name} is ${(file.size / 1048576).toFixed(1)} MB; the limit is 5 MB.`, 'error');
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => this.ws.send({ type: 'csv-upload', filename: file.name, content: String(reader.result ?? '') });
+        reader.readAsText(file);
+      });
+      document.body.appendChild(input);
+      input.click();
+    });
+
     ws.on('form-open', (msg) => {
       const m = msg as any;
       this.openForm(m.fields);

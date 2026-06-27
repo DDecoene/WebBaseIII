@@ -10,7 +10,7 @@ const KWS = new Set([
   'APPEND','RECORD','BLANK','READ','IF','ENDIF','ELSE','STORE','SAY','GET',
   'DO','WHILE','ENDDO','RETURN','CLOSE','TABLES','STRUCTURE','DATABASES',
   'DELETE','RECALL','PACK','GO','GOTO','TOP','BOTTOM','SKIP',
-  'COUNT','LOCATE','CONTINUE','QUIT','FIELDS','HELP',
+  'COUNT','LOCATE','CONTINUE','QUIT','FIELDS','HELP','SUM','AVERAGE','COPY','FROM',
   'AND','OR','NOT','TRUE','FALSE','CREATE','TABLE','DROP','INDEX','ON',
   'INPUT','ACCEPT','DISPLAY','DATABASE','FOR','NEXT',
   'SEEK','FIND','REINDEX','INDEXES','SORT',
@@ -79,6 +79,13 @@ export class Lexer {
         // Plain dot (alias.field separator)
         this.toks.push({ type: 'DOT', val: '.', line: this.ln, col: this.col });
         this.p++; this.col++;
+        continue;
+      }
+
+      // dBASE print command: ? (with leading newline) and ?? (no newline)
+      if (ch === '?') {
+        if (this.src[this.p + 1] === '?') { this.emit('OP', '??'); }
+        else { this.emit('OP', '?'); }
         continue;
       }
 

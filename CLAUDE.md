@@ -106,7 +106,13 @@ tests/
   ServerDatabaseBridge.test.ts
   ProgramStore.test.ts
   AlterTable.test.ts    ALTER TABLE + MODIFY STRUCTURE integration tests
+  Print.test.ts         `?` / `??` print command
+  Aggregate.test.ts     `SUM` / `AVERAGE`
+  Builtins.test.ts / BuiltinsParse.test.ts   built-in functions (direct + through the parser)
+  Csv.test.ts           RFC-4180 CSV codec (toCSV/parseCSV)
+  CopyCsv.test.ts       COPY TO / APPEND FROM integration
   assistant.spec.ts     Playwright: sidebar, wizards, report designer, program run
+  parity-commands.spec.ts / copycsv.spec.ts   Playwright: parity commands + CSV download/upload
 ```
 
 ## W3Script commands
@@ -145,6 +151,10 @@ WebBase-III supports **unlimited work areas** (no DOS 10-area limit). Cross-area
 | `REPLACE <field> WITH <val>, ...` | Update field(s) on current row |
 | `REPLACE ALL <field> WITH <val>, ...` | Update all (filtered) rows |
 | `SET FILTER TO <expr>` | Set a WHERE clause; empty clears it |
+| `SUM <field> [FOR <cond>]` | Total a numeric field over the current table (honours active filter) |
+| `AVERAGE <field> [FOR <cond>]` | Mean of a numeric field over the current table (honours active filter) |
+| `COPY TO <file>.csv` | Export current table to a CSV the browser downloads (header CSV, honours filter + index order; max 50k rows) |
+| `APPEND FROM <file>.csv` | Import a header CSV (browser file picker) into the current table; lenient ≤10 bad rows, else abort; max 5 MB |
 | `MODIFY STRUCTURE` | Open the Modify-structure wizard for the active table |
 | `ALTER TABLE <t> ADD <col> <type>` | Add a column to a table |
 | `ALTER TABLE <t> DROP <col>` | Remove a column from a table |
@@ -186,6 +196,7 @@ WebBase-III supports **unlimited work areas** (no DOS 10-area limit). Cross-area
 ### Variables & I/O
 | Command | What it does |
 |---|---|
+| `? <expr>[, <expr>...]` | Evaluate expression(s) and print; numbers right-justified, bare `?` prints a blank line. `??` accepted (shares `?` formatting in the web terminal) |
 | `STORE <val> TO <var>` | Assign a variable; booleans display as `.T.`/`.F.` |
 | `INPUT "prompt" TO <var>` | Collect keyboard input (shows pending @SAY fields + prompt) |
 | `@ r,c SAY "text" GET <var>` | Define a form field |
@@ -213,7 +224,13 @@ WebBase-III supports **unlimited work areas** (no DOS 10-area limit). Cross-area
 | F5 | Refresh from DB |
 | Esc | Exit grid, return to terminal |
 
-## Roadmap (in progress)
+## Roadmap
+
+**v1.0.0 — dBASE III parity: complete ✅.** All sub-projects below shipped, plus the
+closing parity commands: `?`/`??` print (#2), `SUM`/`AVERAGE` (#3), the extra
+built-ins (#4), `SORT ON … TO` (#8), and `COPY TO`/`APPEND FROM` CSV (#5).
+Beyond-parity work (e.g. live multiuser propagation, #11) lands on the `release/v1.1.0`
+line.
 
 1. ~~Indexing & Search~~ — `INDEX ON`, `SET INDEX TO`, `SEEK`, `FIND`, `REINDEX`, `LIST INDEXES` ✅
 2. ~~Language Completeness~~ — `DO CASE/ENDCASE`, built-in functions (`EOF()`, `BOF()`, `FOUND()`, `RECNO()`, `RECCOUNT()`, `SUBSTR()`, `STR()`, `AT()`, `UPPER()`, `LOWER()`, `ROUND()`, `MOD()`, `MAX()`, `MIN()`, `TIME()`, `YEAR()`, `MONTH()`, `DAY()`, and more) ✅
@@ -236,18 +253,20 @@ Both styles accepted: `TRUE`/`FALSE` and `.T.`/`.TRUE.`/`.F.`/`.FALSE.` (dBASE I
 ## Testing
 
 ```bash
-npm test                # Vitest unit + integration (164 tests)
+npm test                # Vitest unit + integration (239 tests)
 npx playwright test     # E2E browser tests — requires dev server on :5173/:3000
 ```
 
-Playwright suites: `tests/integration.spec.ts` (20 tests — full REPL scenario), `tests/assistant.spec.ts` (8 tests — sidebar, wizards, report designer, program run), `tests/inventory.spec.ts` (5 tests — INVENTORY.prg menu), `tests/multiarea.spec.ts` (4 tests — multi-work-area, relations, alias.field), `tests/demos.spec.ts` (3 tests — demo program seeding), `tests/splash.spec.ts` (1 test — version banner).
+Playwright suites (49 tests): `tests/integration.spec.ts` (20 tests — full REPL scenario), `tests/assistant.spec.ts` (10 tests — sidebar, wizards, report designer, MODIFY STRUCTURE round-trip, program run), `tests/inventory.spec.ts` (5 tests — INVENTORY.prg menu), `tests/multiarea.spec.ts` (4 tests — multi-work-area, relations, alias.field), `tests/parity-commands.spec.ts` (4 tests — `?`/`??`, built-in functions, `SUM`/`AVERAGE`, `SORT ON … TO`), `tests/demos.spec.ts` (3 tests — demo program seeding), `tests/copycsv.spec.ts` (2 tests — COPY TO download + APPEND FROM upload), `tests/splash.spec.ts` (1 test — version banner).
 
 ## Definition of done
 
 Complete these steps **in order** — do not skip or reorder:
 
 1. **Branch correctly** — work sits on a `feature/<name>` branched off the milestone's `release/vX.Y.Z`; the PR is based on that release branch, **not** `main` (see Git conventions → GitFlow). Confirm the issue is assigned to the matching milestone.
-2. `npm test` passes — all tests green
+2. `npm test` (vitest) **and** `npx playwright test` (e2e) both pass — all green.
+   - **Every user-facing command/feature ships with a Playwright e2e case in the same PR, not just a vitest unit/integration test.** A REPL command needs at least one `tests/*.spec.ts` case that types it and asserts the rendered terminal/UI result; browser-only behavior (downloads, uploads, grid, wizards) must be exercised in a real browser. Unit coverage alone is not "done" — the #4 built-ins shipped broken because only unit tests (which bypass the parser) covered them.
+   - **CI gates this.** `.github/workflows/ci.yml` runs a `unit` job (vitest + build) and an `e2e` job (Playwright, auto-starting the dev server via the `webServer` block in `playwright.config.ts`) on every push/PR to `main` and `release/**`. A PR is not mergeable until both jobs are green — do not merge a release-branch PR with red or missing CI.
 3. `package.json` version = the milestone's version (set on the `release/vX.Y.Z` branch); patch bumps for hotfixes
 4. `CHANGELOG.md` — add entry (Added / Fixed / Changed sections) under the milestone version heading
 5. `README.md` — command tables and feature list reflect what was built

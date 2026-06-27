@@ -103,6 +103,13 @@ export class Session {
           await this.sendGridData();
           break;
 
+        case 'csv-upload': {
+          const result = await this.executor.importCSV(msg.filename, msg.content);
+          this.send({ type: 'output', lines: result.output });
+          this.sendStatus();
+          break;
+        }
+
         case 'catalog-request': {
           const area = this.executor.area;
           const databases = await this.bridge.listDatabases();
@@ -313,6 +320,14 @@ export class Session {
 
     if (result.action === 'REPORT_PREVIEW' && (result as any).reportHtml) {
       this.send({ type: 'report-preview', html: (result as any).reportHtml });
+    }
+
+    if (result.action === 'CSV_DOWNLOAD' && result.csvContent !== undefined) {
+      this.send({ type: 'csv-download', filename: result.csvFilename ?? 'export.csv', content: result.csvContent });
+    }
+
+    if (result.action === 'CSV_UPLOAD_OPEN') {
+      this.send({ type: 'csv-upload-open', table: this.executor.area.table ?? '', filename: result.csvFilename ?? 'import.csv' });
     }
 
     if (result.action === 'MODIFY_STRUCTURE') {
