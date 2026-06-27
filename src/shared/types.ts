@@ -124,4 +124,5 @@ export type ServerMessage =
   | { type: 'clear' }
   | { type: 'report-preview'; html: string }
   | { type: 'error'; message: string }
-  | { type: 'catalog'; catalog: Catalog };
+  | { type: 'catalog'; catalog: Catalog }
+  | { type: 'data-changed'; db: string; table: string };
