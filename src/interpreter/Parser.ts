@@ -6,6 +6,9 @@ const BUILTIN_FUNCTIONS = new Set([
   'SUBSTR','LEN','TRIM','LTRIM','UPPER','LOWER','AT','STR','VAL',
   'INT','ABS','SPACE','REPLICATE','DATE','DTOC','CTOD',
   'EOF','BOF','FOUND','RECNO','RECCOUNT',
+  // #4 (PR #17, @kas2804) — implemented in Builtins.ts; must be whitelisted here
+  // too or the parser won't recognise the call.
+  'ROUND','MOD','MAX','MIN','TIME','YEAR','MONTH','DAY',
 ]);
 
 // ── AST Node Types ──────────────────────────────────────────────────────────
