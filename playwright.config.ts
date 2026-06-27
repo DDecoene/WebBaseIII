@@ -11,4 +11,12 @@ export default defineConfig({
     video: 'retain-on-failure',
   },
   reporter: [['list'], ['html', { open: 'never', outputFolder: 'playwright-report' }]],
+  // Auto-start the dev server (Vite :5173 + WS :3000) for the e2e run. In CI a
+  // fresh server is always started; locally an already-running server is reused.
+  webServer: {
+    command: 'npm run dev',
+    url: 'http://localhost:5173',
+    reuseExistingServer: !process.env.CI,
+    timeout: 120_000,
+  },
 });

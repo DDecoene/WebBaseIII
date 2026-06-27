@@ -6,6 +6,9 @@ const BUILTIN_FUNCTIONS = new Set([
   'SUBSTR','LEN','TRIM','LTRIM','UPPER','LOWER','AT','STR','VAL',
   'INT','ABS','SPACE','REPLICATE','DATE','DTOC','CTOD',
   'EOF','BOF','FOUND','RECNO','RECCOUNT',
+  // #4 (PR #17, @kas2804) — implemented in Builtins.ts; must be whitelisted here
+  // too or the parser won't recognise the call.
+  'ROUND','MOD','MAX','MIN','TIME','YEAR','MONTH','DAY',
 ]);
 
 // ── AST Node Types ──────────────────────────────────────────────────────────
@@ -29,6 +32,8 @@ export type ASTNode =
   | { type: 'LIST_REPORTS' }
   | { type: 'DELETE_REPORT'; name: string }
   | { type: 'BROWSE' }
+  | { type: 'AGGREGATE';   op: 'SUM' | 'AVERAGE'; field: string; forCond: string | null }
+  | { type: 'PRINT';       exprs: Expr[]; newline: boolean }
   | { type: 'CLEAR' }
   | { type: 'QUIT' }
   | { type: 'HELP' }
@@ -36,6 +41,8 @@ export type ASTNode =
   | { type: 'SET_FILTER';  expr: string | null }
   | { type: 'REPLACE_ALL'; fields: Array<{ field: string; value: Expr }>; scope: 'ALL' | 'CURRENT' }
   | { type: 'APPEND' }
+  | { type: 'COPY_TO';     file: string }
+  | { type: 'APPEND_FROM'; file: string }
   | { type: 'DELETE';      scope: 'CURRENT' | 'ALL' }
   | { type: 'RECALL';      scope: 'CURRENT' | 'ALL' }
   | { type: 'GO';          target: 'TOP' | 'BOTTOM' | number }
@@ -105,6 +112,9 @@ export class Parser {
 
     if (t.type === 'AT') return this.parseAt();
 
+    // dBASE ? / ?? print command (OP tokens, not keywords)
+    if (t.type === 'OP' && (t.val === '?' || t.val === '??')) return this.parsePrint();
+
     if (t.type !== 'KW' && t.type !== 'ID') {
       const raw = t.val; this.adv(); this.skipLine();
       return { type: 'UNKNOWN', raw };
@@ -117,13 +127,16 @@ export class Parser {
       case 'CLOSE':    return this.parseClose();
       case 'LIST':     return this.parseList();
       case 'BROWSE':   this.adv(); return { type: 'BROWSE' };
+      case 'SUM':      return this.parseAggregate('SUM');
+      case 'AVERAGE':  return this.parseAggregate('AVERAGE');
       case 'CLEAR':    this.adv(); return { type: 'CLEAR' };
       case 'QUIT':     this.adv(); return { type: 'QUIT' };
       case 'HELP':     this.adv(); return { type: 'HELP' };
       case 'PACK':     this.adv(); return { type: 'PACK' };
       case 'SET':      return this.parseSet();
       case 'REPLACE':  return this.parseReplace();
-      case 'APPEND':   this.adv(); this.skipKw('RECORD'); this.skipKw('BLANK'); return { type: 'APPEND' };
+      case 'APPEND':   { this.adv(); if (this.peekKw('FROM')) { this.adv(); return { type: 'APPEND_FROM', file: this.parseFilename() }; } this.skipKw('RECORD'); this.skipKw('BLANK'); return { type: 'APPEND' }; }
+      case 'COPY':     { this.adv(); this.expectKw('TO'); return { type: 'COPY_TO', file: this.parseFilename() }; }
       case 'DELETE':   { this.adv(); if (this.peekKw('REPORT')) { this.adv(); return { type: 'DELETE_REPORT', name: this.ident() }; } return { type: 'DELETE', scope: this.consumeScope() }; }
       case 'RECALL':   this.adv(); return { type: 'RECALL', scope: this.consumeScope() };
       case 'GO':       return this.parseGo();
@@ -567,6 +580,52 @@ export class Parser {
   }
 
   // ── Helpers ─────────────────────────────────────────────────────────────
+
+  // SUM <field> [FOR <cond>] / AVERAGE <field> [FOR <cond>]. The FOR condition is
+  // captured as a raw SQL-compatible string (string literals re-quoted), exactly
+  // like SET FILTER TO.
+  private parseAggregate(op: 'SUM' | 'AVERAGE'): ASTNode {
+    this.adv(); // SUM / AVERAGE
+    const field = this.ident();
+    let forCond: string | null = null;
+    if (this.peekKw('FOR')) {
+      this.adv();
+      const parts: string[] = [];
+      while (!this.end() && this.peek().type !== 'NL' && this.peek().type !== 'SEMI' && this.peek().type !== 'EOF') {
+        const t = this.peek();
+        parts.push(t.type === 'STR' ? `'${t.val.replace(/'/g, "''")}'` : t.val);
+        this.adv();
+      }
+      forCond = parts.length ? parts.join(' ') : null;
+    }
+    return { type: 'AGGREGATE', op, field, forCond };
+  }
+
+  // A filename like customers.csv lexes as ID '.' ID; rebuild it by joining the raw
+  // token values until end of statement. The lexer upper-cases identifiers (it is
+  // case-insensitive), so filenames are normalised to lower case — dBASE filenames
+  // were case-insensitive, and lower-case .csv is the web-friendly convention.
+  private parseFilename(): string {
+    let name = '';
+    while (!this.end() && this.peek().type !== 'NL' && this.peek().type !== 'SEMI' && this.peek().type !== 'EOF') {
+      name += this.adv().val;
+    }
+    return name.trim().toLowerCase();
+  }
+
+  private parsePrint(): ASTNode {
+    const newline = this.adv().val === '?'; // consume ? (newline) or ?? (no newline)
+    const exprs: Expr[] = [];
+    const atEnd = () => {
+      const ty = this.peek().type;
+      return ty === 'NL' || ty === 'SEMI' || ty === 'EOF';
+    };
+    if (!atEnd()) {
+      exprs.push(this.expr());
+      while (this.peek().type === 'COMMA') { this.adv(); exprs.push(this.expr()); }
+    }
+    return { type: 'PRINT', exprs, newline };
+  }
 
   private peek(): Token { return this.toks[this.p] ?? { type: 'EOF', val: '', line: 0, col: 0 }; }
   private prev(): Token { return this.toks[this.p - 1] ?? { type: 'EOF', val: '', line: 0, col: 0 }; }
