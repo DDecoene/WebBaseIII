@@ -121,9 +121,9 @@ console.log('5. Program editor with source');
   const page = await newPage();
   await boot(page);
   await cmd(page, 'USE DATABASE screenshotdb', 800);
-  await cmd(page, 'EDIT inventory_demo', 800);
+  await cmd(page, 'EDIT inventory', 1000); // a real seeded program (demos/INVENTORY.prg) — not a blank new buffer
   await page.waitForSelector('#editor-view', { state: 'visible', timeout: 6000 });
-  await page.waitForTimeout(400);
+  await page.waitForTimeout(700);          // let the .prg source render into the editor
   await snap(page, 'screenshot-program-editor.png');
   await page.keyboard.press('Escape');
   await page.close();
