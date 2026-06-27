@@ -280,6 +280,14 @@ Functions work anywhere an expression is accepted — `IF`, `DO WHILE`, `STORE`,
 | `DATE()` | Today as `MM/DD/YY` |
 | `DTOC(date)` | Date to display string `MM/DD/YY` |
 | `CTOD(str)` | Display string `MM/DD/YY` to ISO date |
+| `ROUND(num, dec)` | Rounds number to `dec` decimal places (default 0) |
+| `MOD(a, b)` | Remainder of `a` divided by `b` |
+| `MAX(a, b)` | Maximum of `a` and `b` |
+| `MIN(a, b)` | Minimum of `a` and `b` |
+| `TIME()` | Current time as `HH:MM:SS` |
+| `YEAR(date)` | Numeric year from ISO date string |
+| `MONTH(date)` | Numeric month from ISO date string |
+| `DAY(date)` | Numeric day from ISO date string |
 
 ### Boolean literals
 
@@ -351,6 +359,19 @@ npx playwright test         # end-to-end browser tests (requires dev server runn
 ```
 
 The Playwright suite (`tests/integration.spec.ts`, `tests/crm.spec.ts`) drives a real browser against the running app and covers navigation, filters, indexing, programs, forms, and BROWSE.
+
+---
+
+## Contributors
+
+Huge thanks to everyone who has helped extend WebBase-III:
+
+- **[@kas2804](https://github.com/kas2804) (Kasturi Rajarampatil)** — added the
+  `ROUND`, `MOD`, `MAX`, `MIN`, `TIME`, `YEAR`, `MONTH`, and `DAY` built-in
+  functions ([#4](https://github.com/DDecoene/WebBaseIII/issues/4), PR
+  [#17](https://github.com/DDecoene/WebBaseIII/pull/17)) — clean, well-tested
+  work that brought the W3Script expression engine closer to full dBASE III
+  parity. 🙌
 
 ---
 
