@@ -7,7 +7,7 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
 
 ---
 
-## [0.9.0] — 2026-06-27 — Live multiuser data propagation
+## [1.1.0] — 2026-06-27 — Live multiuser data propagation
 
 ### Added
 - Live multiuser data propagation (#11): when one session mutates a table, every
