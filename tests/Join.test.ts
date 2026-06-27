@@ -34,6 +34,11 @@ describe('JOIN parsing', () => {
     expect((nodes[0] as any).forCond).toBe("CUST.CITY = 'Paris'");
   });
 
+  it('yields an empty fields list when FIELDS has no names', () => {
+    const nodes = parse('JOIN WITH ord TO custord FOR cust.id = ord.custid FIELDS');
+    expect((nodes[0] as any).fields).toEqual([]);
+  });
+
   it('throws when FOR is missing', () => {
     expect(() => parse('JOIN WITH ord TO custord')).toThrow(/JOIN requires a FOR/i);
   });

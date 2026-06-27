@@ -299,14 +299,16 @@ export class Parser {
     if (this.peekKw('FIELDS')) {
       this.adv();
       const cols: string[] = [];
-      do {
+      while (!this.end() && this.peek().type !== 'NL' && this.peek().type !== 'EOF' && this.peek().type !== 'SEMI') {
         let col = this.peek().val; this.adv();
         if (!this.end() && this.peek().type === 'DOT') {
           this.adv();
           col += '.' + this.peek().val; this.adv();
         }
         cols.push(col);
-      } while (!this.end() && this.peek().type === 'COMMA' && (this.adv(), true));
+        if (this.peek().type === 'COMMA') { this.adv(); continue; }
+        break;
+      }
       fields = cols;
     }
 
