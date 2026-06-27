@@ -147,6 +147,8 @@ WebBase-III supports **unlimited work areas** (no DOS 10-area limit). Cross-area
 | `SET FILTER TO <expr>` | Set a WHERE clause; empty clears it |
 | `SUM <field> [FOR <cond>]` | Total a numeric field over the current table (honours active filter) |
 | `AVERAGE <field> [FOR <cond>]` | Mean of a numeric field over the current table (honours active filter) |
+| `COPY TO <file>.csv` | Export current table to a CSV the browser downloads (header CSV, honours filter + index order; max 50k rows) |
+| `APPEND FROM <file>.csv` | Import a header CSV (browser file picker) into the current table; lenient ≤10 bad rows, else abort; max 5 MB |
 | `MODIFY STRUCTURE` | Open the Modify-structure wizard for the active table |
 | `ALTER TABLE <t> ADD <col> <type>` | Add a column to a table |
 | `ALTER TABLE <t> DROP <col>` | Remove a column from a table |

@@ -193,6 +193,8 @@ WebBase-III supports **unlimited work areas** — each independently holding a t
 | `SET FILTER TO <expr>` | Set a WHERE clause; empty clears it |
 | `SUM <field> [FOR <cond>]` | Total a numeric field over the current table (honours active filter) |
 | `AVERAGE <field> [FOR <cond>]` | Mean of a numeric field over the current table (honours active filter) |
+| `COPY TO <file>.csv` | Export current table to a CSV download (honours filter + index order) |
+| `APPEND FROM <file>.csv` | Import a CSV (browser file picker) into the current table |
 | `MODIFY STRUCTURE` | Open the Modify-structure wizard for the active table |
 | `ALTER TABLE <t> ADD <col> <type>` | Add a column to a table |
 | `ALTER TABLE <t> DROP <col>` | Remove a column from a table |
@@ -200,6 +202,13 @@ WebBase-III supports **unlimited work areas** — each independently holding a t
 | `ALTER TABLE <t> ALTER <col> <type>` | Change a column's type (copy-table dance; data preserved) |
 
 > Column ops that can invalidate an index (DROP, RENAME, ALTER type) drop all of the table's indexes and warn you to rebuild with `INDEX ON`.
+
+> **CSV format (`COPY TO` / `APPEND FROM`):** Unlike dBASE III's headerless,
+> positional `DELIMITED`/`SDF` formats, WebBase-III uses modern **header-based CSV**
+> (RFC-4180, mapped by column name). Export downloads through the browser and
+> honours the active filter + index order. Import opens a file picker and is
+> lenient: up to 10 bad rows are skipped and reported (line + reason); more than 10
+> aborts with nothing appended. Limits: 5 MB import, 50,000-row export.
 
 ### Indexing & search
 

@@ -884,6 +884,8 @@ export class Executor implements IndexCommandsHost {
       { text: '─'.repeat(50), cls: 'sep' },
       { text: 'USE <table>             — open/select a table' },
       { text: 'USE DATABASE <name>     — open a named database' },
+      { text: 'COPY TO <file>.csv      — export current table (header CSV, modern, not dBASE SDF)' },
+      { text: 'APPEND FROM <file>.csv  — import a header CSV into current table' },
       { text: 'SELECT <alias>          — activate or create work area' },
       { text: 'USE <table> ALIAS <n>   — open table with alias override' },
       { text: 'SET RELATION TO <expr> INTO <alias> — link work areas by key' },
