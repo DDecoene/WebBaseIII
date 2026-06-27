@@ -80,6 +80,30 @@ Wizards open in the main area with a live W3Script preview.
 
 ---
 
+### The Assistant — Modify Structure wizard
+
+`MODIFY STRUCTURE` (or sidebar action) opens the column editor prefilled with the current schema — rename, retype, add, or drop columns, then apply in one click.
+
+![Modify Structure wizard](docs/screenshots/screenshot-modify-structure.png)
+
+---
+
+### Aggregate commands & dBASE III parity
+
+`SUM`, `AVERAGE`, `? ROUND(…)`, `? MAX(…)`, and `SORT ON … TO` — numeric aggregates and sorted copies, honouring the active filter.
+
+![Parity commands — SUM AVERAGE ROUND MAX SORT](docs/screenshots/screenshot-parity.png)
+
+---
+
+### CSV import / export
+
+`COPY TO <file>.csv` exports the current table (browser download); `APPEND FROM <file>.csv` imports via the file picker.
+
+![CSV COPY TO output](docs/screenshots/screenshot-csv.png)
+
+---
+
 ## Features
 
 | Feature | Details |
