@@ -67,7 +67,7 @@ await snap(900);
 await typeAndRun('USE customers', 1300);
 await typeAndRun('LIST', 2600);
 await typeAndRun('AVERAGE founded', 2000);
-await typeAndRun('? MAX(founded)', 1800);
+await typeAndRun('? ROUND(1974.6667, 0)', 1800);
 await typeAndRun('SORT ON founded TO byyear', 2000);
 await typeAndRun('SEEK "Tandy Corp"', 1800);
 await typeAndRun('BROWSE', 1200);
