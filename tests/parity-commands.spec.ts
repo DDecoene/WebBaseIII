@@ -33,40 +33,34 @@ test.describe('Parity commands e2e', () => {
     await waitForOutput(page, 'hello', 3000);
   });
 
-  // NOTE: ROUND, MOD, MAX, MIN, TIME, YEAR are implemented in Builtins.ts but are
-  // NOT listed in Parser.ts BUILTIN_FUNCTIONS set, so the parser doesn't recognise
-  // them as function calls and they silently return undefined. This is a product bug.
-  // This test uses only functions that are correctly registered in BUILTIN_FUNCTIONS.
+  // #4 (PR #17, @kas2804) built-ins — exercised end-to-end through the REPL.
   test('2. Built-in functions via ?', async ({ page }) => {
     await boot(page, `e2e_parity_builtins_${Date.now()}`);
 
-    // ABS
-    await cmd(page, '? ABS(-42)');
-    await waitForOutput(page, '42', 3000);
+    await cmd(page, '? ROUND(3.14159, 2)');
+    await waitForOutput(page, '3.14', 3000);
 
-    // INT truncates toward zero
-    await cmd(page, '? INT(3.9)');
+    await cmd(page, '? MOD(17, 5)');
+    await waitForOutput(page, '2', 3000);
+
+    await cmd(page, '? MAX(3, 9)');
+    await waitForOutput(page, '9', 3000);
+
+    await cmd(page, '? MIN(3, 9)');
     await waitForOutput(page, '3', 3000);
 
-    // LEN
-    await cmd(page, '? LEN("hello")');
-    await waitForOutput(page, '5', 3000);
+    await cmd(page, '? YEAR(CTOD("12/25/2026"))');
+    await waitForOutput(page, '2026', 3000);
 
-    // UPPER
-    await cmd(page, '? UPPER("world")');
-    await waitForOutput(page, 'WORLD', 3000);
+    await cmd(page, '? MONTH(CTOD("12/25/2026"))');
+    await waitForOutput(page, '12', 3000);
 
-    // LOWER
-    await cmd(page, '? LOWER("HELLO")');
-    await waitForOutput(page, 'hello', 3000);
+    await cmd(page, '? DAY(CTOD("12/25/2026"))');
+    await waitForOutput(page, '25', 3000);
 
-    // SUBSTR(str, start, len) — 1-based
-    await cmd(page, '? SUBSTR("abcdef", 2, 3)');
-    await waitForOutput(page, 'bcd', 3000);
-
-    // VAL converts string to number
-    await cmd(page, '? VAL("99")');
-    await waitForOutput(page, '99', 3000);
+    // TIME() -> HH:MM:SS
+    await cmd(page, '? TIME()');
+    await expect(page.locator('#terminal-output')).toContainText(/\d\d:\d\d:\d\d/, { timeout: 3000 });
   });
 
   test('3. SUM and AVERAGE', async ({ page }) => {
