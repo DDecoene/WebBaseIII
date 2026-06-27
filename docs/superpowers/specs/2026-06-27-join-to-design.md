@@ -116,5 +116,8 @@ not just a code comment:
 ## Out of scope
 
 - Cross-database joins (attach).
-- `alias->field` arrow lexing (separate compatibility nicety, noted in #10).
 - Live/view variant (covered by `SET RELATION`).
+
+> Note: `alias->field` arrow syntax does not exist anywhere in the codebase
+> today and is **not** being added — WebBase-III uses `alias.field` dot syntax
+> exclusively (see Deviation #2).
