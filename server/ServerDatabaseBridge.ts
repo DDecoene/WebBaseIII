@@ -30,6 +30,7 @@ function getDb(dbName: string): Database.Database {
 export class ServerDatabaseBridge implements IDatabaseBridge {
   public opfsAvailable = false;
   public currentDb: string | null = null;
+  public onMutate: (() => void) | null = null;
   private db: Database.Database | null = null;
 
   async openDatabase(dbName: string): Promise<{ dbName: string; opfsAvailable: boolean }> {
@@ -52,6 +53,7 @@ export class ServerDatabaseBridge implements IDatabaseBridge {
   async exec(sql: string, params?: unknown[]): Promise<void> {
     if (!this.db) throw new Error('No database open — run: USE <tablename>');
     this.db.prepare(sql).run(...(params ?? []));
+    this.onMutate?.();
   }
 
   async query(sql: string, params?: unknown[]): Promise<Record<string, unknown>[]> {
