@@ -4,6 +4,7 @@ import { Lexer } from './Lexer';
 import { callStateless } from './Builtins';
 import { IndexCommands, IndexCommandsHost } from './IndexCommands';
 import { ReportCommands } from './ReportCommands';
+import { toCSV, parseCSV, MAX_EXPORT_ROWS, MAX_IMPORT_BYTES, MAX_IMPORT_SKIPS } from '../shared/csv';
 
 export type { OutputLine, FormField } from '../shared/types';
 
@@ -155,6 +156,8 @@ export class Executor implements IndexCommandsHost {
         case 'BROWSE':      return { output: [], action: 'BROWSE' };
         case 'PRINT':       return this.doPrint(node.exprs);
         case 'AGGREGATE':   return this.doAggregate(node.op, node.field, node.forCond);
+        case 'COPY_TO':     return this.doCopyTo(node.file);
+        case 'APPEND_FROM': return this.doAppendFrom(node.file);
         case 'CLEAR':       return { output: [{ text: '', cls: 'clear' }] };
         case 'QUIT':        return { output: [], action: 'QUIT' };
         case 'HELP':        return this.doHelp();
@@ -533,6 +536,112 @@ export class Executor implements IndexCommandsHost {
     this.vars.set(varName, v);
     if (this.programDepth > 0) return { output: [] };
     return { output: [{ text: `${varName} = ${fmtVal(v)}`, cls: 'info' }] };
+  }
+
+  // COPY TO <file>.csv — export the current table (filtered + index-ordered) as a
+  // CSV the browser downloads. Honours SET FILTER; capped at MAX_EXPORT_ROWS.
+  private async doCopyTo(file: string): Promise<ExecResult> {
+    this.requireTable();
+    const table = this.area.table!;
+    const filename = file.toLowerCase().endsWith('.csv') ? file : `${file}.csv`;
+    const count = await this.db.getRowCount(table, this.area.filter ?? undefined);
+    if (count > MAX_EXPORT_ROWS) {
+      throw new Error(`Too many rows to export (${count} > ${MAX_EXPORT_ROWS}). Narrow with SET FILTER TO ...`);
+    }
+    const cols = (await this.db.getStructure(table)).map(c => c.name);
+    const rows = await this.getOrderedRows(MAX_EXPORT_ROWS);
+    return {
+      output: [{ text: `${rows.length} record(s) copied to ${filename}.`, cls: 'ok' }],
+      action: 'CSV_DOWNLOAD',
+      csvFilename: filename,
+      csvContent: toCSV(cols, rows),
+    };
+  }
+
+  // APPEND FROM <file>.csv — the import is a round-trip: open a file picker in the
+  // browser; the actual insert runs when the resulting csv-upload calls importCSV().
+  private async doAppendFrom(file: string): Promise<ExecResult> {
+    this.requireTable();
+    const filename = file.toLowerCase().endsWith('.csv') ? file : `${file}.csv`;
+    return { output: [], action: 'CSV_UPLOAD_OPEN', csvFilename: filename };
+  }
+
+  // Bulk-import CSV into the current table. Header-mapped (by name, case-insensitive),
+  // lenient up to MAX_IMPORT_SKIPS bad rows; beyond that, roll back entirely.
+  async importCSV(filename: string, content: string): Promise<ExecResult> {
+    this.requireTable();
+    const table = this.area.table!;
+
+    if (Buffer.byteLength(content, 'utf8') > MAX_IMPORT_BYTES) {
+      return { output: [{ text: `** ${filename} is too large; the limit is 5 MB.`, cls: 'error' }] };
+    }
+
+    const struct = await this.db.getStructure(table);
+    const numeric = new Map(struct.map(c => [c.name.toLowerCase(), /INT|REAL|NUM|DEC|DOUB|FLOA/i.test(c.type)]));
+    const colByLower = new Map(struct.map(c => [c.name.toLowerCase(), c.name]));
+
+    const { header, rows } = parseCSV(content);
+    const map = header.map(h => colByLower.get(h.trim().toLowerCase()) ?? null);
+
+    type Skip = { line: number; reason: string };
+    const skips: Skip[] = [];
+    const good: { cols: string[]; vals: unknown[] }[] = [];
+
+    rows.forEach((cells, idx) => {
+      const fileLine = idx + 2; // header is line 1
+      if (cells.length !== header.length) {
+        skips.push({ line: fileLine, reason: `expected ${header.length} fields, got ${cells.length}` });
+        return;
+      }
+      const cols: string[] = [];
+      const vals: unknown[] = [];
+      let bad: Skip | null = null;
+      for (let c = 0; c < header.length; c++) {
+        const col = map[c];
+        if (!col) continue; // unknown header -> ignore this column
+        const raw = cells[c];
+        if (raw === '') { cols.push(col); vals.push(null); continue; }
+        if (numeric.get(col.toLowerCase())) {
+          const n = Number(raw);
+          if (Number.isNaN(n)) { bad = { line: fileLine, reason: `column "${col}" — "${raw}" is not numeric` }; break; }
+          cols.push(col); vals.push(n);
+        } else {
+          cols.push(col); vals.push(raw);
+        }
+      }
+      if (bad) { skips.push(bad); return; }
+      good.push({ cols, vals });
+    });
+
+    if (skips.length > MAX_IMPORT_SKIPS) {
+      const detail = skips.slice(0, MAX_IMPORT_SKIPS).map(s => ({ text: `   line ${s.line}: ${s.reason}`, cls: 'warn' as const }));
+      return { output: [
+        { text: `** Import aborted: more than ${MAX_IMPORT_SKIPS} malformed rows (${skips.length} total). No records were appended.`, cls: 'error' },
+        ...detail,
+      ] };
+    }
+
+    await this.db.exec('BEGIN');
+    try {
+      for (const g of good) {
+        if (g.cols.length === 0) continue;
+        const names = g.cols.map(c => q(c)).join(', ');
+        const placeholders = g.cols.map(() => '?').join(', ');
+        await this.db.exec(`INSERT INTO ${q(table)} (${names}) VALUES (${placeholders})`, g.vals);
+      }
+      await this.db.exec('COMMIT');
+    } catch (e) {
+      await this.db.exec('ROLLBACK');
+      throw e;
+    }
+    await this.refreshRecCount();
+
+    const out: OutputLine[] = [{ text: `Appended ${good.length} record(s) from ${filename}.`, cls: 'ok' }];
+    if (skips.length) {
+      out.push({ text: `** Skipped ${skips.length} row(s):`, cls: 'warn' });
+      for (const s of skips.slice(0, MAX_IMPORT_SKIPS)) out.push({ text: `   line ${s.line}: ${s.reason}`, cls: 'warn' });
+    }
+    return { output: out };
   }
 
   // dBASE SUM / AVERAGE — aggregate a numeric field over the current table,
