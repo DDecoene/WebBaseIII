@@ -129,6 +129,31 @@ describe('JOIN integration', () => {
     expect(out).toMatch(/AMOUNT/);
   });
 
+  it('errors when the active area has no table', async () => {
+    const { session, sent } = makeSession();
+    const run = (text: string) => session.handleMessage({ type: 'command', text });
+    const db = `test_join_${++dbCounter}`;
+    await run(`USE DATABASE ${db}`);
+    await run('SELECT ORD'); await run(`USE DATABASE ${db}`);   // empty area, referenced below
+    await run('SELECT CUST'); await run(`USE DATABASE ${db}`);  // active, no table
+    await run('JOIN WITH ORD TO t FOR 1 = 1');
+    expect(listText(sent)).toMatch(/no table in use/i);
+  });
+
+  it('errors when the alias area has no open table', async () => {
+    const { sent, run } = await seedTwoAreas();
+    await run('JOIN WITH NOPE TO t FOR CUST.id = 1');
+    expect(listText(sent)).toMatch(/work area 'NOPE' has no open table/i);
+  });
+
+  it('errors when the target table already exists', async () => {
+    const { sent, run } = await seedTwoAreas();
+    await run('JOIN WITH ORD TO custord FOR CUST.id = ORD.custid');
+    sent.length = 0;
+    await run('JOIN WITH ORD TO custord FOR CUST.id = ORD.custid');
+    expect(listText(sent)).toMatch(/already exists: CUSTORD/i);
+  });
+
   it('warns and drops the alias duplicate on a column-name clash', async () => {
     const { session, sent } = makeSession();
     const db = `test_join_${++dbCounter}`;
