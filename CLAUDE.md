@@ -203,7 +203,8 @@ WebBase-III supports **unlimited work areas** (no DOS 10-area limit). Cross-area
 ## Roadmap (in progress)
 
 1. ~~Indexing & Search~~ — `INDEX ON`, `SET INDEX TO`, `SEEK`, `FIND`, `REINDEX`, `LIST INDEXES` ✅
-2. ~~Language Completeness~~ — `DO CASE/ENDCASE`, built-in functions (`EOF()`, `BOF()`, `FOUND()`, `RECNO()`, `RECCOUNT()`, `SUBSTR()`, `STR()`, `AT()`, `UPPER()`, `LOWER()`, and more) ✅
+2. ~~Language Completeness~~ — `DO CASE/ENDCASE`, built-in functions (`EOF()`, `BOF()`, `FOUND()`, `RECNO()`, `RECCOUNT()`, `SUBSTR()`, `STR()`, `AT()`, `UPPER()`, `LOWER()`, `ROUND()`, `MOD()`, `MAX()`, `MIN()`, `TIME()`, `YEAR()`, `MONTH()`, `DAY()`, and more) ✅
+   - `ROUND`/`MOD`/`MAX`/`MIN`/`TIME`/`YEAR`/`MONTH`/`DAY` contributed by [@kas2804](https://github.com/kas2804) in PR #17 (#4). 🙏
 3. ~~Multi-Work-Area~~ — unlimited `SELECT <alias>`, `SET RELATION TO`, `alias.field` notation ✅
 4. ~~Report & Label Engine~~ — `REPORT FORM`, group breaks, subtotals, HTML preview ✅
 5. ~~The Assistant~~ — sidebar GUI, wizards, catalog protocol ✅

@@ -7,6 +7,16 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
 
 ---
 
+## [0.8.0] — 2026-06-27 — More built-in functions
+
+### Added
+- New W3Script built-in functions (#4, PR #17 by @kas2804): `ROUND(n, decimals)`,
+  `MOD(a, b)`, `MAX(a, b)`, `MIN(a, b)`, `TIME()` (current time as `HH:MM:SS`),
+  and the date-part functions `YEAR(date)`, `MONTH(date)`, `DAY(date)`. Each has a
+  matching Vitest case in `tests/Builtins.test.ts`.
+
+---
+
 ## [0.7.0] — 2026-06-24 — MODIFY STRUCTURE / ALTER TABLE
 
 ### Added
