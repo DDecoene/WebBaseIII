@@ -246,8 +246,9 @@ Playwright suites: `tests/integration.spec.ts` (20 tests — full REPL scenario)
 Complete these steps **in order** — do not skip or reorder:
 
 1. **Branch correctly** — work sits on a `feature/<name>` branched off the milestone's `release/vX.Y.Z`; the PR is based on that release branch, **not** `main` (see Git conventions → GitFlow). Confirm the issue is assigned to the matching milestone.
-2. `npm test` passes — all tests green
-   - **Every user-facing command/feature gets a Playwright e2e case, not just a vitest unit/integration test.** A REPL command needs at least one `tests/*.spec.ts` case that types it and asserts the rendered terminal/UI result; browser-only behavior (downloads, uploads, grid, wizards) must be exercised in a real browser. Unit coverage alone is not "done".
+2. `npm test` (vitest) **and** `npx playwright test` (e2e) both pass — all green.
+   - **Every user-facing command/feature ships with a Playwright e2e case in the same PR, not just a vitest unit/integration test.** A REPL command needs at least one `tests/*.spec.ts` case that types it and asserts the rendered terminal/UI result; browser-only behavior (downloads, uploads, grid, wizards) must be exercised in a real browser. Unit coverage alone is not "done" — the #4 built-ins shipped broken because only unit tests (which bypass the parser) covered them.
+   - **CI gates this.** `.github/workflows/ci.yml` runs a `unit` job (vitest + build) and an `e2e` job (Playwright, auto-starting the dev server via the `webServer` block in `playwright.config.ts`) on every push/PR to `main` and `release/**`. A PR is not mergeable until both jobs are green — do not merge a release-branch PR with red or missing CI.
 3. `package.json` version = the milestone's version (set on the `release/vX.Y.Z` branch); patch bumps for hotfixes
 4. `CHANGELOG.md` — add entry (Added / Fixed / Changed sections) under the milestone version heading
 5. `README.md` — command tables and feature list reflect what was built
