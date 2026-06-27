@@ -367,10 +367,13 @@ src/
 
 ```bash
 npm test                    # unit + integration tests (Vitest)
-npx playwright test         # end-to-end browser tests (requires dev server running)
+npx playwright test         # end-to-end browser tests (auto-starts the dev server)
 ```
 
-The Playwright suite (`tests/integration.spec.ts`, `tests/crm.spec.ts`) drives a real browser against the running app and covers navigation, filters, indexing, programs, forms, and BROWSE.
+The Playwright suite drives a real browser against the running app and covers the
+REPL, filters, indexing, programs, forms, BROWSE, the Assistant wizards,
+multi-work-area, the parity commands (`?`/`??`, `SUM`/`AVERAGE`, `SORT ON … TO`),
+and CSV `COPY TO`/`APPEND FROM`. CI runs both Vitest and Playwright on every PR.
 
 ---
 
