@@ -84,6 +84,10 @@ export class Grid {
     document.removeEventListener('keydown', this.boundKey, true);
   }
 
+  get tableName(): string {
+    return this.table;
+  }
+
   private render() {
     this.info.textContent = `BROWSE: ${this.table}   ${this.rows.length} record(s)${this.filter ? '  [FILTER: ' + this.filter + ']' : ''}`;
     this.renderHeader();
