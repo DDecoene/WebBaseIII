@@ -70,6 +70,7 @@ export type ASTNode =
   | { type: 'REINDEX' }
   | { type: 'LIST_INDEXES' }
   | { type: 'SORT'; field: string; descending: boolean; target: string }
+  | { type: 'JOIN'; withAlias: string; target: string; forCond: string; fields: string[] | null }
   | { type: 'SEEK';        value: Expr }
   | { type: 'FIND';        value: string }
   | { type: 'UNKNOWN';     raw: string };
@@ -165,6 +166,7 @@ export class Parser {
       }
       case 'INDEX':    return this.parseIndexOn();
       case 'SORT':     return this.parseSort();
+      case 'JOIN':     return this.parseJoin();
       case 'REINDEX':  this.adv(); return { type: 'REINDEX' };
       case 'SEEK':     this.adv(); return { type: 'SEEK', value: this.expr() };
       case 'FIND':     { this.adv(); const val = this.peek().val; this.adv(); return { type: 'FIND', value: val }; }
@@ -262,6 +264,53 @@ export class Parser {
       this.adv();
     }
     return { type: 'SET_FILTER', expr: parts.length ? parts.join(' ') : null };
+  }
+
+  private parseJoin(): ASTNode {
+    this.adv(); // JOIN
+    this.expectKw('WITH');
+    const withAlias = this.ident();
+    this.expectKw('TO');
+    const target = this.ident();
+    if (!this.peekKw('FOR')) {
+      throw new Error('JOIN requires a FOR condition (e.g. JOIN WITH ord TO file FOR id = ord.id)');
+    }
+    this.adv(); // FOR
+    // Collect the FOR condition until FIELDS / end of statement.
+    // Re-quote STR tokens as SQL literals (like SET FILTER) and glue alias.field
+    // around DOT tokens so `ord.custid` stays a single qualified reference.
+    let forCond = '';
+    let prevWasDot = false;
+    const atEnd = () =>
+      this.end() || this.peekKw('FIELDS') ||
+      this.peek().type === 'NL' || this.peek().type === 'EOF' || this.peek().type === 'SEMI';
+    while (!atEnd()) {
+      const t = this.peek();
+      if (t.type === 'DOT') { forCond += '.'; prevWasDot = true; this.adv(); continue; }
+      const piece = t.type === 'STR' ? `'${t.val.replace(/'/g, "''")}'` : t.val;
+      forCond += (forCond === '' || prevWasDot) ? piece : ' ' + piece;
+      prevWasDot = false;
+      this.adv();
+    }
+    if (!forCond.trim()) throw new Error('JOIN requires a FOR condition');
+
+    // Optional FIELDS list: name, alias.field, ...
+    let fields: string[] | null = null;
+    if (this.peekKw('FIELDS')) {
+      this.adv();
+      const cols: string[] = [];
+      do {
+        let col = this.peek().val; this.adv();
+        if (!this.end() && this.peek().type === 'DOT') {
+          this.adv();
+          col += '.' + this.peek().val; this.adv();
+        }
+        cols.push(col);
+      } while (!this.end() && this.peek().type === 'COMMA' && (this.adv(), true));
+      fields = cols;
+    }
+
+    return { type: 'JOIN', withAlias, target, forCond: forCond.trim(), fields };
   }
 
   private parseSort(): ASTNode {
