@@ -191,6 +191,8 @@ WebBase-III supports **unlimited work areas** — each independently holding a t
 | `REPLACE <field> WITH <val>, ...` | Update field(s) on current row |
 | `REPLACE ALL <field> WITH <val>, ...` | Update all (filtered) rows |
 | `SET FILTER TO <expr>` | Set a WHERE clause; empty clears it |
+| `SUM <field> [FOR <cond>]` | Total a numeric field over the current table (honours active filter) |
+| `AVERAGE <field> [FOR <cond>]` | Mean of a numeric field over the current table (honours active filter) |
 | `MODIFY STRUCTURE` | Open the Modify-structure wizard for the active table |
 | `ALTER TABLE <t> ADD <col> <type>` | Add a column to a table |
 | `ALTER TABLE <t> DROP <col>` | Remove a column from a table |

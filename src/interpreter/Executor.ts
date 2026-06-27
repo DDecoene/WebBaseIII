@@ -152,6 +152,7 @@ export class Executor implements IndexCommandsHost {
         case 'LIST_COLS':   return this.doListCols(node.cols);
         case 'BROWSE':      return { output: [], action: 'BROWSE' };
         case 'PRINT':       return this.doPrint(node.exprs);
+        case 'AGGREGATE':   return this.doAggregate(node.op, node.field, node.forCond);
         case 'CLEAR':       return { output: [{ text: '', cls: 'clear' }] };
         case 'QUIT':        return { output: [], action: 'QUIT' };
         case 'HELP':        return this.doHelp();
@@ -530,6 +531,21 @@ export class Executor implements IndexCommandsHost {
     this.vars.set(varName, v);
     if (this.programDepth > 0) return { output: [] };
     return { output: [{ text: `${varName} = ${fmtVal(v)}`, cls: 'info' }] };
+  }
+
+  // dBASE SUM / AVERAGE — aggregate a numeric field over the current table,
+  // honouring the active SET FILTER plus an optional FOR condition. SQLite does the
+  // aggregation server-side. Result is printed right-justified like ?.
+  private async doAggregate(op: 'SUM' | 'AVERAGE', field: string, forCond: string | null): Promise<ExecResult> {
+    this.requireTable();
+    const fn = op === 'SUM' ? 'SUM' : 'AVG';
+    const conds = [this.area.filter, forCond].filter((c): c is string => !!c);
+    const where = conds.length ? ` WHERE ${conds.map(c => `(${c})`).join(' AND ')}` : '';
+    const rows = await this.db.query(
+      `SELECT ${fn}(${q(field)}) AS v FROM ${q(this.area.table!)}${where}`
+    );
+    const v = Number(rows[0]?.v ?? 0);
+    return { output: [{ text: fmtPrint(v), cls: 'info' }] };
   }
 
   // dBASE ? / ?? — evaluate expression(s) and print the result. A bare ? prints a

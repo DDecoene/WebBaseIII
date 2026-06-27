@@ -29,6 +29,7 @@ export type ASTNode =
   | { type: 'LIST_REPORTS' }
   | { type: 'DELETE_REPORT'; name: string }
   | { type: 'BROWSE' }
+  | { type: 'AGGREGATE';   op: 'SUM' | 'AVERAGE'; field: string; forCond: string | null }
   | { type: 'PRINT';       exprs: Expr[]; newline: boolean }
   | { type: 'CLEAR' }
   | { type: 'QUIT' }
@@ -121,6 +122,8 @@ export class Parser {
       case 'CLOSE':    return this.parseClose();
       case 'LIST':     return this.parseList();
       case 'BROWSE':   this.adv(); return { type: 'BROWSE' };
+      case 'SUM':      return this.parseAggregate('SUM');
+      case 'AVERAGE':  return this.parseAggregate('AVERAGE');
       case 'CLEAR':    this.adv(); return { type: 'CLEAR' };
       case 'QUIT':     this.adv(); return { type: 'QUIT' };
       case 'HELP':     this.adv(); return { type: 'HELP' };
@@ -571,6 +574,26 @@ export class Parser {
   }
 
   // ── Helpers ─────────────────────────────────────────────────────────────
+
+  // SUM <field> [FOR <cond>] / AVERAGE <field> [FOR <cond>]. The FOR condition is
+  // captured as a raw SQL-compatible string (string literals re-quoted), exactly
+  // like SET FILTER TO.
+  private parseAggregate(op: 'SUM' | 'AVERAGE'): ASTNode {
+    this.adv(); // SUM / AVERAGE
+    const field = this.ident();
+    let forCond: string | null = null;
+    if (this.peekKw('FOR')) {
+      this.adv();
+      const parts: string[] = [];
+      while (!this.end() && this.peek().type !== 'NL' && this.peek().type !== 'SEMI' && this.peek().type !== 'EOF') {
+        const t = this.peek();
+        parts.push(t.type === 'STR' ? `'${t.val.replace(/'/g, "''")}'` : t.val);
+        this.adv();
+      }
+      forCond = parts.length ? parts.join(' ') : null;
+    }
+    return { type: 'AGGREGATE', op, field, forCond };
+  }
 
   private parsePrint(): ASTNode {
     const newline = this.adv().val === '?'; // consume ? (newline) or ?? (no newline)
