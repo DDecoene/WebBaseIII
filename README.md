@@ -80,6 +80,30 @@ Wizards open in the main area with a live W3Script preview.
 
 ---
 
+### The Assistant — Modify Structure wizard
+
+`MODIFY STRUCTURE` (or sidebar action) opens the column editor prefilled with the current schema — rename, retype, add, or drop columns, then apply in one click.
+
+![Modify Structure wizard](docs/screenshots/screenshot-modify-structure.png)
+
+---
+
+### Aggregate commands & dBASE III parity
+
+`SUM`, `AVERAGE`, `? ROUND(…)`, `? MAX(…)`, and `SORT ON … TO` — numeric aggregates and sorted copies, honouring the active filter.
+
+![Parity commands — SUM AVERAGE ROUND MAX SORT](docs/screenshots/screenshot-parity.png)
+
+---
+
+### CSV import / export
+
+`COPY TO <file>.csv` exports the current table (browser download); `APPEND FROM <file>.csv` imports via the file picker.
+
+![CSV COPY TO output](docs/screenshots/screenshot-csv.png)
+
+---
+
 ## Features
 
 | Feature | Details |
@@ -367,10 +391,13 @@ src/
 
 ```bash
 npm test                    # unit + integration tests (Vitest)
-npx playwright test         # end-to-end browser tests (requires dev server running)
+npx playwright test         # end-to-end browser tests (auto-starts the dev server)
 ```
 
-The Playwright suite (`tests/integration.spec.ts`, `tests/crm.spec.ts`) drives a real browser against the running app and covers navigation, filters, indexing, programs, forms, and BROWSE.
+The Playwright suite drives a real browser against the running app and covers the
+REPL, filters, indexing, programs, forms, BROWSE, the Assistant wizards,
+multi-work-area, the parity commands (`?`/`??`, `SUM`/`AVERAGE`, `SORT ON … TO`),
+and CSV `COPY TO`/`APPEND FROM`. CI runs both Vitest and Playwright on every PR.
 
 ---
 

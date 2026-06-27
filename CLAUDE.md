@@ -106,7 +106,13 @@ tests/
   ServerDatabaseBridge.test.ts
   ProgramStore.test.ts
   AlterTable.test.ts    ALTER TABLE + MODIFY STRUCTURE integration tests
+  Print.test.ts         `?` / `??` print command
+  Aggregate.test.ts     `SUM` / `AVERAGE`
+  Builtins.test.ts / BuiltinsParse.test.ts   built-in functions (direct + through the parser)
+  Csv.test.ts           RFC-4180 CSV codec (toCSV/parseCSV)
+  CopyCsv.test.ts       COPY TO / APPEND FROM integration
   assistant.spec.ts     Playwright: sidebar, wizards, report designer, program run
+  parity-commands.spec.ts / copycsv.spec.ts   Playwright: parity commands + CSV download/upload
 ```
 
 ## W3Script commands
@@ -218,7 +224,13 @@ WebBase-III supports **unlimited work areas** (no DOS 10-area limit). Cross-area
 | F5 | Refresh from DB |
 | Esc | Exit grid, return to terminal |
 
-## Roadmap (in progress)
+## Roadmap
+
+**v1.0.0 — dBASE III parity: complete ✅.** All sub-projects below shipped, plus the
+closing parity commands: `?`/`??` print (#2), `SUM`/`AVERAGE` (#3), the extra
+built-ins (#4), `SORT ON … TO` (#8), and `COPY TO`/`APPEND FROM` CSV (#5).
+Beyond-parity work (e.g. live multiuser propagation, #11) lands on the `release/v1.1.0`
+line.
 
 1. ~~Indexing & Search~~ — `INDEX ON`, `SET INDEX TO`, `SEEK`, `FIND`, `REINDEX`, `LIST INDEXES` ✅
 2. ~~Language Completeness~~ — `DO CASE/ENDCASE`, built-in functions (`EOF()`, `BOF()`, `FOUND()`, `RECNO()`, `RECCOUNT()`, `SUBSTR()`, `STR()`, `AT()`, `UPPER()`, `LOWER()`, `ROUND()`, `MOD()`, `MAX()`, `MIN()`, `TIME()`, `YEAR()`, `MONTH()`, `DAY()`, and more) ✅
@@ -235,11 +247,11 @@ Both styles accepted: `TRUE`/`FALSE` and `.T.`/`.TRUE.`/`.F.`/`.FALSE.` (dBASE I
 ## Testing
 
 ```bash
-npm test                # Vitest unit + integration (164 tests)
+npm test                # Vitest unit + integration (239 tests)
 npx playwright test     # E2E browser tests — requires dev server on :5173/:3000
 ```
 
-Playwright suites: `tests/integration.spec.ts` (20 tests — full REPL scenario), `tests/assistant.spec.ts` (8 tests — sidebar, wizards, report designer, program run), `tests/inventory.spec.ts` (5 tests — INVENTORY.prg menu), `tests/multiarea.spec.ts` (4 tests — multi-work-area, relations, alias.field), `tests/demos.spec.ts` (3 tests — demo program seeding), `tests/splash.spec.ts` (1 test — version banner), `tests/copycsv.spec.ts` (2 tests — COPY TO download + APPEND FROM upload).
+Playwright suites (49 tests): `tests/integration.spec.ts` (20 tests — full REPL scenario), `tests/assistant.spec.ts` (10 tests — sidebar, wizards, report designer, MODIFY STRUCTURE round-trip, program run), `tests/inventory.spec.ts` (5 tests — INVENTORY.prg menu), `tests/multiarea.spec.ts` (4 tests — multi-work-area, relations, alias.field), `tests/parity-commands.spec.ts` (4 tests — `?`/`??`, built-in functions, `SUM`/`AVERAGE`, `SORT ON … TO`), `tests/demos.spec.ts` (3 tests — demo program seeding), `tests/copycsv.spec.ts` (2 tests — COPY TO download + APPEND FROM upload), `tests/splash.spec.ts` (1 test — version banner).
 
 ## Definition of done
 
