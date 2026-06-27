@@ -29,6 +29,7 @@ export type ASTNode =
   | { type: 'LIST_REPORTS' }
   | { type: 'DELETE_REPORT'; name: string }
   | { type: 'BROWSE' }
+  | { type: 'PRINT';       exprs: Expr[]; newline: boolean }
   | { type: 'CLEAR' }
   | { type: 'QUIT' }
   | { type: 'HELP' }
@@ -104,6 +105,9 @@ export class Parser {
     const t = this.peek();
 
     if (t.type === 'AT') return this.parseAt();
+
+    // dBASE ? / ?? print command (OP tokens, not keywords)
+    if (t.type === 'OP' && (t.val === '?' || t.val === '??')) return this.parsePrint();
 
     if (t.type !== 'KW' && t.type !== 'ID') {
       const raw = t.val; this.adv(); this.skipLine();
@@ -567,6 +571,20 @@ export class Parser {
   }
 
   // ── Helpers ─────────────────────────────────────────────────────────────
+
+  private parsePrint(): ASTNode {
+    const newline = this.adv().val === '?'; // consume ? (newline) or ?? (no newline)
+    const exprs: Expr[] = [];
+    const atEnd = () => {
+      const ty = this.peek().type;
+      return ty === 'NL' || ty === 'SEMI' || ty === 'EOF';
+    };
+    if (!atEnd()) {
+      exprs.push(this.expr());
+      while (this.peek().type === 'COMMA') { this.adv(); exprs.push(this.expr()); }
+    }
+    return { type: 'PRINT', exprs, newline };
+  }
 
   private peek(): Token { return this.toks[this.p] ?? { type: 'EOF', val: '', line: 0, col: 0 }; }
   private prev(): Token { return this.toks[this.p - 1] ?? { type: 'EOF', val: '', line: 0, col: 0 }; }

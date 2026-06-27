@@ -186,6 +186,7 @@ WebBase-III supports **unlimited work areas** (no DOS 10-area limit). Cross-area
 ### Variables & I/O
 | Command | What it does |
 |---|---|
+| `? <expr>[, <expr>...]` | Evaluate expression(s) and print; numbers right-justified, bare `?` prints a blank line. `??` accepted (shares `?` formatting in the web terminal) |
 | `STORE <val> TO <var>` | Assign a variable; booleans display as `.T.`/`.F.` |
 | `INPUT "prompt" TO <var>` | Collect keyboard input (shows pending @SAY fields + prompt) |
 | `@ r,c SAY "text" GET <var>` | Define a form field |
