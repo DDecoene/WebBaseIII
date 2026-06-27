@@ -9,11 +9,13 @@ export type { OutputLine, FormField } from '../shared/types';
 
 export interface ExecResult {
   output: OutputLine[];
-  action?: 'BROWSE' | 'QUIT' | 'FORM_READY' | 'FORM_SUBMIT' | 'DO_PRG' | 'EDIT_PRG' | 'LIST_PROGRAMS' | 'REPORT_PREVIEW' | 'MODIFY_STRUCTURE';
+  action?: 'BROWSE' | 'QUIT' | 'FORM_READY' | 'FORM_SUBMIT' | 'DO_PRG' | 'EDIT_PRG' | 'LIST_PROGRAMS' | 'REPORT_PREVIEW' | 'MODIFY_STRUCTURE' | 'CSV_DOWNLOAD' | 'CSV_UPLOAD_OPEN';
   formFields?: FormField[];
   prgName?: string;
   prgContent?: string;
   reportHtml?: string;
+  csvFilename?: string;
+  csvContent?: string;
   remainingNodes?: ASTNode[];
   continuation?: () => Promise<ExecResult>;
 }
