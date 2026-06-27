@@ -45,18 +45,18 @@ async function typeAndRun(cmd, pauseAfter) {
 // ---- setup (not recorded) ----
 await run('USE DATABASE GIFDEMO');
 await run('DROP TABLE customers');
-await run('CREATE TABLE customers (name CHAR(30), city CHAR(20), phone CHAR(12))');
+await run('CREATE TABLE customers (name CHAR(30), city CHAR(20), founded INTEGER)');
 const rows = [
-  ['Ashton-Tate', 'Torrance', '555-1981'],
-  ['Borland Intl', 'Scotts Valley', '555-1983'],
-  ['Commodore', 'West Chester', '555-1982'],
-  ['Digital Research', 'Pacific Grove', '555-1976'],
-  ['Osborne Computing', 'Hayward', '555-1980'],
-  ['Tandy Corp', 'Fort Worth', '555-1977'],
+  ['Ashton-Tate', 'Torrance', 1980],
+  ['Borland Intl', 'Scotts Valley', 1983],
+  ['Commodore', 'West Chester', 1954],
+  ['Digital Research', 'Pacific Grove', 1974],
+  ['Osborne Computing', 'Hayward', 1980],
+  ['Tandy Corp', 'Fort Worth', 1977],
 ];
-for (const [name, city, phone] of rows) {
+for (const [name, city, founded] of rows) {
   await run('APPEND RECORD');
-  await run(`REPLACE name WITH "${name}", city WITH "${city}", phone WITH "${phone}"`);
+  await run(`REPLACE name WITH "${name}", city WITH "${city}", founded WITH ${founded}`);
 }
 await run('INDEX ON name TO BYNAME');
 await run('CLOSE');
@@ -66,6 +66,9 @@ await run('CLEAR', 600);
 await snap(900);
 await typeAndRun('USE customers', 1300);
 await typeAndRun('LIST', 2600);
+await typeAndRun('AVERAGE founded', 2000);
+await typeAndRun('? MAX(founded)', 1800);
+await typeAndRun('SORT ON founded TO byyear', 2000);
 await typeAndRun('SEEK "Tandy Corp"', 1800);
 await typeAndRun('BROWSE', 1200);
 // a little life inside the grid
