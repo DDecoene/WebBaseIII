@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { ServerDatabaseBridge } from '../server/ServerDatabaseBridge';
+import { ServerDatabaseBridge, __closeAndEvictForTest } from '../server/ServerDatabaseBridge';
 import fs from 'fs';
 import path from 'path';
 
@@ -16,6 +16,8 @@ describe('ServerDatabaseBridge', () => {
 
   afterEach(async () => {
     await bridge.closeDatabase();
+    // Close and evict the shared handle so the next test gets a fresh DB file.
+    __closeAndEvictForTest(TEST_DB);
     for (const f of [DB_PATH, DB_PATH + '-shm', DB_PATH + '-wal']) {
       if (fs.existsSync(f)) fs.unlinkSync(f);
     }
@@ -67,5 +69,19 @@ describe('ServerDatabaseBridge', () => {
   it('rejects invalid database names', async () => {
     await expect(bridge.openDatabase('../evil')).rejects.toThrow('Invalid database name');
     await expect(bridge.openDatabase('../../etc/passwd')).rejects.toThrow('Invalid database name');
+  });
+
+  it('keeps the shared handle usable after another session closes it', async () => {
+    const a = new ServerDatabaseBridge();
+    const b = new ServerDatabaseBridge();
+    await a.openDatabase(TEST_DB);
+    await b.openDatabase(TEST_DB);            // same shared handle
+    await a.exec('CREATE TABLE IF NOT EXISTS shared_t (id INTEGER)');
+
+    await a.closeDatabase();                  // A leaves
+
+    // B must still work — previously this threw "The database connection is not open"
+    await expect(b.query('SELECT COUNT(*) AS n FROM shared_t')).resolves.toBeDefined();
+    await b.closeDatabase();
   });
 });
