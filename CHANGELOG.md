@@ -7,9 +7,12 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
 
 ---
 
-## [1.0.0] — unreleased — feature-complete
+## [1.0.0] — 2026-06-27 — dBASE III parity complete
 
-> Parity milestone. Accumulates on `release/v1.0.0`; tagged when it merges to `main`.
+> The feature-complete parity milestone: `?`/`??`, `SUM`/`AVERAGE`, the extra
+> built-ins (#4), `SORT ON … TO` (#8), `COPY TO`/`APPEND FROM` CSV (#5), on top of
+> indexing, language completeness, multi-work-area, reports, the Assistant, and
+> MODIFY STRUCTURE. Backed by 239 vitest + 49 Playwright tests, CI-gated.
 
 ### Fixed
 - The #4 built-ins (`ROUND`, `MOD`, `MAX`, `MIN`, `TIME`, `YEAR`, `MONTH`, `DAY`,
