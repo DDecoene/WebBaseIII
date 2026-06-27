@@ -34,7 +34,7 @@ npm run serve      # builds frontend, then serves everything on http://localhost
 server/
   index.ts              Node.js HTTP + WebSocket server (port 3000)
   Session.ts            Per-connection session: parses commands, drives Executor
-  SessionManager.ts     Tracks all active sessions
+  SessionManager.ts     Tracks all active sessions; broadcast() fans data-changed to peers viewing a mutated table
   ServerDatabaseBridge.ts  IDatabaseBridge impl wrapping better-sqlite3
   ProgramStore.ts       .prg program storage in data/system.sqlite3
   IndexStore.ts         Index metadata + active index in data/system.sqlite3
@@ -209,6 +209,12 @@ WebBase-III supports **unlimited work areas** (no DOS 10-area limit). Cross-area
 4. ~~Report & Label Engine~~ — `REPORT FORM`, group breaks, subtotals, HTML preview ✅
 5. ~~The Assistant~~ — sidebar GUI, wizards, catalog protocol ✅
 6. ~~Modify Structure~~ — `MODIFY STRUCTURE`, `ALTER TABLE` ADD/DROP/RENAME/ALTER, ModStructWizard, sidebar action ✅
+
+### Beyond parity (v1.1.0)
+
+- ~~Live multiuser propagation~~ — mutating a table broadcasts a `data-changed`
+  message (via `SessionManager.broadcast`, server-side view filtering + debounce)
+  so other sessions BROWSE-ing that table refresh automatically (#11) ✅
 
 ## Boolean literals
 
