@@ -247,6 +247,18 @@ WebBase-III supports **unlimited work areas** — each independently holding a t
 | `SEEK <expr>` | Position record pointer at first index match |
 | `FIND <string>` | Alias for SEEK (unquoted string — dBASE III legacy form) |
 | `SORT ON <field>[/D] TO <newtable>` | Write a sorted copy of the table to a new table; `/D` = descending; honours the active filter |
+| `JOIN WITH <alias> TO <file> FOR <cond> [FIELDS <list>]` | Materialize a snapshot table by joining the active area with `<alias>`; honours the active filter |
+
+> **`JOIN` differs from classic dBASE III:** `FOR` is **required** (dBASE allowed
+> omitting it); cross-area fields use `alias.field` dot syntax (not `alias->field`);
+> `FOR` is a SQL predicate (like `SET FILTER`); the join runs on SQLite's planner,
+> not an O(n×m) nested loop; on a column-name clash the active table wins and the
+> duplicate is dropped **with a warning** (dBASE dropped it silently); and there
+> are no 128-field / 10-char-name limits.
+>
+> _Limitation:_ if a `SET FILTER` is active on the source area, its predicate is
+> applied to the joined query; a filter referencing a column whose name exists in
+> both joined tables may be ambiguous — qualify it or clear the filter before JOIN.
 
 ### Reports
 

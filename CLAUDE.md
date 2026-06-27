@@ -174,6 +174,7 @@ WebBase-III supports **unlimited work areas** (no DOS 10-area limit). Cross-area
 | `SEEK <expr>` | Position record pointer at first index match |
 | `FIND <string>` | Alias for SEEK (unquoted string — dBASE III legacy) |
 | `SORT ON <field>[/D] TO <newtable>` | Sorted copy of the table into a new table (`/D` descending); honours active filter. Thin alias over `CREATE TABLE AS SELECT … ORDER BY` |
+| `JOIN WITH <alias> TO <file> FOR <cond> [FIELDS <list>]` | Materialize a snapshot table by joining the active area with `<alias>`; honours the active filter |
 
 > Index expressions support built-in functions: `INDEX ON UPPER(lastname) TO BYUPPER`
 
@@ -245,6 +246,7 @@ line.
 - ~~Live multiuser propagation~~ — mutating a table broadcasts a `data-changed`
   message (via `SessionManager.broadcast`, server-side view filtering + debounce)
   so other sessions BROWSE-ing that table refresh automatically (#11) ✅
+- ~~JOIN to materialize a combined table~~ — `JOIN WITH <alias> TO <file> FOR <cond> [FIELDS <list>]`, snapshot table via SQLite join (#10) ✅
 
 ## Boolean literals
 

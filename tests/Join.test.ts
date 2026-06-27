@@ -172,3 +172,14 @@ describe('JOIN integration', () => {
     expect(out).toMatch(/Joined 1 record/i);
   });
 });
+
+describe('JOIN help', () => {
+  it('HELP lists the JOIN command', async () => {
+    const sent2: any[] = [];
+    const session = new Session((m: any) => sent2.push(m));
+    await session.handleMessage({ type: 'command', text: 'HELP' });
+    const out = sent2.filter(m => m.type === 'output')
+      .flatMap((m: any) => m.lines.map((l: any) => l.text)).join(' | ');
+    expect(out).toMatch(/JOIN WITH .* TO .* FOR/i);
+  });
+});

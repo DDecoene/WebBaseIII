@@ -976,6 +976,7 @@ export class Executor implements IndexCommandsHost {
       { text: 'SEEK <value>             — position to first match in active index' },
       { text: 'FIND <string>            — same as SEEK (legacy string form)' },
       { text: 'SORT ON <field>[/D] TO <newtable> — sorted copy of the table' },
+      { text: 'JOIN WITH <a> TO <file> FOR <cond> [FIELDS <list>] — materialize a combined table' },
       { text: 'CREATE REPORT <name>    — create a new report definition (opens editor)' },
       { text: 'MODIFY REPORT <name>    — edit an existing report definition' },
       { text: 'REPORT FORM <name>      — run report: ASCII + HTML preview' },
