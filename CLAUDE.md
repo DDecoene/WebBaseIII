@@ -239,7 +239,7 @@ npm test                # Vitest unit + integration (164 tests)
 npx playwright test     # E2E browser tests — requires dev server on :5173/:3000
 ```
 
-Playwright suites: `tests/integration.spec.ts` (20 tests — full REPL scenario), `tests/assistant.spec.ts` (8 tests — sidebar, wizards, report designer, program run), `tests/inventory.spec.ts` (5 tests — INVENTORY.prg menu), `tests/multiarea.spec.ts` (4 tests — multi-work-area, relations, alias.field), `tests/demos.spec.ts` (3 tests — demo program seeding), `tests/splash.spec.ts` (1 test — version banner).
+Playwright suites: `tests/integration.spec.ts` (20 tests — full REPL scenario), `tests/assistant.spec.ts` (8 tests — sidebar, wizards, report designer, program run), `tests/inventory.spec.ts` (5 tests — INVENTORY.prg menu), `tests/multiarea.spec.ts` (4 tests — multi-work-area, relations, alias.field), `tests/demos.spec.ts` (3 tests — demo program seeding), `tests/splash.spec.ts` (1 test — version banner), `tests/copycsv.spec.ts` (2 tests — COPY TO download + APPEND FROM upload).
 
 ## Definition of done
 
