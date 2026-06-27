@@ -362,6 +362,19 @@ The Playwright suite (`tests/integration.spec.ts`, `tests/crm.spec.ts`) drives a
 
 ---
 
+## Contributors
+
+Huge thanks to everyone who has helped extend WebBase-III:
+
+- **[@kas2804](https://github.com/kas2804) (Kasturi Rajarampatil)** — added the
+  `ROUND`, `MOD`, `MAX`, `MIN`, `TIME`, `YEAR`, `MONTH`, and `DAY` built-in
+  functions ([#4](https://github.com/DDecoene/WebBaseIII/issues/4), PR
+  [#17](https://github.com/DDecoene/WebBaseIII/pull/17)) — clean, well-tested
+  work that brought the W3Script expression engine closer to full dBASE III
+  parity. 🙌
+
+---
+
 ## License
 
 AGPL-3.0 — see [LICENSE.md](LICENSE.md).
