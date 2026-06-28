@@ -120,17 +120,17 @@ test.describe('INVENTORY.prg', () => {
     await menuChoice(page, 'Q');
     await waitForProgramExit(page);
 
-    // Verify all 6 products were seeded with correct data (REPLACE must have
+    // Verify all 5 products were seeded with correct data (REPLACE must have
     // targeted each appended row, not overwritten record 1 repeatedly)
     await cmd(page, 'USE DATABASE INVDEMO');
     await cmd(page, 'USE PRODUCTS');
     await cmd(page, 'GO BOTTOM');
-    await waitForOutput(page, 'Record pointer: 6 / 6', 5000);
+    await waitForOutput(page, 'Record pointer: 5 / 5', 5000);
     await cmd(page, 'LIST');
     const output = (await page.locator('#terminal-output').textContent()) ?? '';
     expect(output).not.toMatch(/\*\* Error/i);
     expect(output).toContain('Laptop Pro 15');
-    expect(output).toContain('Stapler Heavy');
+    expect(output).toContain('Desk Chair Ergo');
   });
 
   test('second run — no re-seeding (RECCOUNT regression)', async ({ page }) => {
@@ -163,82 +163,61 @@ test.describe('INVENTORY.prg', () => {
     await waitForOutput(page, 'STOCK: 99', 5000);
   });
 
-  test('option 3 — search finds Laptop Pro 15 by exact name', async ({ page }) => {
+  test('option 5 — search finds Laptop Pro 15 and shows its category', async ({ page }) => {
     await boot(page);
     await cmd(page, `DO ${PRG_NAME}`, 2500);
     await expect(page.locator('#form-view')).toBeVisible({ timeout: 6000 });
 
-    // Choose option 3 and wait until the Search form appears
-    await menuChoiceAndWait(page, '3', 'SEARCH PRODUCT');
+    // Option 5 is now Search Product; wait until the Search form appears
+    await menuChoiceAndWait(page, '5', 'SEARCH PRODUCT');
 
     // Fill exact product name (SEEK is exact-match on UPPER(NAME) index)
     await fillFirstField(page, 'Laptop Pro 15');
 
-    // Result should appear in form view (@ SAY + INPUT prompt)
+    // Result shows the product plus its category via the SET RELATION alias.field
     await expect(page.locator('#form-view')).toContainText('Laptop Pro 15', { timeout: 5000 });
+    await expect(page.locator('#form-view')).toContainText('Electronics', { timeout: 5000 });
 
     await ack(page);
-
-    // Back at the main menu — quit (form closes when the program ends)
     await expect(page.locator('#form-view')).toContainText('WEBBASE-III', { timeout: 6000 });
     await menuChoice(page, 'Q');
     await waitForProgramExit(page);
   });
+});
 
-  test('option 5 — stock report shows product and total rows', async ({ page }) => {
+test.describe('Inventory demo — v1.0/v1.1 features', () => {
+  test.beforeEach(async ({ page }) => {
     await boot(page);
-    await cmd(page, `DO ${PRG_NAME}`, 2500);
-    await expect(page.locator('#form-view')).toBeVisible({ timeout: 6000 });
-
-    // Choose option 5 and wait for the report form (all @SAY + INPUT prompt)
-    await menuChoiceAndWait(page, '5', 'STOCK REPORT');
-
-    // Report content rendered as @SAY fields — check for total line
-    await expect(page.locator('#form-view')).toContainText('Total', { timeout: 5000 });
-
-    await ack(page);
-
-    // Back at the main menu — quit (form closes when the program ends)
-    await expect(page.locator('#form-view')).toContainText('WEBBASE-III', { timeout: 6000 });
-    await menuChoice(page, 'Q');
-    await waitForProgramExit(page);
+    await seedProgram(page);
+    await cmd(page, `DO ${PRG_NAME}`, 1800);
+    await expect(page.locator('#form-view')).toBeVisible({ timeout: 8000 });
   });
 
-  test('option 6 + 7 — deactivate then reactivate Hammer 16oz', async ({ page }) => {
-    await boot(page);
-    await cmd(page, `DO ${PRG_NAME}`, 2500);
-    await expect(page.locator('#form-view')).toBeVisible({ timeout: 6000 });
+  test('option 6 — valuation & stock summary prints totals', async ({ page }) => {
+    await menuChoice(page, '6');
+    await expect(page.locator('#form-view')).toContainText(/valuation|stock/i, { timeout: 6000 });
+  });
 
-    // Deactivate (option 6) — wait for the Deactivate screen
-    await menuChoiceAndWait(page, '6', 'DEACTIVATE PRODUCT');
-    await fillFirstField(page, 'Hammer 16oz');
+  test('option 7 — low-stock report renders the HTML preview', async ({ page }) => {
+    await menuChoice(page, '7');
+    await expect(page.locator('#report-preview-view')).toBeVisible({ timeout: 8000 });
+    await page.keyboard.press('Escape');
+  });
 
-    // Confirm form shows the product found
-    await expect(page.locator('#form-view')).toContainText('Hammer', { timeout: 5000 });
+  test('option 9 — top products by value sorts into a new table', async ({ page }) => {
+    await menuChoice(page, '9');
+    await waitForOutput(page, 'TOPPROD', 6000);
+  });
 
-    // Fill confirm field (Y/N)
-    const confirmInput = page.locator('#form-view input.f-get').last();
-    await confirmInput.fill('Y');
-    await confirmInput.press('Enter');
-    await page.waitForTimeout(1200);
-    await expect(page.locator('#form-view')).toContainText('deactivated', { timeout: 5000 });
-    await ack(page);
+  test('option 10 — export products downloads a CSV', async ({ page }) => {
+    const dl = page.waitForEvent('download');
+    await menuChoice(page, '10');
+    const d = await dl;
+    expect(d.suggestedFilename().toLowerCase()).toContain('products');
+  });
 
-    // Activate (option 7) — wait for the Activate screen
-    await menuChoiceAndWait(page, '7', 'ACTIVATE PRODUCT');
-    await fillFirstField(page, 'Hammer 16oz');
-    await expect(page.locator('#form-view')).toContainText('Hammer', { timeout: 5000 });
-
-    const confirmInput2 = page.locator('#form-view input.f-get').last();
-    await confirmInput2.fill('Y');
-    await confirmInput2.press('Enter');
-    await page.waitForTimeout(1200);
-    await expect(page.locator('#form-view')).toContainText('activated', { timeout: 5000 });
-    await ack(page);
-
-    // Back at the main menu — quit (form closes when the program ends)
-    await expect(page.locator('#form-view')).toContainText('WEBBASE-III', { timeout: 6000 });
-    await menuChoice(page, 'Q');
-    await waitForProgramExit(page);
+  test('option 11 — combined catalog JOIN builds a table', async ({ page }) => {
+    await menuChoice(page, '11');
+    await waitForOutput(page, 'CATALOG', 6000);
   });
 });
