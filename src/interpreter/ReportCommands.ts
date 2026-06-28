@@ -1,11 +1,12 @@
 import type { ExecResult } from './Executor.js';
-import type { ReportDef, IDatabaseBridge, WorkArea } from '../shared/types.js';
+import type { ReportDef, IDatabaseBridge, WorkArea, ClientSideEffect } from '../shared/types.js';
 import { ReportRunner } from '../../server/ReportRunner.js';
 import { reportStore } from '../../server/ReportStore.js';
 
 export interface ReportCommandsHost {
   readonly area: WorkArea;
   readonly db: IDatabaseBridge;
+  onSideEffect: ((e: ClientSideEffect) => void) | null;
 }
 
 const BLANK_REPORT = JSON.stringify({
@@ -55,7 +56,10 @@ export class ReportCommands {
     const rows = await this.host.db.query(sql);
     const { ascii, html } = runner.run(def, rows);
     const lines = ascii.split('\n').map(text => ({ text }));
-    return { output: lines, action: 'REPORT_PREVIEW', reportHtml: html } as any;
+    // Emit the preview as a side-effect so it survives running inside a program
+    // block (DO WHILE / DO CASE / IF), where the returned action would be lost.
+    this.host.onSideEffect?.({ type: 'report-preview', html });
+    return { output: lines };
   }
 
   doListReports(): ExecResult {

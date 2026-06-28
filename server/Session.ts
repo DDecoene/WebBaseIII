@@ -19,6 +19,10 @@ export class Session {
   constructor(private send: (msg: ServerMessage) => void) {
     this.bridge = new ServerDatabaseBridge();
     this.executor = new Executor(this.bridge, indexStore);
+    // Fire-and-forget client side-effects (CSV download, report preview, CSV
+    // upload picker) are emitted immediately so they work at any nesting depth,
+    // including inside a program's DO WHILE / DO CASE / IF blocks.
+    this.executor.onSideEffect = (e) => this.send(e);
   }
 
   async handleMessage(msg: ClientMessage): Promise<void> {
@@ -300,17 +304,9 @@ export class Session {
       return true;
     }
 
-    if (result.action === 'REPORT_PREVIEW' && (result as any).reportHtml) {
-      this.send({ type: 'report-preview', html: (result as any).reportHtml });
-    }
-
-    if (result.action === 'CSV_DOWNLOAD' && result.csvContent !== undefined) {
-      this.send({ type: 'csv-download', filename: result.csvFilename ?? 'export.csv', content: result.csvContent });
-    }
-
-    if (result.action === 'CSV_UPLOAD_OPEN') {
-      this.send({ type: 'csv-upload-open', table: this.executor.area.table ?? '', filename: result.csvFilename ?? 'import.csv' });
-    }
+    // REPORT_PREVIEW / CSV_DOWNLOAD / CSV_UPLOAD_OPEN are now delivered via
+    // executor.onSideEffect (emitted immediately, so they work inside program
+    // blocks) — no action handling needed here.
 
     if (result.action === 'MODIFY_STRUCTURE') {
       const area = this.executor.area;

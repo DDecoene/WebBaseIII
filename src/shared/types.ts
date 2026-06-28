@@ -86,6 +86,17 @@ export interface CatalogTable { name: string; count: number; }
 export interface CatalogIndex { tag: string; expression: string; active: boolean; }
 export interface CatalogReport { name: string; content: string; }
 
+/**
+ * "Fire-and-forget" client side-effects an executing command emits immediately
+ * (rather than returning as an ExecResult action), so they survive being run
+ * inside a program's control-flow block (DO WHILE / DO CASE / IF). Each variant
+ * mirrors a ServerMessage shape so the Session can forward it verbatim.
+ */
+export type ClientSideEffect =
+  | { type: 'csv-download'; filename: string; content: string }
+  | { type: 'csv-upload-open'; table: string; filename: string }
+  | { type: 'report-preview'; html: string };
+
 export interface Catalog {
   databases: string[];
   tables: CatalogTable[];
