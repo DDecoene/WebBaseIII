@@ -126,6 +126,35 @@ already covered by `tests/propagation.spec.ts`.
 - First-run seeding guarded by `RECCOUNT() == 0`, re-runs don't reseed (regression guard
   already in `tests/inventory.spec.ts`).
 
+## Discoverability — making the demos visible as usable starters
+
+A user must be able to tell, without reading the repo, that `crm` and `inventory` are
+complete, editable example apps they can build off. Four surfaces:
+
+1. **Splash "Try a demo" block** (`src/terminal/Terminal.ts` `printWelcome`). Highest
+   visibility — shown on every connect. Add after Quick start, e.g.:
+   ```
+   Try a full example app:
+     DO crm         — a working mini-CRM (companies, contacts, deals)
+     DO inventory   — a working stock manager (categories, products, movements)
+   These are complete, editable programs — EDIT crm to copy and build your own.
+   ```
+2. **Assistant demo launchers** (`src/ui/Assistant.ts`). Add explicit friendly entries to
+   the Programs category that run the demos on click — labels make intent obvious:
+   `Run CRM demo (example app)` → `DO crm`, `Run Inventory demo (example app)` →
+   `DO inventory`, plus the existing generic `Run program…` / `Edit program…` pickers
+   (which already list `crm`/`inventory`). Ships with a Playwright case (satisfies the
+   DoD Assistant-parity step explicitly rather than by the "run via DO" note).
+3. **HELP demos section** (the HELP command output in `src/interpreter/Executor.ts`). Add
+   a short "Demos / examples" block listing `DO crm` / `DO inventory` and "EDIT <name> to
+   customize".
+4. **Header comment in each `.prg`**. A clear comment block at the top of `crm.prg` and
+   `INVENTORY.prg` (seen on `EDIT`) explaining it's a usable starter — what it does, how
+   the tables relate, and "copy this file / EDIT it to adapt".
+
+These surfaces are additive and small; each gets coverage (splash + HELP asserted in a
+terminal e2e; the Assistant launchers in `tests/assistant.spec.ts`).
+
 ## Testing (Definition of Done)
 
 - **`tests/inventory.spec.ts`** (extend) — receive stock changes stock; valuation totals;
@@ -135,9 +164,11 @@ already covered by `tests/propagation.spec.ts`.
 - **`tests/demos.spec.ts`** (extend) — assert the two report defs seed (visible via
   `LIST REPORTS` / catalog).
 - **`tests/DemoSeeder` vitest** — `seedDemoReports()` writes the JSON defs to the store.
-- Per the DoD Assistant-parity step: these are demo programs run via `DO`, already
-  reachable from the Assistant "Run program…" picker — no new Assistant action needed;
-  note this in the PR.
+- **`tests/assistant.spec.ts`** (extend) — the two demo launcher actions
+  (`Run CRM demo`, `Run Inventory demo`) run the demo and open its menu form (satisfies
+  the DoD Assistant-parity step).
+- **Splash + HELP** — a terminal e2e asserts the splash "Try a demo" block on connect and
+  the HELP demos section (extend `tests/splash.spec.ts` / an integration case).
 
 ## Docs
 
