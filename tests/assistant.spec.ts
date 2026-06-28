@@ -208,6 +208,51 @@ test.describe('Assistant wizards — modify structure', () => {
   });
 });
 
+test.describe('Assistant — post-v0.6 commands (CSV / REINDEX / PACK)', () => {
+  test.beforeEach(async ({ page }) => {
+    await boot(page);
+    const cmds = [
+      'USE DATABASE ASSISTDEMO',
+      'DROP TABLE wiz_post',
+      'CREATE TABLE wiz_post (NAME CHAR(20), QTY NUM(6))',
+      'APPEND RECORD', 'REPLACE NAME WITH "Anvil", QTY WITH 3',
+      'APPEND RECORD', 'REPLACE NAME WITH "Rope", QTY WITH 50',
+      'USE wiz_post',
+    ];
+    for (const c of cmds) {
+      await page.locator('#terminal-input').fill(c);
+      await page.locator('#terminal-input').press('Enter');
+      await page.waitForTimeout(250);
+    }
+  });
+
+  test('Export to CSV triggers a download of the active table', async ({ page }) => {
+    const downloadPromise = page.waitForEvent('download');
+    await clickAction(page, 'Export to CSV');
+    const download = await downloadPromise;
+    expect(download.suggestedFilename().toLowerCase()).toContain('wiz_post');
+    await expect(page.locator('#terminal-output')).toContainText('record(s) copied', { timeout: 5000 });
+  });
+
+  test('Import from CSV opens a file picker', async ({ page }) => {
+    const chooserPromise = page.waitForEvent('filechooser');
+    await clickAction(page, 'Import from CSV');
+    const chooser = await chooserPromise;
+    expect(chooser).toBeTruthy();
+  });
+
+  test('Reindex rebuilds indexes', async ({ page }) => {
+    await clickAction(page, 'Reindex');
+    await expect(page.locator('#terminal-output')).toContainText('Indexes rebuilt', { timeout: 5000 });
+  });
+
+  test('Pack database VACUUMs after confirm', async ({ page }) => {
+    page.on('dialog', d => d.accept());
+    await clickAction(page, 'Pack database');
+    await expect(page.locator('#terminal-output')).toContainText('VACUUM complete', { timeout: 5000 });
+  });
+});
+
 test.describe('Assistant wizards — report designer', () => {
   test('builds, saves, and runs a report', async ({ page }) => {
     await boot(page);
