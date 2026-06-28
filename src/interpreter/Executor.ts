@@ -1005,6 +1005,11 @@ export class Executor implements IndexCommandsHost {
       { text: 'DO <name>               — run a saved program' },
       { text: 'EDIT <name>             — create/edit a program' },
       { text: 'LIST PROGRAMS           — list saved programs' },
+      { text: '' },
+      { text: 'Demos / examples:' },
+      { text: 'DO crm        — usable CRM example app (EDIT crm to customize)' },
+      { text: 'DO inventory  — usable inventory example app (EDIT inventory to customize)' },
+      { text: '' },
       { text: 'QUIT                    — exit' },
     ]};
   }
