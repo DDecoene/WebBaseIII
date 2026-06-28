@@ -1,4 +1,4 @@
-import { IDatabaseBridge, IIndexStore, OutputLine, FormField, WorkArea } from '../shared/types';
+import { IDatabaseBridge, IIndexStore, OutputLine, FormField, WorkArea, ClientSideEffect } from '../shared/types';
 import { ASTNode, Expr, ColDef, Parser } from './Parser';
 import { Lexer } from './Lexer';
 import { callStateless } from './Builtins';
@@ -10,13 +10,10 @@ export type { OutputLine, FormField } from '../shared/types';
 
 export interface ExecResult {
   output: OutputLine[];
-  action?: 'BROWSE' | 'QUIT' | 'FORM_READY' | 'FORM_SUBMIT' | 'DO_PRG' | 'EDIT_PRG' | 'LIST_PROGRAMS' | 'REPORT_PREVIEW' | 'MODIFY_STRUCTURE' | 'CSV_DOWNLOAD' | 'CSV_UPLOAD_OPEN';
+  action?: 'BROWSE' | 'QUIT' | 'FORM_READY' | 'FORM_SUBMIT' | 'DO_PRG' | 'EDIT_PRG' | 'LIST_PROGRAMS' | 'MODIFY_STRUCTURE';
   formFields?: FormField[];
   prgName?: string;
   prgContent?: string;
-  reportHtml?: string;
-  csvFilename?: string;
-  csvContent?: string;
   remainingNodes?: ASTNode[];
   continuation?: () => Promise<ExecResult>;
 }
@@ -64,6 +61,10 @@ export class Executor implements IndexCommandsHost {
   private indexCmds: IndexCommands;
   private reportCmds: ReportCommands;
   private programDepth = 0;
+
+  /** Sink for fire-and-forget client side-effects (CSV download, report preview,
+      CSV upload picker). Set by the Session so these survive control-flow blocks. */
+  public onSideEffect: ((e: ClientSideEffect) => void) | null = null;
 
   constructor(
     public db: IDatabaseBridge,
@@ -551,12 +552,10 @@ export class Executor implements IndexCommandsHost {
     }
     const cols = (await this.db.getStructure(table)).map(c => c.name);
     const rows = await this.getOrderedRows(MAX_EXPORT_ROWS);
-    return {
-      output: [{ text: `${rows.length} record(s) copied to ${filename}.`, cls: 'ok' }],
-      action: 'CSV_DOWNLOAD',
-      csvFilename: filename,
-      csvContent: toCSV(cols, rows),
-    };
+    // Emit the download as a side-effect so it survives running inside a program
+    // block (DO WHILE / DO CASE / IF), where the returned action would be lost.
+    this.onSideEffect?.({ type: 'csv-download', filename, content: toCSV(cols, rows) });
+    return { output: [{ text: `${rows.length} record(s) copied to ${filename}.`, cls: 'ok' }] };
   }
 
   // APPEND FROM <file>.csv — the import is a round-trip: open a file picker in the
@@ -564,7 +563,8 @@ export class Executor implements IndexCommandsHost {
   private async doAppendFrom(file: string): Promise<ExecResult> {
     this.requireTable();
     const filename = file.toLowerCase().endsWith('.csv') ? file : `${file}.csv`;
-    return { output: [], action: 'CSV_UPLOAD_OPEN', csvFilename: filename };
+    this.onSideEffect?.({ type: 'csv-upload-open', table: this.area.table ?? '', filename });
+    return { output: [] };
   }
 
   // Bulk-import CSV into the current table. Header-mapped (by name, case-insensitive),

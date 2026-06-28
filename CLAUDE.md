@@ -59,7 +59,7 @@ src/
   interpreter/
     Lexer.ts            Tokenises W3Script input (case-insensitive)
     Parser.ts           Recursive-descent AST builder
-    Executor.ts         Async AST runner; manages state (db/table/filter/vars/rowPtr/activeIndex)
+    Executor.ts         Async AST runner; manages state (db/table/filter/vars/rowPtr/activeIndex). Emits fire-and-forget client side-effects (CSV download, report preview, CSV upload picker) via onSideEffect so they work inside program blocks
     IndexCommands.ts    Index command handlers (extracted from Executor)
     ReportCommands.ts   Report command handlers delegating to ReportRunner
 
@@ -255,11 +255,11 @@ Both styles accepted: `TRUE`/`FALSE` and `.T.`/`.TRUE.`/`.F.`/`.FALSE.` (dBASE I
 ## Testing
 
 ```bash
-npm test                # Vitest unit + integration (258 tests)
+npm test                # Vitest unit + integration (260 tests)
 npx playwright test     # E2E browser tests — requires dev server on :5173/:3000
 ```
 
-Playwright suites (59 tests): `tests/integration.spec.ts` (20 tests — full REPL scenario), `tests/assistant.spec.ts` (18 tests — sidebar, wizards, report designer, MODIFY STRUCTURE round-trip, program run, CSV/SORT/SUM-AVERAGE/REINDEX/PACK actions), `tests/inventory.spec.ts` (5 tests — INVENTORY.prg menu), `tests/multiarea.spec.ts` (4 tests — multi-work-area, relations, alias.field), `tests/parity-commands.spec.ts` (4 tests — `?`/`??`, built-in functions, `SUM`/`AVERAGE`, `SORT ON … TO`), `tests/demos.spec.ts` (3 tests — demo program seeding), `tests/copycsv.spec.ts` (2 tests — COPY TO download + APPEND FROM upload), `tests/join.spec.ts` (1 test — JOIN materialization), `tests/propagation.spec.ts` (1 test — live multiuser refresh), `tests/splash.spec.ts` (1 test — version banner).
+Playwright suites (60 tests): `tests/integration.spec.ts` (20 tests — full REPL scenario), `tests/assistant.spec.ts` (18 tests — sidebar, wizards, report designer, MODIFY STRUCTURE round-trip, program run, CSV/SORT/SUM-AVERAGE/REINDEX/PACK actions), `tests/inventory.spec.ts` (5 tests — INVENTORY.prg menu), `tests/multiarea.spec.ts` (4 tests — multi-work-area, relations, alias.field), `tests/parity-commands.spec.ts` (4 tests — `?`/`??`, built-in functions, `SUM`/`AVERAGE`, `SORT ON … TO`), `tests/demos.spec.ts` (3 tests — demo program seeding), `tests/copycsv.spec.ts` (2 tests — COPY TO download + APPEND FROM upload), `tests/join.spec.ts` (1 test — JOIN materialization), `tests/propagation.spec.ts` (1 test — live multiuser refresh), `tests/program-side-effects.spec.ts` (1 test — CSV/report side-effects fire from inside a program block), `tests/splash.spec.ts` (1 test — version banner).
 
 ## Definition of done
 
