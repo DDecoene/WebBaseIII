@@ -10,6 +10,10 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
 ## [1.1.0] — 2026-06-27 — Live multiuser data propagation
 
 ### Added
+- `JOIN WITH <alias> TO <file> FOR <cond> [FIELDS <list>]` — materialize a combined
+  snapshot table from two open work areas, computed by SQLite's join planner.
+  Deviations from dBASE III (FOR required, `alias.field` dot syntax, SQL-predicate
+  FOR, active-wins collision handling with a warning) are documented in README. (#10)
 - Live multiuser data propagation (#11): when one session mutates a table, every
   other session currently BROWSE-ing that same table refreshes automatically — no
   manual re-query. Type in one browser window, watch another repaint.
