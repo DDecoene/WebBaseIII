@@ -10,6 +10,9 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
 ## [1.1.0] — 2026-06-27 — Live multiuser data propagation
 
 ### Added
+- `CONTRIBUTING.md` rewritten for the GitFlow model: fork → branch off the active
+  `release/vX.Y.Z` → PR against that release branch (not `main`), plus a Definition of
+  Done section. Added a PR template and a README "Contributing" pointer. (#31)
 - `JOIN WITH <alias> TO <file> FOR <cond> [FIELDS <list>]` — materialize a combined
   snapshot table from two open work areas, computed by SQLite's join planner.
   Deviations from dBASE III (FOR required, `alias.field` dot syntax, SQL-predicate
