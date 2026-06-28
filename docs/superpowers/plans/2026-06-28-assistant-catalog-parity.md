@@ -23,7 +23,7 @@ Adds the `onRun` action hook (a click handler that can read the active table nam
 - Modify: `src/ui/wizards/index.ts`
 - Test: `tests/assistant.spec.ts`
 
-- [ ] **Step 1: Write the failing e2e tests**
+- [x] **Step 1: Write the failing e2e tests**
 
 Append this block to `tests/assistant.spec.ts` (it reuses the file's existing `boot`/`clickAction` helpers defined at the top):
 
@@ -74,12 +74,12 @@ test.describe('Assistant — post-v0.6 commands (CSV / REINDEX / PACK)', () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `npx playwright test tests/assistant.spec.ts -g "post-v0.6"`
 Expected: FAIL — the actions "Export to CSV", "Import from CSV", "Reindex", "Pack database" do not exist, so `clickAction` finds no element / times out.
 
-- [ ] **Step 3: Add `onRun`, immediate-action `confirm`, and active-table tracking to `Assistant.ts`**
+- [x] **Step 3: Add `onRun`, immediate-action `confirm`, and active-table tracking to `Assistant.ts`**
 
 In `src/ui/Assistant.ts`, extend the `WizardName` type (line 4) to include the two new wizards:
 
@@ -135,7 +135,7 @@ Update `activate()` to honour `confirm` on immediate actions and dispatch `onRun
   }
 ```
 
-- [ ] **Step 4: Add the catalog actions**
+- [x] **Step 4: Add the catalog actions**
 
 In `CATEGORIES`, append to the **Data** category's `actions` array (after `Clear filter`):
 
@@ -159,7 +159,7 @@ Append to the **Tables** category's `actions` array (after `Drop table…`):
       confirm: () => 'VACUUM rewrites the database file to reclaim space. Continue?' },
 ```
 
-- [ ] **Step 5: Register the new wizards in the dispatcher**
+- [x] **Step 5: Register the new wizards in the dispatcher**
 
 In `src/ui/wizards/index.ts`, add imports next to the other wizard imports:
 
@@ -177,7 +177,7 @@ Add two cases to the `switch (name)` in `openWizard`, after the `report` case:
 
 > Note: `SortWizard.ts` and `AggregateWizard.ts` are created in Tasks 2 and 3. Until then the build will fail on the missing imports — that is expected; this task's e2e subset for CSV/REINDEX/PACK is verified after Tasks 2–3 land, OR temporarily stub the two wizard files with `export function openSortWizard(){}` / `export function openAggregateWizard(){}` to compile. Prefer doing Tasks 1→2→3 back-to-back and running the full suite once at the end of Task 3.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/ui/Assistant.ts src/ui/wizards/index.ts tests/assistant.spec.ts
@@ -192,7 +192,7 @@ git commit -m "feat(assistant): CSV/REINDEX/PACK actions + onRun hook + active-t
 - Create: `src/ui/wizards/SortWizard.ts`
 - Test: `tests/assistant.spec.ts`
 
-- [ ] **Step 1: Write the failing e2e test**
+- [x] **Step 1: Write the failing e2e test**
 
 Append to `tests/assistant.spec.ts`:
 
@@ -237,12 +237,12 @@ test.describe('Assistant wizards — sort', () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `npx playwright test tests/assistant.spec.ts -g "wizards — sort"`
 Expected: FAIL — no `SortWizard`, so the wizard view / `#wz-sort-field` never appears.
 
-- [ ] **Step 3: Create `src/ui/wizards/SortWizard.ts`**
+- [x] **Step 3: Create `src/ui/wizards/SortWizard.ts`**
 
 ```typescript
 import { WizardShell } from './WizardShell';
@@ -289,12 +289,12 @@ export function openSortWizard(catalog: Catalog, run: (cmd: string) => void, onC
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `npx playwright test tests/assistant.spec.ts -g "wizards — sort"`
 Expected: PASS (both cases).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/ui/wizards/SortWizard.ts tests/assistant.spec.ts
@@ -309,7 +309,7 @@ git commit -m "feat(assistant): Sort wizard (SORT ON … TO) (#33)"
 - Create: `src/ui/wizards/AggregateWizard.ts`
 - Test: `tests/assistant.spec.ts`
 
-- [ ] **Step 1: Write the failing e2e test**
+- [x] **Step 1: Write the failing e2e test**
 
 Append to `tests/assistant.spec.ts`:
 
@@ -352,12 +352,12 @@ test.describe('Assistant wizards — aggregate', () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `npx playwright test tests/assistant.spec.ts -g "wizards — aggregate"`
 Expected: FAIL — no `AggregateWizard`, so `#wz-agg-op` never appears.
 
-- [ ] **Step 3: Create `src/ui/wizards/AggregateWizard.ts`**
+- [x] **Step 3: Create `src/ui/wizards/AggregateWizard.ts`**
 
 ```typescript
 import { WizardShell } from './WizardShell';
@@ -402,12 +402,12 @@ export function openAggregateWizard(catalog: Catalog, run: (cmd: string) => void
 }
 ```
 
-- [ ] **Step 4: Run the full Assistant suite to verify everything passes**
+- [x] **Step 4: Run the full Assistant suite to verify everything passes**
 
 Run: `npx playwright test tests/assistant.spec.ts`
 Expected: PASS — all existing cases plus the new CSV/REINDEX/PACK, sort, and aggregate cases.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/ui/wizards/AggregateWizard.ts tests/assistant.spec.ts
@@ -425,7 +425,7 @@ Amends the DoD to require Assistant parity, and brings CHANGELOG/README/CLAUDE.m
 - Modify: `CHANGELOG.md`
 - Modify: `README.md`
 
-- [ ] **Step 1: Amend the Definition of Done in `CLAUDE.md`**
+- [x] **Step 1: Amend the Definition of Done in `CLAUDE.md`**
 
 Replace the second bullet under step 2 (the `**CI gates this.**` bullet) by inserting a new Assistant-parity bullet **before** it. Find this exact text:
 
@@ -440,7 +440,7 @@ and replace it with:
    - **CI gates this.** `.github/workflows/ci.yml` runs a `unit` job (vitest + build) and an `e2e` job (Playwright, auto-starting the dev server via the `webServer` block in `playwright.config.ts`) on every push/PR to `main` and `release/**`. A PR is not mergeable until both jobs are green — do not merge a release-branch PR with red or missing CI.
 ```
 
-- [ ] **Step 2: Update the Assistant architecture note in `CLAUDE.md`**
+- [x] **Step 2: Update the Assistant architecture note in `CLAUDE.md`**
 
 Find the `Assistant.ts` line in the `src/ui/` architecture block:
 
@@ -462,11 +462,11 @@ And in the `src/ui/wizards/` line, add the two new wizards:
                         SortWizard, AggregateWizard, index.ts dispatcher
 ```
 
-- [ ] **Step 3: Update the `tests/assistant.spec.ts` count note in `CLAUDE.md`**
+- [x] **Step 3: Update the `tests/assistant.spec.ts` count note in `CLAUDE.md`**
 
 In the Testing section, the `assistant.spec.ts` description currently reads `10 tests`. Run `npx playwright test tests/assistant.spec.ts --list | tail -1` to get the new total for that file, then update the count and the overall Playwright suite total in the "Playwright suites (49 tests)" sentence accordingly (add the number of new cases: 4 CSV/REINDEX/PACK + 2 sort + 2 aggregate = 8 new).
 
-- [ ] **Step 4: Add a CHANGELOG entry**
+- [x] **Step 4: Add a CHANGELOG entry**
 
 In `CHANGELOG.md`, under the `1.1.0` version heading's `### Added` section, add:
 
@@ -475,11 +475,11 @@ In `CHANGELOG.md`, under the `1.1.0` version heading's `### Added` section, add:
 - Definition of Done now requires every new user-facing command to be surfaced in the Assistant with a Playwright e2e case (#33).
 ```
 
-- [ ] **Step 5: Update `README.md`**
+- [x] **Step 5: Update `README.md`**
 
 In `README.md`, find the Assistant feature description / category list and update it to mention the new actions (CSV import/export, sort, sum/average, reindex, pack). Match the existing wording style of that section. (Search for "Assistant" in README.md to locate it.)
 
-- [ ] **Step 6: Run the full test suites**
+- [x] **Step 6: Run the full test suites**
 
 Run: `npm test`
 Expected: PASS (no unit regressions).
@@ -487,7 +487,7 @@ Expected: PASS (no unit regressions).
 Run: `npx playwright test`
 Expected: PASS (all e2e green).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add CLAUDE.md CHANGELOG.md README.md

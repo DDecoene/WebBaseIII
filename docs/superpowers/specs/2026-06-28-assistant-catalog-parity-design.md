@@ -107,6 +107,31 @@ action (or driving the wizard) must drive the REPL and assert the rendered resul
 Standard DoD: `npm test` + `npx playwright test` green; `package.json` already at
 `1.1.0` on the release branch; CHANGELOG + README + CLAUDE.md updated.
 
+## Implementation outcome (2026-06-28)
+
+Shipped as planned in PR #35 (based on `release/v1.1.0`, closes #33). All four
+catalog/wizard tasks plus the docs/DoD task landed; full suites green (vitest 258,
+Playwright 59; the 8 new e2e cases all pass and CI is green on the PR).
+
+Deviations from the plan, all minor:
+
+- **Output casing in tests.** The Sort e2e asserted `Sorted 2 record(s) into wiz_sorted`
+  but the server uppercases table names, so the assertion was corrected to
+  `WIZ_SORTED`. The wizard *preview* still shows the user's typed (lowercase) name.
+- **Stub-then-replace ordering.** Because Task 1 registers the `'sort'`/`'aggregate'`
+  wizards in `wizards/index.ts` before Tasks 2–3 create those files, Task 1 created
+  temporary no-op stubs for `SortWizard.ts` / `AggregateWizard.ts` to keep the build
+  compiling; Tasks 2–3 overwrote them with the real implementations.
+- **Stale test-count notes corrected.** Updating the CLAUDE.md Testing section revealed
+  the Playwright breakdown was already stale (missing `join.spec.ts` and
+  `propagation.spec.ts` from #10/#11) and the vitest count was 239; both were corrected
+  (Playwright 59, vitest 258).
+- **Visual assets retaken.** `screenshot-assistant.png` and `demo.gif` were re-recorded
+  — the Assistant sidebar is permanently visible (including in the demo GIF), so both
+  would otherwise show a sidebar missing the new entries.
+
+The deferred JOIN + Work areas/SET RELATION work is tracked in follow-up issue #34.
+
 ## Out of scope
 
 Record `DELETE`/`RECALL`, `REPLACE`, `?`/`STORE`, `GO`/`SKIP` — BROWSE already covers
