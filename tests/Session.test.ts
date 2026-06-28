@@ -1065,4 +1065,64 @@ describe('Multi-work-area integration', () => {
     expect(msg.catalog.columns).toEqual([]);
     expect(msg.catalog.indexes).toEqual([]);
   });
+
+  // Regression: COPY TO / REPORT FORM run *inside a program control-flow block*
+  // (DO CASE / DO WHILE / IF) must still deliver their client side-effects
+  // (csv-download / report-preview). Before the onSideEffect fix these actions
+  // were swallowed by the block executor — the server did the work but the
+  // browser never got the download or preview. (bug present since v1.0.0 / v0.5.0)
+  it('COPY TO inside a program block still emits csv-download', async () => {
+    const { session, sent } = makeSession();
+    const db = uniqueDb();
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    await session.handleMessage({ type: 'command', text: 'CREATE TABLE se_t (name TEXT, qty INTEGER)' });
+    await session.handleMessage({ type: 'command', text: 'USE se_t' });
+    await session.handleMessage({ type: 'command', text: 'APPEND RECORD' });
+    await session.handleMessage({ type: 'command', text: 'REPLACE name WITH "A", qty WITH 1' });
+    programStore.save('test_se_copy', [
+      'STORE .T. TO go',
+      'DO WHILE go',
+      '  DO CASE',
+      '    CASE go',
+      '      USE se_t',
+      '      COPY TO se_out.csv',
+      '      STORE .F. TO go',
+      '  ENDCASE',
+      'ENDDO',
+    ].join('\n'));
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: 'DO test_se_copy' });
+    const dl = sent.find(m => m.type === 'csv-download') as any;
+    expect(dl).toBeDefined();
+    expect(dl.filename).toBe('se_out.csv');
+    expect(dl.content.toLowerCase()).toContain('name');
+  });
+
+  it('REPORT FORM inside a program block still emits report-preview', async () => {
+    const { session, sent } = makeSession();
+    const db = uniqueDb();
+    await session.handleMessage({ type: 'command', text: `USE DATABASE ${db}` });
+    await session.handleMessage({ type: 'command', text: 'CREATE TABLE se_r (name TEXT, amount INTEGER)' });
+    await session.handleMessage({ type: 'command', text: 'USE se_r' });
+    await session.handleMessage({ type: 'command', text: 'APPEND RECORD' });
+    await session.handleMessage({ type: 'command', text: 'REPLACE name WITH "A", amount WITH 5' });
+    reportStore.save('test_se_rep', JSON.stringify({
+      title: 'T', columns: [{ field: 'NAME', heading: 'Name', width: 10 }],
+    }));
+    programStore.save('test_se_report', [
+      'STORE .T. TO go',
+      'DO WHILE go',
+      '  IF go',
+      '    USE se_r',
+      '    REPORT FORM test_se_rep',
+      '    STORE .F. TO go',
+      '  ENDIF',
+      'ENDDO',
+    ].join('\n'));
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: 'DO test_se_report' });
+    const prev = sent.find(m => m.type === 'report-preview') as any;
+    expect(prev).toBeDefined();
+    expect(typeof prev.html).toBe('string');
+  });
 });
