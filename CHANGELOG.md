@@ -10,6 +10,14 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
 ## [1.1.0] — 2026-06-27 — Live multiuser data propagation
 
 ### Added
+- Rebuilt the `crm` and `inventory` demos into usable example apps — a mini-CRM
+  (companies / contacts / deals) and a stock manager (categories / products / stock
+  movements) — that double as a guided tour of the v1.0.0 + v1.1.0 feature set:
+  `SUM`/`AVERAGE … FOR`, `SORT ON … TO`, `JOIN`, `REPORT FORM`, CSV export, work-area
+  relations with `alias.field`, and a live-propagation tip. Each demo seeds a grouped
+  report definition (`demos/reports/*.json`, seeded by `DemoSeeder.seedDemoReports`).
+  The demos are now discoverable from the splash screen, `HELP`, and the Assistant
+  (Programs → Run CRM demo / Run Inventory demo). (#29)
 - Assistant sidebar parity for post-v0.6 commands: Export/Import CSV actions, a
   Sort-to-new-table wizard, a Sum/Average wizard, and Reindex / Pack database
   actions — closing the drift between the sidebar and the REPL language. (#33)

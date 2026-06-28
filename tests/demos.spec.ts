@@ -103,4 +103,12 @@ test.describe('Demo programs', () => {
       await quitProgram(page);
     });
   }
+
+  test('seeded report definitions are available', async ({ page }) => {
+    await page.goto('http://localhost:5173');
+    await expect(page.locator('#terminal-output')).toContainText('Connected.', { timeout: 8000 });
+    await typeCmd(page, 'LIST REPORTS', 800);
+    await expect(page.locator('#terminal-output')).toContainText('dealsbystage', { timeout: 5000 });
+    await expect(page.locator('#terminal-output')).toContainText('lowstock', { timeout: 5000 });
+  });
 });

@@ -43,6 +43,13 @@ test.describe('CRM demo', () => {
   test.beforeEach(async ({ page }) => {
     await boot(page);
     await seedProgram(page);
+    // Clean slate: drop the demo's tables so DO crm performs a fresh first-run
+    // seed. The CRM database persists server-side and is shared across suites, so
+    // without this a stale table/index from another test can break seeding.
+    await cmd(page, 'USE DATABASE CRM');
+    for (const t of ['COMPANIES', 'CONTACTS', 'DEALS', 'CUSTOMERS', 'TOPDEALS', 'PIPELINE']) {
+      await cmd(page, `DROP TABLE ${t}`, 150);
+    }
     await cmd(page, `DO ${PRG_NAME}`, 1800);
   });
 

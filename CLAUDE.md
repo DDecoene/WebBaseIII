@@ -53,7 +53,7 @@ server/
   IndexStore.ts         Index metadata + active index in data/system.sqlite3
   ReportStore.ts        Report definition storage in data/system.sqlite3 (reports table)
   ReportRunner.ts       ASCII and HTML report rendering, group breaks, subtotals, grand totals
-  DemoSeeder.ts         Seeds demos/*.prg into the program store at startup (demos win)
+  DemoSeeder.ts         Seeds demos/*.prg into the program store and demos/reports/*.json into the report store at startup (demos win)
 
 src/
   interpreter/
@@ -90,7 +90,9 @@ data/
 
 demos/
   *.prg                 Demo programs — single source of truth; seeded into the
-                        program store on every server start (overwrites store copies)
+                        program store on every server start (overwrites store copies).
+                        crm.prg + INVENTORY.prg are usable example apps.
+  reports/*.json        Demo report definitions — seeded into the report store at startup
 
 .devcontainer/
   devcontainer.json     GitHub Codespaces config — auto npm install + npm run dev
@@ -255,11 +257,11 @@ Both styles accepted: `TRUE`/`FALSE` and `.T.`/`.TRUE.`/`.F.`/`.FALSE.` (dBASE I
 ## Testing
 
 ```bash
-npm test                # Vitest unit + integration (260 tests)
+npm test                # Vitest unit + integration (262 tests)
 npx playwright test     # E2E browser tests — requires dev server on :5173/:3000
 ```
 
-Playwright suites (60 tests): `tests/integration.spec.ts` (20 tests — full REPL scenario), `tests/assistant.spec.ts` (18 tests — sidebar, wizards, report designer, MODIFY STRUCTURE round-trip, program run, CSV/SORT/SUM-AVERAGE/REINDEX/PACK actions), `tests/inventory.spec.ts` (5 tests — INVENTORY.prg menu), `tests/multiarea.spec.ts` (4 tests — multi-work-area, relations, alias.field), `tests/parity-commands.spec.ts` (4 tests — `?`/`??`, built-in functions, `SUM`/`AVERAGE`, `SORT ON … TO`), `tests/demos.spec.ts` (3 tests — demo program seeding), `tests/copycsv.spec.ts` (2 tests — COPY TO download + APPEND FROM upload), `tests/join.spec.ts` (1 test — JOIN materialization), `tests/propagation.spec.ts` (1 test — live multiuser refresh), `tests/program-side-effects.spec.ts` (1 test — CSV/report side-effects fire from inside a program block), `tests/splash.spec.ts` (1 test — version banner).
+Playwright suites (73 tests): `tests/integration.spec.ts` (20 tests — full REPL scenario), `tests/assistant.spec.ts` (20 tests — sidebar, wizards, report designer, MODIFY STRUCTURE round-trip, program run, CSV/SORT/SUM-AVERAGE/REINDEX/PACK actions, demo launchers), `tests/inventory.spec.ts` (8 tests — INVENTORY.prg menu + valuation/low-stock report/sort/CSV/JOIN), `tests/crm.spec.ts` (6 tests — CRM demo menu, pipeline summary, sort, report, CSV, JOIN), `tests/multiarea.spec.ts` (4 tests — multi-work-area, relations, alias.field), `tests/parity-commands.spec.ts` (4 tests — `?`/`??`, built-in functions, `SUM`/`AVERAGE`, `SORT ON … TO`), `tests/demos.spec.ts` (4 tests — demo program + report seeding), `tests/copycsv.spec.ts` (2 tests — COPY TO download + APPEND FROM upload), `tests/splash.spec.ts` (2 tests — version banner + demo discoverability), `tests/join.spec.ts` (1 test — JOIN materialization), `tests/propagation.spec.ts` (1 test — live multiuser refresh), `tests/program-side-effects.spec.ts` (1 test — CSV/report side-effects fire from inside a program block).
 
 ## Definition of done
 
