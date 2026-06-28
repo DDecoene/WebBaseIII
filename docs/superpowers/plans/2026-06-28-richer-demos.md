@@ -25,7 +25,7 @@
 - Modify: `server/index.ts`
 - Test: `tests/DemoSeeder.test.ts` (create)
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/DemoSeeder.test.ts`:
 
@@ -59,12 +59,12 @@ describe('seedDemoReports', () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `npx vitest run tests/DemoSeeder.test.ts`
 Expected: FAIL — `seedDemoReports` is not exported.
 
-- [ ] **Step 3: Implement `seedDemoReports`**
+- [x] **Step 3: Implement `seedDemoReports`**
 
 In `server/DemoSeeder.ts`, add the import and the function (keep the existing `seedDemoPrograms`):
 
@@ -91,7 +91,7 @@ export function seedDemoReports(reportsDir = REPORTS_DIR): string[] {
 }
 ```
 
-- [ ] **Step 4: Wire it into startup**
+- [x] **Step 4: Wire it into startup**
 
 In `server/index.ts`, next to `const seededDemos = seedDemoPrograms();`, add:
 
@@ -104,12 +104,12 @@ const seededReports = seedDemoReports();
 
 (Adjust the existing import line rather than adding a duplicate. If there is a startup log line listing seeded demos, extend it to mention `seededReports.length` reports.)
 
-- [ ] **Step 5: Run the test to verify it passes**
+- [x] **Step 5: Run the test to verify it passes**
 
 Run: `npx vitest run tests/DemoSeeder.test.ts`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add server/DemoSeeder.ts server/index.ts tests/DemoSeeder.test.ts
@@ -124,7 +124,7 @@ git commit -m "feat(demos): seed report definitions from demos/reports/*.json (#
 - Create: `demos/reports/dealsbystage.json`
 - Create: `demos/reports/lowstock.json`
 
-- [ ] **Step 1: Create `demos/reports/dealsbystage.json`**
+- [x] **Step 1: Create `demos/reports/dealsbystage.json`**
 
 ```json
 {
@@ -141,7 +141,7 @@ git commit -m "feat(demos): seed report definitions from demos/reports/*.json (#
 }
 ```
 
-- [ ] **Step 2: Create `demos/reports/lowstock.json`**
+- [x] **Step 2: Create `demos/reports/lowstock.json`**
 
 ```json
 {
@@ -159,12 +159,12 @@ git commit -m "feat(demos): seed report definitions from demos/reports/*.json (#
 }
 ```
 
-- [ ] **Step 3: Validate the JSON parses**
+- [x] **Step 3: Validate the JSON parses**
 
 Run: `node -e "JSON.parse(require('fs').readFileSync('demos/reports/dealsbystage.json')); JSON.parse(require('fs').readFileSync('demos/reports/lowstock.json')); console.log('ok')"`
 Expected: `ok`
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add demos/reports/dealsbystage.json demos/reports/lowstock.json
@@ -179,7 +179,7 @@ git commit -m "feat(demos): seeded report definitions for CRM + inventory (#29)"
 - Modify (full rewrite): `demos/crm.prg`
 - Test: `tests/crm.spec.ts` (create)
 
-- [ ] **Step 1: Write the failing e2e test**
+- [x] **Step 1: Write the failing e2e test**
 
 Create `tests/crm.spec.ts` (modelled on `tests/inventory.spec.ts` helpers):
 
@@ -267,12 +267,12 @@ test.describe('CRM demo', () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `npx playwright test tests/crm.spec.ts`
 Expected: FAIL — the rewritten `crm.prg` doesn't exist yet, so menus/options don't match.
 
-- [ ] **Step 3: Rewrite `demos/crm.prg`**
+- [x] **Step 3: Rewrite `demos/crm.prg`**
 
 Replace the entire file with the program below. (It follows the proven idioms in the current `INVENTORY.prg`.)
 
@@ -563,12 +563,12 @@ CLEAR
 @ 2, 5 SAY "CRM demo closed. Type DO crm to run it again, or EDIT crm to customize."
 ```
 
-- [ ] **Step 4: Run the test, iterate until green**
+- [x] **Step 4: Run the test, iterate until green**
 
 Run: `npx playwright test tests/crm.spec.ts`
 Expected: PASS. If a step errors, open the app (`npm run dev`), `DO crm`, reproduce the failing option, read the `** Error` line, and fix the `.prg` (common causes: a table that must be dropped before re-create on re-run; an index not active before SEEK; a JOIN target table already existing — the program drops `TOPDEALS`/`PIPELINE` first to avoid this). Keep iterating; do not change the test to hide a real program bug (only adjust assertions for cosmetic output/casing).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add demos/crm.prg tests/crm.spec.ts
@@ -583,7 +583,7 @@ git commit -m "feat(demos): rebuild crm.prg into a usable CRM example app (#29)"
 - Modify (full rewrite): `demos/INVENTORY.prg`
 - Test: `tests/inventory.spec.ts` (extend)
 
-- [ ] **Step 1: Add failing e2e cases**
+- [x] **Step 1: Add failing e2e cases**
 
 Append a new describe block to `tests/inventory.spec.ts` (reuse its existing `boot`/`seedProgram`/`cmd`/`menuChoice` helpers — match their actual names in the file):
 
@@ -627,12 +627,12 @@ test.describe('Inventory demo — v1.0/v1.1 features', () => {
 
 If `waitForOutput`/`PRG_NAME` aren't exported helpers in that file, add the same small helpers used in `tests/crm.spec.ts`.
 
-- [ ] **Step 2: Run to verify the new cases fail**
+- [x] **Step 2: Run to verify the new cases fail**
 
 Run: `npx playwright test tests/inventory.spec.ts -g "v1.0/v1.1 features"`
 Expected: FAIL — options 6/7/9/10/11 don't exist yet in the current menu.
 
-- [ ] **Step 3: Rewrite `demos/INVENTORY.prg`**
+- [x] **Step 3: Rewrite `demos/INVENTORY.prg`**
 
 Replace the entire file with the program below. It keeps Categories + Products (adds `REORDER`) and adds a MOVEMENTS ledger, then a feature-rich menu.
 
@@ -939,12 +939,12 @@ CLEAR
 @ 2, 5 SAY "Inventory demo closed. Type DO inventory to run it again, or EDIT inventory."
 ```
 
-- [ ] **Step 4: Run the inventory suite, iterate until green**
+- [x] **Step 4: Run the inventory suite, iterate until green**
 
 Run: `npx playwright test tests/inventory.spec.ts`
 Expected: PASS (existing seeding/regression cases + the new feature cases). Iterate on `.prg` errors as in Task 3 Step 4. Note the existing "second run does not re-seed" regression test must still pass — the `IF RECCOUNT() == 0` guards preserve that.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add demos/INVENTORY.prg tests/inventory.spec.ts
@@ -962,7 +962,7 @@ git commit -m "feat(demos): rebuild INVENTORY.prg into a usable stock manager (#
 - Modify: `demos/crm.prg`, `demos/INVENTORY.prg` (header comments already added in Tasks 3–4 — verify present)
 - Test: `tests/splash.spec.ts` (extend), `tests/assistant.spec.ts` (extend)
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/assistant.spec.ts`:
 
@@ -991,12 +991,12 @@ Add to `tests/splash.spec.ts` an assertion (inside its existing test or a new on
   await expect(page.locator('#terminal-output')).toContainText('DO inventory', { timeout: 8000 });
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `npx playwright test tests/assistant.spec.ts -g "demo launchers" tests/splash.spec.ts`
 Expected: FAIL — launcher actions and splash demo lines don't exist.
 
-- [ ] **Step 3: Add the splash block**
+- [x] **Step 3: Add the splash block**
 
 In `src/terminal/Terminal.ts` `printWelcome`, after the Quick start block (before the trailing `{ text: '' }`), add:
 
@@ -1008,7 +1008,7 @@ In `src/terminal/Terminal.ts` `printWelcome`, after the Quick start block (befor
       { text: '  These are complete, editable programs — EDIT crm to build your own.', cls: 'info' },
 ```
 
-- [ ] **Step 4: Add a HELP demos section**
+- [x] **Step 4: Add a HELP demos section**
 
 In `src/interpreter/Executor.ts`, find the HELP output array (the lines with `{ text: 'COPY TO ...' }` etc.) and add near the end, before the closing of the help list:
 
@@ -1021,7 +1021,7 @@ In `src/interpreter/Executor.ts`, find the HELP output array (the lines with `{ 
 
 (Match the exact object shape used by the surrounding HELP lines — some use `{ text }`, some `{ text, cls }`.)
 
-- [ ] **Step 5: Add the Assistant demo launchers**
+- [x] **Step 5: Add the Assistant demo launchers**
 
 In `src/ui/Assistant.ts`, in the **Programs** category `actions` array, add two entries at the top (before `Run program…`):
 
@@ -1032,16 +1032,16 @@ In `src/ui/Assistant.ts`, in the **Programs** category `actions` array, add two 
 
 (These are always enabled — the demos are seeded on startup and self-contained. `command` runs immediately via the existing `activate()` path.)
 
-- [ ] **Step 6: Verify the `.prg` header comments**
+- [x] **Step 6: Verify the `.prg` header comments**
 
 Confirm `demos/crm.prg` and `demos/INVENTORY.prg` start with the comment blocks authored in Tasks 3–4 (they do). No change needed if present.
 
-- [ ] **Step 7: Run the tests to verify they pass**
+- [x] **Step 7: Run the tests to verify they pass**
 
 Run: `npx playwright test tests/assistant.spec.ts -g "demo launchers" tests/splash.spec.ts`
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/terminal/Terminal.ts src/interpreter/Executor.ts src/ui/Assistant.ts tests/assistant.spec.ts tests/splash.spec.ts
@@ -1057,7 +1057,7 @@ git commit -m "feat(demos): surface demos in splash, HELP, and Assistant (#29)"
 - Modify: `README.md`, `CLAUDE.md`, `CHANGELOG.md`
 - Modify: `docs/screenshots/*` (if demo UI changed materially)
 
-- [ ] **Step 1: Add a report-seed assertion to `tests/demos.spec.ts`**
+- [x] **Step 1: Add a report-seed assertion to `tests/demos.spec.ts`**
 
 Add a test that the seeded report defs are available (via `LIST REPORTS`):
 
@@ -1075,12 +1075,12 @@ test('seeded report definitions are available', async ({ page }) => {
 
 (Match the file's existing import/helper style.)
 
-- [ ] **Step 2: Run it**
+- [x] **Step 2: Run it**
 
 Run: `npx playwright test tests/demos.spec.ts`
 Expected: PASS.
 
-- [ ] **Step 3: Update `CHANGELOG.md`**
+- [x] **Step 3: Update `CHANGELOG.md`**
 
 Under `## [1.1.0]` → `### Added`:
 
@@ -1088,17 +1088,17 @@ Under `## [1.1.0]` → `### Added`:
 - Rebuilt the `crm` and `inventory` demos into usable example apps (companies/contacts/deals; categories/products/stock movements) that showcase SUM/AVERAGE FOR, SORT, JOIN, REPORT FORM, CSV export, relations, and live propagation. Each seeds a grouped report definition. Demos are now surfaced in the splash screen, HELP, and the Assistant. (#29)
 ```
 
-- [ ] **Step 4: Update `README.md`**
+- [x] **Step 4: Update `README.md`**
 
 Update the demo descriptions (search for `crm`/`INVENTORY`/`demos`) to describe the new usable apps and the seeded reports, and mention `DO crm` / `DO inventory` as ready-to-run examples.
 
-- [ ] **Step 5: Update `CLAUDE.md`**
+- [x] **Step 5: Update `CLAUDE.md`**
 
 - In the `demos/` architecture block, mention `demos/reports/*.json` (seeded report defs) and the richer crm/inventory programs.
 - In the `server/` block, note `DemoSeeder.seedDemoReports`.
 - In the Testing section, add `tests/crm.spec.ts` to the Playwright suite list and update the suite count (run `npx playwright test --list 2>&1 | grep -oE '^[[:space:]]+[a-zA-Z-]+\.spec\.ts' | tr -d ' ' | sort | uniq -c` to get exact per-file counts and the new total).
 
-- [ ] **Step 6: Full suites green**
+- [x] **Step 6: Full suites green**
 
 Run: `npm test`
 Expected: PASS.
@@ -1106,11 +1106,11 @@ Expected: PASS.
 Run: `npx playwright test`
 Expected: PASS.
 
-- [ ] **Step 7: Retake demo screenshots (if changed)**
+- [x] **Step 7: Retake demo screenshots (if changed)**
 
 If `docs/screenshots/` has demo screenshots that now look different (e.g. an inventory menu shot), retake them with the dev server running. The README demo GIF is a REPL showcase that does not run the demos, so it does not need re-recording for this issue.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add tests/demos.spec.ts README.md CLAUDE.md CHANGELOG.md docs/screenshots

@@ -176,6 +176,31 @@ terminal e2e; the Assistant launchers in `tests/assistant.spec.ts`).
 - CHANGELOG entry under 1.1.0.
 - Retake demo screenshots if the demo UI changes materially.
 
+## Implementation outcome (2026-06-28)
+
+Shipped on `feature/29-richer-demos` (PR into `release/v1.1.0`). All six plan tasks
+landed; full suites green (vitest 262, Playwright 73).
+
+Notable events and deviations:
+
+- **Surfaced a v1.0.0 bug mid-implementation.** Running `REPORT FORM` / `COPY TO` from
+  inside the demo menu loops did nothing in the browser — the per-command client action
+  was swallowed by the block executor. Latent bug (CSV since v1.0.0, report since
+  v0.5.0). Fixed as **hotfix v1.0.1** off `main` (new `Executor.onSideEffect` sink),
+  tagged + released, then merged forward into `release/v1.1.0` and this branch. The
+  demos depend on that fix.
+- **Inventory menu renumbered.** The rewrite reorganised the menu (added receive/issue
+  stock, valuation, low-stock report; removed the old activate/deactivate flow), so the
+  existing `tests/inventory.spec.ts` option-number cases were updated and the seed set
+  changed (5 products, no "Stapler Heavy").
+- **`REPORT FORM` needs a pause.** Both demos add an `INPUT "Press Enter"` after
+  `REPORT FORM` so the preview is seen before the menu loop redraws.
+- **CRM test isolation.** The `CRM` database persists server-side and is shared across
+  suites; a stale `CONTACTS`/`BYNAME(LASTNAME)` index from another suite broke seeding in
+  the full run. `tests/crm.spec.ts` `beforeEach` now drops the demo tables for a clean
+  first-run seed. (Per-test DB teardown is tracked as issue #36.)
+- **Discoverability:** all four surfaces shipped; `screenshot-assistant.png` retaken.
+
 ## Out of scope
 
 - No new W3Script command for report definition (seeding covers the need).
