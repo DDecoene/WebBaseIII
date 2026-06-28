@@ -414,6 +414,13 @@ and CSV `COPY TO`/`APPEND FROM`. CI runs both Vitest and Playwright on every PR.
 
 ---
 
+## Contributing
+
+Contributions are welcome! WebBase-III uses **GitFlow** — fork the repo and open your
+PR against the **active `release/vX.Y.Z` branch** (the open milestone), not `main`.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full fork → release-branch workflow and
+the Definition of Done.
+
 ## Contributors
 
 Huge thanks to everyone who has helped extend WebBase-III:
