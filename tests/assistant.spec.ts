@@ -329,3 +329,40 @@ test.describe('Assistant wizards — sort', () => {
     await expect(page.locator('.wz-preview')).toContainText('SORT ON QTY/D TO wiz_sorted');
   });
 });
+
+test.describe('Assistant wizards — aggregate', () => {
+  test.beforeEach(async ({ page }) => {
+    await boot(page);
+    const cmds = [
+      'USE DATABASE ASSISTDEMO',
+      'DROP TABLE wiz_agg',
+      'CREATE TABLE wiz_agg (NAME CHAR(20), QTY NUM(6))',
+      'APPEND RECORD', 'REPLACE NAME WITH "Anvil", QTY WITH 3',
+      'APPEND RECORD', 'REPLACE NAME WITH "Rope", QTY WITH 50',
+      'USE wiz_agg',
+    ];
+    for (const c of cmds) {
+      await page.locator('#terminal-input').fill(c);
+      await page.locator('#terminal-input').press('Enter');
+      await page.waitForTimeout(250);
+    }
+  });
+
+  test('Aggregate wizard sums a numeric field', async ({ page }) => {
+    await clickAction(page, 'Sum / Average…');
+    await expect(page.locator('#wizard-view')).toBeVisible({ timeout: 5000 });
+    await page.locator('#wz-agg-op').selectOption({ value: 'SUM' });
+    await page.locator('#wz-agg-field').selectOption({ value: 'QTY' });
+    await expect(page.locator('.wz-preview')).toContainText('SUM QTY');
+    await page.locator('#wizard-view button', { hasText: 'Compute' }).click();
+    await expect(page.locator('#terminal-output')).toContainText('53', { timeout: 5000 });
+  });
+
+  test('Aggregate wizard offers only numeric fields', async ({ page }) => {
+    await clickAction(page, 'Sum / Average…');
+    await expect(page.locator('#wizard-view')).toBeVisible({ timeout: 5000 });
+    const opts = page.locator('#wz-agg-field option');
+    await expect(opts).toHaveCount(1);          // only QTY (NUM); NAME (CHAR) excluded
+    await expect(opts.first()).toHaveText(/QTY/);
+  });
+});
