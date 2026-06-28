@@ -7,7 +7,17 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
 
 ---
 
-## [1.0.0] — 2026-06-27 — dBASE III parity complete
+## [1.0.1] — 2026-06-28 — Hotfix
+
+### Fixed
+- `COPY TO`, `APPEND FROM`, and `REPORT FORM` now work when run **inside a program**
+  control-flow block (`DO WHILE` / `DO CASE` / `IF`). Previously the server performed
+  the work but the browser never received the CSV download, file picker, or report
+  preview — the per-command client action was swallowed by the block executor (only
+  `BROWSE` and form `READ` were threaded through). These three are now delivered as
+  immediate side-effects via a new `Executor.onSideEffect` sink, so they fire at any
+  nesting depth. (Bug present since v1.0.0 for CSV and v0.5.0 for `REPORT FORM`;
+  REPL and Assistant usage were unaffected.)
 
 > The feature-complete parity milestone: `?`/`??`, `SUM`/`AVERAGE`, the extra
 > built-ins (#4), `SORT ON … TO` (#8), `COPY TO`/`APPEND FROM` CSV (#5), on top of
