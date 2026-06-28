@@ -10,6 +10,11 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
 ## [1.1.0] — 2026-06-27 — Live multiuser data propagation
 
 ### Added
+- Assistant sidebar parity for post-v0.6 commands: Export/Import CSV actions, a
+  Sort-to-new-table wizard, a Sum/Average wizard, and Reindex / Pack database
+  actions — closing the drift between the sidebar and the REPL language. (#33)
+- Definition of Done now requires every new user-facing command to be surfaced in
+  the Assistant (action and/or wizard) with a Playwright e2e case. (#33)
 - `CONTRIBUTING.md` rewritten for the GitFlow model: fork → branch off the active
   `release/vX.Y.Z` → PR against that release branch (not `main`), plus a Definition of
   Done section. Added a PR template and a README "Contributing" pointer. (#31)

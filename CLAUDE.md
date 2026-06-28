@@ -71,10 +71,10 @@ src/
     FormLayout.ts       @ SAY GET form engine — character-cell coordinates
     ProgramEditor.ts    .prg source editor UI
     ReportPreview.ts    iframe-based HTML report preview panel (Esc to close, Ctrl+P to print)
-    Assistant.ts        Permanent left sidebar — 6 categories, catalog-driven pickers, action dispatch
+    Assistant.ts        Permanent left sidebar — catalog-driven pickers, action dispatch (incl. CSV, SORT, SUM/AVERAGE, REINDEX, PACK)
     wizards/            Wizard panels (take over main area): WizardShell, DatabaseWizard, TableWizard,
                         FilterWizard, IndexWizard, SearchWizard, ReportWizard, ModStructWizard,
-                        index.ts dispatcher
+                        SortWizard, AggregateWizard, index.ts dispatcher
 
   ws/
     WsClient.ts         Browser WebSocket client — sends commands, receives messages
@@ -255,11 +255,11 @@ Both styles accepted: `TRUE`/`FALSE` and `.T.`/`.TRUE.`/`.F.`/`.FALSE.` (dBASE I
 ## Testing
 
 ```bash
-npm test                # Vitest unit + integration (239 tests)
+npm test                # Vitest unit + integration (258 tests)
 npx playwright test     # E2E browser tests — requires dev server on :5173/:3000
 ```
 
-Playwright suites (49 tests): `tests/integration.spec.ts` (20 tests — full REPL scenario), `tests/assistant.spec.ts` (10 tests — sidebar, wizards, report designer, MODIFY STRUCTURE round-trip, program run), `tests/inventory.spec.ts` (5 tests — INVENTORY.prg menu), `tests/multiarea.spec.ts` (4 tests — multi-work-area, relations, alias.field), `tests/parity-commands.spec.ts` (4 tests — `?`/`??`, built-in functions, `SUM`/`AVERAGE`, `SORT ON … TO`), `tests/demos.spec.ts` (3 tests — demo program seeding), `tests/copycsv.spec.ts` (2 tests — COPY TO download + APPEND FROM upload), `tests/splash.spec.ts` (1 test — version banner).
+Playwright suites (59 tests): `tests/integration.spec.ts` (20 tests — full REPL scenario), `tests/assistant.spec.ts` (18 tests — sidebar, wizards, report designer, MODIFY STRUCTURE round-trip, program run, CSV/SORT/SUM-AVERAGE/REINDEX/PACK actions), `tests/inventory.spec.ts` (5 tests — INVENTORY.prg menu), `tests/multiarea.spec.ts` (4 tests — multi-work-area, relations, alias.field), `tests/parity-commands.spec.ts` (4 tests — `?`/`??`, built-in functions, `SUM`/`AVERAGE`, `SORT ON … TO`), `tests/demos.spec.ts` (3 tests — demo program seeding), `tests/copycsv.spec.ts` (2 tests — COPY TO download + APPEND FROM upload), `tests/join.spec.ts` (1 test — JOIN materialization), `tests/propagation.spec.ts` (1 test — live multiuser refresh), `tests/splash.spec.ts` (1 test — version banner).
 
 ## Definition of done
 
@@ -268,6 +268,7 @@ Complete these steps **in order** — do not skip or reorder:
 1. **Branch correctly** — work sits on a `feature/<name>` branched off the milestone's `release/vX.Y.Z`; the PR is based on that release branch, **not** `main` (see Git conventions → GitFlow). Confirm the issue is assigned to the matching milestone.
 2. `npm test` (vitest) **and** `npx playwright test` (e2e) both pass — all green.
    - **Every user-facing command/feature ships with a Playwright e2e case in the same PR, not just a vitest unit/integration test.** A REPL command needs at least one `tests/*.spec.ts` case that types it and asserts the rendered terminal/UI result; browser-only behavior (downloads, uploads, grid, wizards) must be exercised in a real browser. Unit coverage alone is not "done" — the #4 built-ins shipped broken because only unit tests (which bypass the parser) covered them.
+   - **Assistant parity.** Every new user-facing command/feature is surfaced in the Assistant sidebar (a `CATEGORIES` action in `src/ui/Assistant.ts` and/or a wizard) **and** ships with a Playwright e2e case that clicks the Assistant action (or drives its wizard) and asserts the rendered REPL/UI result — OR the PR explicitly notes why the command does not belong in the Assistant (e.g. BROWSE already covers it, or it is not GUI-shaped). A vitest test does not satisfy this; the Assistant path must run in a real browser.
    - **CI gates this.** `.github/workflows/ci.yml` runs a `unit` job (vitest + build) and an `e2e` job (Playwright, auto-starting the dev server via the `webServer` block in `playwright.config.ts`) on every push/PR to `main` and `release/**`. A PR is not mergeable until both jobs are green — do not merge a release-branch PR with red or missing CI.
 3. `package.json` version = the milestone's version (set on the `release/vX.Y.Z` branch); patch bumps for hotfixes
 4. `CHANGELOG.md` — add entry (Added / Fixed / Changed sections) under the milestone version heading

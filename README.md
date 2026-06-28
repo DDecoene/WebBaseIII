@@ -115,7 +115,7 @@ Wizards open in the main area with a live W3Script preview.
 | **DO CASE** | Multi-branch conditional, `OTHERWISE` fallback |
 | **Built-in functions** | `EOF()`, `BOF()`, `FOUND()`, `RECNO()`, `SUBSTR()`, `STR()`, `AT()`, `CTOD()`, `DTOC()` and more |
 | **Program files** | Save, edit, and run `.prg` scripts with `DO` / `EDIT` |
-| **The Assistant** | Permanent left sidebar — open databases/tables, browse, filter, index, search, design reports, run programs without typing |
+| **The Assistant** | Permanent left sidebar — open databases/tables, browse, filter, CSV import/export, sort, sum/average, index, search, reindex, pack, design reports, run programs without typing |
 | **Multi-user** | Each WebSocket connection gets its own isolated interpreter session |
 | **Live propagation** | Edit a record in one session and every other session BROWSE-ing that table refreshes automatically — no re-query |
 | **Persistent storage** | `better-sqlite3` with WAL mode — databases survive server restart |
@@ -125,10 +125,11 @@ Wizards open in the main area with a live W3Script preview.
 ## The Assistant
 
 The sidebar on the left drives everything without typing: open or create databases and tables,
-browse and filter data, build indexes, search, design and run reports, run programs, and modify
+browse and filter data, import/export CSV, sort into a new table, sum or average a numeric field,
+build indexes, search, reindex, pack the database, design and run reports, run programs, and modify
 table structure. Every click generates a real W3Script command that echoes into the terminal —
-watch it to learn the language. Wizards (New table, Filter, Modify structure, report designer, …)
-open in the main area and show a live preview of the command they will run.
+watch it to learn the language. Wizards (New table, Filter, Sort, Sum/Average, Modify structure,
+report designer, …) open in the main area and show a live preview of the command they will run.
 
 ---
 
