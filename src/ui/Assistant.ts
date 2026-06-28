@@ -1,7 +1,7 @@
 import { WsClient } from '../ws/WsClient';
 import type { Catalog } from '../shared/types';
 
-export type WizardName = 'database' | 'table' | 'filter' | 'index' | 'search' | 'report';
+export type WizardName = 'database' | 'table' | 'filter' | 'index' | 'search' | 'report' | 'sort' | 'aggregate';
 
 export interface AssistantHost {
   run(cmd: string): void;
@@ -20,6 +20,7 @@ interface ActionDef {
   pickerExtra?: string;             // synthetic first entry, e.g. "(natural order)"
   onPick?: (name: string, host: AssistantHost) => void;
   confirm?: (name: string) => string | null;  // returns confirm() text, null = no confirm
+  onRun?: (host: AssistantHost, table: string | null) => void;  // immediate, dynamic command
 }
 
 const CATEGORIES: { name: string; actions: ActionDef[] }[] = [
@@ -36,18 +37,25 @@ const CATEGORIES: { name: string; actions: ActionDef[] }[] = [
     { label: 'Drop table…', needs: 'db', picker: 'tables',
       confirm: n => `Drop table ${n}? This permanently deletes the table and all its data.`,
       onPick: (n, h) => h.run(`DROP TABLE ${n}`) },
+    { label: 'Pack database', needs: 'table', command: 'PACK',
+      confirm: () => 'VACUUM rewrites the database file to reclaim space. Continue?' },
   ]},
   { name: 'Data', actions: [
     { label: 'Browse', needs: 'table', command: 'BROWSE' },
     { label: 'Add record', needs: 'table', commands: ['APPEND RECORD', 'BROWSE'] },
     { label: 'Filter…', needs: 'table', wizard: 'filter' },
     { label: 'Clear filter', needs: 'table', command: 'SET FILTER TO' },
+    { label: 'Export to CSV', needs: 'table', onRun: (h, t) => { if (t) h.run(`COPY TO ${t}.csv`); } },
+    { label: 'Import from CSV', needs: 'table', onRun: (h, t) => { if (t) h.run(`APPEND FROM ${t}.csv`); } },
+    { label: 'Sort to new table…', needs: 'table', wizard: 'sort' },
+    { label: 'Sum / Average…', needs: 'table', wizard: 'aggregate' },
   ]},
   { name: 'Search', actions: [
     { label: 'Set index…', needs: 'table', picker: 'indexes', pickerExtra: '(natural order)',
       onPick: (n, h) => h.run(n === '(natural order)' ? 'SET INDEX TO' : `SET INDEX TO ${n}`) },
     { label: 'New index…', needs: 'table', wizard: 'index' },
     { label: 'Find record…', needs: 'table', wizard: 'search' },
+    { label: 'Reindex', needs: 'table', command: 'REINDEX' },
   ]},
   { name: 'Reports', actions: [
     { label: 'Run report…', needs: 'table', picker: 'reports', onPick: (n, h) => h.run(`REPORT FORM ${n}`) },
@@ -65,6 +73,7 @@ export class Assistant {
   private catalog: Catalog = { databases: [], tables: [], columns: [], indexes: [], reports: [], programs: [] };
   private hasDb = false;
   private hasTable = false;
+  private activeTable: string | null = null;
   private openPicker: string | null = null;   // label of the action whose picker is expanded
 
   constructor(private ws: WsClient, private host: AssistantHost) {
@@ -78,6 +87,7 @@ export class Assistant {
       const changed = this.hasDb !== !!m.db || this.hasTable !== !!m.table;
       this.hasDb = !!m.db;
       this.hasTable = !!m.table;
+      this.activeTable = m.table ?? null;
       if (changed) this.refresh();
     });
     this.render();
@@ -187,8 +197,13 @@ export class Assistant {
       return;
     }
     this.openPicker = null;
+    if (a.confirm) {
+      const text = a.confirm(this.activeTable ?? '');
+      if (text && !window.confirm(text)) { this.render(); return; }
+    }
     if (a.command) { this.host.run(a.command); this.refresh(); }
     if (a.commands) { for (const c of a.commands) this.host.run(c); this.refresh(); }
+    if (a.onRun) a.onRun(this.hostWithRefresh(), this.activeTable);
     if (a.wizard) this.host.openWizard(a.wizard);
     this.render();
   }
