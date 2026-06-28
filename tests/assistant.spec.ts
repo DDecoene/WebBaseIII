@@ -290,3 +290,42 @@ test.describe('Assistant wizards — report designer', () => {
     await page.keyboard.press('Escape');
   });
 });
+
+test.describe('Assistant wizards — sort', () => {
+  test.beforeEach(async ({ page }) => {
+    await boot(page);
+    const cmds = [
+      'USE DATABASE ASSISTDEMO',
+      'DROP TABLE wiz_sortsrc',
+      'DROP TABLE wiz_sorted',
+      'CREATE TABLE wiz_sortsrc (NAME CHAR(20), QTY NUM(6))',
+      'APPEND RECORD', 'REPLACE NAME WITH "Rope", QTY WITH 50',
+      'APPEND RECORD', 'REPLACE NAME WITH "Anvil", QTY WITH 3',
+      'USE wiz_sortsrc',
+    ];
+    for (const c of cmds) {
+      await page.locator('#terminal-input').fill(c);
+      await page.locator('#terminal-input').press('Enter');
+      await page.waitForTimeout(250);
+    }
+  });
+
+  test('Sort wizard emits SORT ON … TO and creates the new table', async ({ page }) => {
+    await clickAction(page, 'Sort to new table…');
+    await expect(page.locator('#wizard-view')).toBeVisible({ timeout: 5000 });
+    await page.locator('#wz-sort-field').selectOption({ value: 'NAME' });
+    await page.locator('#wz-sort-target').fill('wiz_sorted');
+    await expect(page.locator('.wz-preview')).toContainText('SORT ON NAME TO wiz_sorted');
+    await page.locator('#wizard-view button', { hasText: 'Sort' }).click();
+    await expect(page.locator('#terminal-output')).toContainText('Sorted 2 record(s) into WIZ_SORTED', { timeout: 5000 });
+  });
+
+  test('Sort wizard adds /D when Descending is checked', async ({ page }) => {
+    await clickAction(page, 'Sort to new table…');
+    await expect(page.locator('#wizard-view')).toBeVisible({ timeout: 5000 });
+    await page.locator('#wz-sort-field').selectOption({ value: 'QTY' });
+    await page.locator('#wz-sort-desc').check();
+    await page.locator('#wz-sort-target').fill('wiz_sorted');
+    await expect(page.locator('.wz-preview')).toContainText('SORT ON QTY/D TO wiz_sorted');
+  });
+});
