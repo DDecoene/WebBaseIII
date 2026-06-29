@@ -100,6 +100,7 @@ demos/
 scripts/
   make-demo-gif.mjs     Records README demo GIF frames (needs server on :3000)
   make-demo-gif.py      Assembles frames into docs/screenshots/demo.gif (PIL)
+  clean-data.mjs        Removes scratch data/*.sqlite3* (keeps system.sqlite3); `npm run clean:data`, and run by the Playwright global teardown
 
 tests/
   Session.test.ts       Integration tests (full command round-trips, multi-work-area)

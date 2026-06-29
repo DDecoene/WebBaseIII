@@ -10,6 +10,9 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
 ## [1.1.0] — 2026-06-27 — Live multiuser data propagation
 
 ### Added
+- e2e runs now clean up after themselves: a Playwright global teardown deletes the
+  scratch databases tests create in `data/` (keeping `system.sqlite3`), and a new
+  `npm run clean:data` does the same on demand. (#36)
 - `SUM`/`AVERAGE <field> [FOR <cond>] TO <var>` — the dBASE `TO` clause stores the
   aggregate in a memory variable (and prints nothing) instead of echoing it, so programs
   can compute a total and place it inline with `@ SAY`. (#29)
