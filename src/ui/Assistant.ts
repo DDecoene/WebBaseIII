@@ -63,6 +63,8 @@ const CATEGORIES: { name: string; actions: ActionDef[] }[] = [
     { label: 'Edit report…', needs: 'table', picker: 'reports', onPick: (n, h) => h.openWizard('report', n) },
   ]},
   { name: 'Programs', actions: [
+    { label: 'Run CRM demo', command: 'DO crm' },
+    { label: 'Run Inventory demo', command: 'DO inventory' },
     { label: 'Run program…', picker: 'programs', onPick: (n, h) => h.run(`DO ${n}`) },
     { label: 'Edit program…', picker: 'programs', onPick: (n, h) => h.run(`EDIT ${n}`) },
   ]},

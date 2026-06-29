@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { WebSocketServer } from 'ws';
 import { SessionManager } from './SessionManager.js';
-import { seedDemoPrograms } from './DemoSeeder.js';
+import { seedDemoPrograms, seedDemoReports } from './DemoSeeder.js';
 
 const PORT = Number(process.env.PORT ?? 3000);
 const DIST_DIR = path.join(process.cwd(), 'dist');
@@ -23,6 +23,8 @@ const MIME: Record<string, string> = {
 // demos/*.prg are the single source of truth — they overwrite store copies on every start
 const seededDemos = seedDemoPrograms();
 if (seededDemos.length) console.log(`Seeded demo programs: ${seededDemos.join(', ')}`);
+const seededReports = seedDemoReports();
+if (seededReports.length) console.log(`Seeded demo reports: ${seededReports.join(', ')}`);
 
 const manager = new SessionManager();
 

@@ -1,0 +1,13 @@
+{
+  "title": "Low Stock Report",
+  "pageWidth": 80,
+  "columns": [
+    { "field": "NAME", "heading": "Product", "width": 30 },
+    { "field": "STOCK", "heading": "Stock", "width": 8, "total": true },
+    { "field": "REORDER", "heading": "Reorder", "width": 8 },
+    { "field": "PRICE", "heading": "Price", "width": 10 }
+  ],
+  "groupBy": "CATID",
+  "pageHeader": "WebBase-III Inventory — Low Stock",
+  "pageFooter": "Page {PAGE}"
+}

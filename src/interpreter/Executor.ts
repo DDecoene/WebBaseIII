@@ -156,7 +156,7 @@ export class Executor implements IndexCommandsHost {
         case 'LIST_COLS':   return this.doListCols(node.cols);
         case 'BROWSE':      return { output: [], action: 'BROWSE' };
         case 'PRINT':       return this.doPrint(node.exprs);
-        case 'AGGREGATE':   return this.doAggregate(node.op, node.field, node.forCond);
+        case 'AGGREGATE':   return this.doAggregate(node.op, node.field, node.forCond, node.toVar);
         case 'COPY_TO':     return this.doCopyTo(node.file);
         case 'APPEND_FROM': return this.doAppendFrom(node.file);
         case 'CLEAR':       return { output: [{ text: '', cls: 'clear' }] };
@@ -648,7 +648,7 @@ export class Executor implements IndexCommandsHost {
   // dBASE SUM / AVERAGE — aggregate a numeric field over the current table,
   // honouring the active SET FILTER plus an optional FOR condition. SQLite does the
   // aggregation server-side. Result is printed right-justified like ?.
-  private async doAggregate(op: 'SUM' | 'AVERAGE', field: string, forCond: string | null): Promise<ExecResult> {
+  private async doAggregate(op: 'SUM' | 'AVERAGE', field: string, forCond: string | null, toVar: string | null = null): Promise<ExecResult> {
     this.requireTable();
     const fn = op === 'SUM' ? 'SUM' : 'AVG';
     const conds = [this.area.filter, forCond].filter((c): c is string => !!c);
@@ -657,6 +657,12 @@ export class Executor implements IndexCommandsHost {
       `SELECT ${fn}(${q(field)}) AS v FROM ${q(this.area.table!)}${where}`
     );
     const v = Number(rows[0]?.v ?? 0);
+    // dBASE `... TO <var>` assigns the result to a memory variable and prints
+    // nothing; otherwise the value is printed right-justified like ?.
+    if (toVar) {
+      this.vars.set(toVar, v);
+      return { output: [] };
+    }
     return { output: [{ text: fmtPrint(v), cls: 'info' }] };
   }
 
@@ -1005,6 +1011,11 @@ export class Executor implements IndexCommandsHost {
       { text: 'DO <name>               — run a saved program' },
       { text: 'EDIT <name>             — create/edit a program' },
       { text: 'LIST PROGRAMS           — list saved programs' },
+      { text: '' },
+      { text: 'Demos / examples:' },
+      { text: 'DO crm        — usable CRM example app (EDIT crm to customize)' },
+      { text: 'DO inventory  — usable inventory example app (EDIT inventory to customize)' },
+      { text: '' },
       { text: 'QUIT                    — exit' },
     ]};
   }

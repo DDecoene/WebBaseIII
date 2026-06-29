@@ -366,3 +366,19 @@ test.describe('Assistant wizards — aggregate', () => {
     await expect(opts.first()).toHaveText(/QTY/);
   });
 });
+
+test.describe('Assistant — demo launchers', () => {
+  test('Run CRM demo launches the CRM and opens its menu', async ({ page }) => {
+    await boot(page);
+    await clickAction(page, 'Run CRM demo');
+    await expect(page.locator('#form-view')).toBeVisible({ timeout: 8000 });
+    await expect(page.locator('#form-view')).toContainText('CRM', { timeout: 6000 });
+  });
+
+  test('Run Inventory demo launches the inventory and opens its menu', async ({ page }) => {
+    await boot(page);
+    await clickAction(page, 'Run Inventory demo');
+    await expect(page.locator('#form-view')).toBeVisible({ timeout: 8000 });
+    await expect(page.locator('#form-view')).toContainText('INVENTORY', { timeout: 6000 });
+  });
+});

@@ -375,6 +375,11 @@ export class Terminal {
       { text: '  USE customers', cls: 'out' },
       { text: '  BROWSE', cls: 'out' },
       { text: '' },
+      { text: 'Try a full example app:', cls: 'hdr' },
+      { text: '  DO crm         — a working mini-CRM (companies, contacts, deals)', cls: 'out' },
+      { text: '  DO inventory   — a working stock manager (categories, products, movements)', cls: 'out' },
+      { text: '  These are complete, editable programs — EDIT crm to build your own.', cls: 'info' },
+      { text: '' },
     ].forEach(l => this.printLine(l.text, l.cls));
   }
 }

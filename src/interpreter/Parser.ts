@@ -32,7 +32,7 @@ export type ASTNode =
   | { type: 'LIST_REPORTS' }
   | { type: 'DELETE_REPORT'; name: string }
   | { type: 'BROWSE' }
-  | { type: 'AGGREGATE';   op: 'SUM' | 'AVERAGE'; field: string; forCond: string | null }
+  | { type: 'AGGREGATE';   op: 'SUM' | 'AVERAGE'; field: string; forCond: string | null; toVar: string | null }
   | { type: 'PRINT';       exprs: Expr[]; newline: boolean }
   | { type: 'CLEAR' }
   | { type: 'QUIT' }
@@ -642,14 +642,22 @@ export class Parser {
     if (this.peekKw('FOR')) {
       this.adv();
       const parts: string[] = [];
-      while (!this.end() && this.peek().type !== 'NL' && this.peek().type !== 'SEMI' && this.peek().type !== 'EOF') {
+      // Collect the FOR condition, but stop at a trailing `TO <var>` clause.
+      while (!this.end() && this.peek().type !== 'NL' && this.peek().type !== 'SEMI'
+             && this.peek().type !== 'EOF' && !this.peekKw('TO')) {
         const t = this.peek();
         parts.push(t.type === 'STR' ? `'${t.val.replace(/'/g, "''")}'` : t.val);
         this.adv();
       }
       forCond = parts.length ? parts.join(' ') : null;
     }
-    return { type: 'AGGREGATE', op, field, forCond };
+    // Optional dBASE `TO <var>`: store the result in a variable instead of printing.
+    let toVar: string | null = null;
+    if (this.peekKw('TO')) {
+      this.adv();
+      toVar = this.ident();
+    }
+    return { type: 'AGGREGATE', op, field, forCond, toVar };
   }
 
   // A filename like customers.csv lexes as ID '.' ID; rebuild it by joining the raw

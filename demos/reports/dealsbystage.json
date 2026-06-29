@@ -1,0 +1,12 @@
+{
+  "title": "Sales Pipeline by Stage",
+  "pageWidth": 80,
+  "columns": [
+    { "field": "TITLE", "heading": "Deal", "width": 30 },
+    { "field": "COMPID", "heading": "Company", "width": 10 },
+    { "field": "VALUE", "heading": "Value", "width": 14, "total": true }
+  ],
+  "groupBy": "STAGE",
+  "pageHeader": "WebBase-III CRM — Pipeline",
+  "pageFooter": "Page {PAGE}"
+}
