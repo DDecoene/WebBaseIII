@@ -47,13 +47,13 @@ npm run serve      # builds frontend, then serves everything on http://localhost
 server/
   index.ts              Node.js HTTP + WebSocket server (port 3000)
   Session.ts            Per-connection session: parses commands, drives Executor
-  SessionManager.ts     Tracks all active sessions
+  SessionManager.ts     Tracks all active sessions; broadcast() fans data-changed to peers viewing a mutated table
   ServerDatabaseBridge.ts  IDatabaseBridge impl wrapping better-sqlite3
   ProgramStore.ts       .prg program storage in data/system.sqlite3
   IndexStore.ts         Index metadata + active index in data/system.sqlite3
   ReportStore.ts        Report definition storage in data/system.sqlite3 (reports table)
   ReportRunner.ts       ASCII and HTML report rendering, group breaks, subtotals, grand totals
-  DemoSeeder.ts         Seeds demos/*.prg into the program store at startup (demos win)
+  DemoSeeder.ts         Seeds demos/*.prg into the program store and demos/reports/*.json into the report store at startup (demos win)
 
 src/
   interpreter/
@@ -71,10 +71,10 @@ src/
     FormLayout.ts       @ SAY GET form engine — character-cell coordinates
     ProgramEditor.ts    .prg source editor UI
     ReportPreview.ts    iframe-based HTML report preview panel (Esc to close, Ctrl+P to print)
-    Assistant.ts        Permanent left sidebar — 6 categories, catalog-driven pickers, action dispatch
+    Assistant.ts        Permanent left sidebar — catalog-driven pickers, action dispatch (incl. CSV, SORT, SUM/AVERAGE, REINDEX, PACK)
     wizards/            Wizard panels (take over main area): WizardShell, DatabaseWizard, TableWizard,
                         FilterWizard, IndexWizard, SearchWizard, ReportWizard, ModStructWizard,
-                        index.ts dispatcher
+                        SortWizard, AggregateWizard, index.ts dispatcher
 
   ws/
     WsClient.ts         Browser WebSocket client — sends commands, receives messages
@@ -90,7 +90,9 @@ data/
 
 demos/
   *.prg                 Demo programs — single source of truth; seeded into the
-                        program store on every server start (overwrites store copies)
+                        program store on every server start (overwrites store copies).
+                        crm.prg + INVENTORY.prg are usable example apps.
+  reports/*.json        Demo report definitions — seeded into the report store at startup
 
 .devcontainer/
   devcontainer.json     GitHub Codespaces config — auto npm install + npm run dev
@@ -98,6 +100,7 @@ demos/
 scripts/
   make-demo-gif.mjs     Records README demo GIF frames (needs server on :3000)
   make-demo-gif.py      Assembles frames into docs/screenshots/demo.gif (PIL)
+  clean-data.mjs        Removes scratch data/*.sqlite3* (keeps system.sqlite3); `npm run clean:data`, and run by the Playwright global teardown
 
 tests/
   Session.test.ts       Integration tests (full command round-trips, multi-work-area)
@@ -151,8 +154,8 @@ WebBase-III supports **unlimited work areas** (no DOS 10-area limit). Cross-area
 | `REPLACE <field> WITH <val>, ...` | Update field(s) on current row |
 | `REPLACE ALL <field> WITH <val>, ...` | Update all (filtered) rows |
 | `SET FILTER TO <expr>` | Set a WHERE clause; empty clears it |
-| `SUM <field> [FOR <cond>]` | Total a numeric field over the current table (honours active filter) |
-| `AVERAGE <field> [FOR <cond>]` | Mean of a numeric field over the current table (honours active filter) |
+| `SUM <field> [FOR <cond>] [TO <var>]` | Total a numeric field over the current table (honours active filter); `TO <var>` stores the result in a variable instead of printing |
+| `AVERAGE <field> [FOR <cond>] [TO <var>]` | Mean of a numeric field over the current table (honours active filter); `TO <var>` stores the result in a variable instead of printing |
 | `COPY TO <file>.csv` | Export current table to a CSV the browser downloads (header CSV, honours filter + index order; max 50k rows) |
 | `APPEND FROM <file>.csv` | Import a header CSV (browser file picker) into the current table; lenient ≤10 bad rows, else abort; max 5 MB |
 | `MODIFY STRUCTURE` | Open the Modify-structure wizard for the active table |
@@ -174,6 +177,7 @@ WebBase-III supports **unlimited work areas** (no DOS 10-area limit). Cross-area
 | `SEEK <expr>` | Position record pointer at first index match |
 | `FIND <string>` | Alias for SEEK (unquoted string — dBASE III legacy) |
 | `SORT ON <field>[/D] TO <newtable>` | Sorted copy of the table into a new table (`/D` descending); honours active filter. Thin alias over `CREATE TABLE AS SELECT … ORDER BY` |
+| `JOIN WITH <alias> TO <file> FOR <cond> [FIELDS <list>]` | Materialize a snapshot table by joining the active area with `<alias>`; honours the active filter |
 
 > Index expressions support built-in functions: `INDEX ON UPPER(lastname) TO BYUPPER`
 
@@ -240,6 +244,13 @@ line.
 5. ~~The Assistant~~ — sidebar GUI, wizards, catalog protocol ✅
 6. ~~Modify Structure~~ — `MODIFY STRUCTURE`, `ALTER TABLE` ADD/DROP/RENAME/ALTER, ModStructWizard, sidebar action ✅
 
+### Beyond parity (v1.1.0)
+
+- ~~Live multiuser propagation~~ — mutating a table broadcasts a `data-changed`
+  message (via `SessionManager.broadcast`, server-side view filtering + debounce)
+  so other sessions BROWSE-ing that table refresh automatically (#11) ✅
+- ~~JOIN to materialize a combined table~~ — `JOIN WITH <alias> TO <file> FOR <cond> [FIELDS <list>]`, snapshot table via SQLite join (#10) ✅
+
 ## Boolean literals
 
 Both styles accepted: `TRUE`/`FALSE` and `.T.`/`.TRUE.`/`.F.`/`.FALSE.` (dBASE III style). Output always uses `.T.`/`.F.`. Logical operators likewise: `NOT`/`.NOT.`, `AND`/`.AND.`, `OR`/`.OR.`.
@@ -247,11 +258,11 @@ Both styles accepted: `TRUE`/`FALSE` and `.T.`/`.TRUE.`/`.F.`/`.FALSE.` (dBASE I
 ## Testing
 
 ```bash
-npm test                # Vitest unit + integration (241 tests)
+npm test                # Vitest unit + integration (265 tests)
 npx playwright test     # E2E browser tests — requires dev server on :5173/:3000
 ```
 
-Playwright suites (50 tests): `tests/integration.spec.ts` (20 tests — full REPL scenario), `tests/assistant.spec.ts` (10 tests — sidebar, wizards, report designer, MODIFY STRUCTURE round-trip, program run), `tests/inventory.spec.ts` (5 tests — INVENTORY.prg menu), `tests/multiarea.spec.ts` (4 tests — multi-work-area, relations, alias.field), `tests/parity-commands.spec.ts` (4 tests — `?`/`??`, built-in functions, `SUM`/`AVERAGE`, `SORT ON … TO`), `tests/demos.spec.ts` (3 tests — demo program seeding), `tests/copycsv.spec.ts` (2 tests — COPY TO download + APPEND FROM upload), `tests/program-side-effects.spec.ts` (1 test — CSV/report side-effects fire from inside a program block), `tests/splash.spec.ts` (1 test — version banner).
+Playwright suites (73 tests): `tests/integration.spec.ts` (20 tests — full REPL scenario), `tests/assistant.spec.ts` (20 tests — sidebar, wizards, report designer, MODIFY STRUCTURE round-trip, program run, CSV/SORT/SUM-AVERAGE/REINDEX/PACK actions, demo launchers), `tests/inventory.spec.ts` (8 tests — INVENTORY.prg menu + valuation/low-stock report/sort/CSV/JOIN), `tests/crm.spec.ts` (6 tests — CRM demo menu, pipeline summary, sort, report, CSV, JOIN), `tests/multiarea.spec.ts` (4 tests — multi-work-area, relations, alias.field), `tests/parity-commands.spec.ts` (4 tests — `?`/`??`, built-in functions, `SUM`/`AVERAGE`, `SORT ON … TO`), `tests/demos.spec.ts` (4 tests — demo program + report seeding), `tests/copycsv.spec.ts` (2 tests — COPY TO download + APPEND FROM upload), `tests/splash.spec.ts` (2 tests — version banner + demo discoverability), `tests/join.spec.ts` (1 test — JOIN materialization), `tests/propagation.spec.ts` (1 test — live multiuser refresh), `tests/program-side-effects.spec.ts` (1 test — CSV/report side-effects fire from inside a program block).
 
 ## Definition of done
 
@@ -260,6 +271,7 @@ Complete these steps **in order** — do not skip or reorder:
 1. **Branch correctly** — work sits on a `feature/<name>` branched off the milestone's `release/vX.Y.Z`; the PR is based on that release branch, **not** `main` (see Git conventions → GitFlow). Confirm the issue is assigned to the matching milestone.
 2. `npm test` (vitest) **and** `npx playwright test` (e2e) both pass — all green.
    - **Every user-facing command/feature ships with a Playwright e2e case in the same PR, not just a vitest unit/integration test.** A REPL command needs at least one `tests/*.spec.ts` case that types it and asserts the rendered terminal/UI result; browser-only behavior (downloads, uploads, grid, wizards) must be exercised in a real browser. Unit coverage alone is not "done" — the #4 built-ins shipped broken because only unit tests (which bypass the parser) covered them.
+   - **Assistant parity.** Every new user-facing command/feature is surfaced in the Assistant sidebar (a `CATEGORIES` action in `src/ui/Assistant.ts` and/or a wizard) **and** ships with a Playwright e2e case that clicks the Assistant action (or drives its wizard) and asserts the rendered REPL/UI result — OR the PR explicitly notes why the command does not belong in the Assistant (e.g. BROWSE already covers it, or it is not GUI-shaped). A vitest test does not satisfy this; the Assistant path must run in a real browser.
    - **CI gates this.** `.github/workflows/ci.yml` runs a `unit` job (vitest + build) and an `e2e` job (Playwright, auto-starting the dev server via the `webServer` block in `playwright.config.ts`) on every push/PR to `main` and `release/**`. A PR is not mergeable until both jobs are green — do not merge a release-branch PR with red or missing CI.
 3. `package.json` version = the milestone's version (set on the `release/vX.Y.Z` branch); patch bumps for hotfixes
 4. `CHANGELOG.md` — add entry (Added / Fixed / Changed sections) under the milestone version heading

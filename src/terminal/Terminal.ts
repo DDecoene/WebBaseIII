@@ -70,6 +70,14 @@ export class Terminal {
       this.openGrid(m.table, m.filter, m.columns, m.rows);
     });
 
+    ws.on('data-changed', (msg) => {
+      const m = msg as any;
+      // Only refresh if we're currently BROWSE-ing the affected table.
+      if (this.grid && this.grid.tableName.toLowerCase() === String(m.table).toLowerCase()) {
+        this.ws.send({ type: 'grid-refresh' });
+      }
+    });
+
     ws.on('csv-download', (msg) => {
       const m = msg as any;
       const blob = new Blob([m.content], { type: 'text/csv;charset=utf-8' });
@@ -366,6 +374,11 @@ export class Terminal {
       { text: '  CREATE TABLE customers (name CHAR(40), phone CHAR(20), country CHAR(30))', cls: 'out' },
       { text: '  USE customers', cls: 'out' },
       { text: '  BROWSE', cls: 'out' },
+      { text: '' },
+      { text: 'Try a full example app:', cls: 'hdr' },
+      { text: '  DO crm         — a working mini-CRM (companies, contacts, deals)', cls: 'out' },
+      { text: '  DO inventory   — a working stock manager (categories, products, movements)', cls: 'out' },
+      { text: '  These are complete, editable programs — EDIT crm to build your own.', cls: 'info' },
       { text: '' },
     ].forEach(l => this.printLine(l.text, l.cls));
   }

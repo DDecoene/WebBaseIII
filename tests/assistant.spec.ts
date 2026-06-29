@@ -208,6 +208,51 @@ test.describe('Assistant wizards — modify structure', () => {
   });
 });
 
+test.describe('Assistant — post-v0.6 commands (CSV / REINDEX / PACK)', () => {
+  test.beforeEach(async ({ page }) => {
+    await boot(page);
+    const cmds = [
+      'USE DATABASE ASSISTDEMO',
+      'DROP TABLE wiz_post',
+      'CREATE TABLE wiz_post (NAME CHAR(20), QTY NUM(6))',
+      'APPEND RECORD', 'REPLACE NAME WITH "Anvil", QTY WITH 3',
+      'APPEND RECORD', 'REPLACE NAME WITH "Rope", QTY WITH 50',
+      'USE wiz_post',
+    ];
+    for (const c of cmds) {
+      await page.locator('#terminal-input').fill(c);
+      await page.locator('#terminal-input').press('Enter');
+      await page.waitForTimeout(250);
+    }
+  });
+
+  test('Export to CSV triggers a download of the active table', async ({ page }) => {
+    const downloadPromise = page.waitForEvent('download');
+    await clickAction(page, 'Export to CSV');
+    const download = await downloadPromise;
+    expect(download.suggestedFilename().toLowerCase()).toContain('wiz_post');
+    await expect(page.locator('#terminal-output')).toContainText('record(s) copied', { timeout: 5000 });
+  });
+
+  test('Import from CSV opens a file picker', async ({ page }) => {
+    const chooserPromise = page.waitForEvent('filechooser');
+    await clickAction(page, 'Import from CSV');
+    const chooser = await chooserPromise;
+    expect(chooser).toBeTruthy();
+  });
+
+  test('Reindex rebuilds indexes', async ({ page }) => {
+    await clickAction(page, 'Reindex');
+    await expect(page.locator('#terminal-output')).toContainText('Indexes rebuilt', { timeout: 5000 });
+  });
+
+  test('Pack database VACUUMs after confirm', async ({ page }) => {
+    page.on('dialog', d => d.accept());
+    await clickAction(page, 'Pack database');
+    await expect(page.locator('#terminal-output')).toContainText('VACUUM complete', { timeout: 5000 });
+  });
+});
+
 test.describe('Assistant wizards — report designer', () => {
   test('builds, saves, and runs a report', async ({ page }) => {
     await boot(page);
@@ -243,5 +288,97 @@ test.describe('Assistant wizards — report designer', () => {
     await expect(page.locator('#terminal-output')).toContainText('. REPORT FORM wizstock', { timeout: 6000 });
     await expect(page.locator('#report-preview-view')).toBeVisible({ timeout: 6000 });
     await page.keyboard.press('Escape');
+  });
+});
+
+test.describe('Assistant wizards — sort', () => {
+  test.beforeEach(async ({ page }) => {
+    await boot(page);
+    const cmds = [
+      'USE DATABASE ASSISTDEMO',
+      'DROP TABLE wiz_sortsrc',
+      'DROP TABLE wiz_sorted',
+      'CREATE TABLE wiz_sortsrc (NAME CHAR(20), QTY NUM(6))',
+      'APPEND RECORD', 'REPLACE NAME WITH "Rope", QTY WITH 50',
+      'APPEND RECORD', 'REPLACE NAME WITH "Anvil", QTY WITH 3',
+      'USE wiz_sortsrc',
+    ];
+    for (const c of cmds) {
+      await page.locator('#terminal-input').fill(c);
+      await page.locator('#terminal-input').press('Enter');
+      await page.waitForTimeout(250);
+    }
+  });
+
+  test('Sort wizard emits SORT ON … TO and creates the new table', async ({ page }) => {
+    await clickAction(page, 'Sort to new table…');
+    await expect(page.locator('#wizard-view')).toBeVisible({ timeout: 5000 });
+    await page.locator('#wz-sort-field').selectOption({ value: 'NAME' });
+    await page.locator('#wz-sort-target').fill('wiz_sorted');
+    await expect(page.locator('.wz-preview')).toContainText('SORT ON NAME TO wiz_sorted');
+    await page.locator('#wizard-view button', { hasText: 'Sort' }).click();
+    await expect(page.locator('#terminal-output')).toContainText('Sorted 2 record(s) into WIZ_SORTED', { timeout: 5000 });
+  });
+
+  test('Sort wizard adds /D when Descending is checked', async ({ page }) => {
+    await clickAction(page, 'Sort to new table…');
+    await expect(page.locator('#wizard-view')).toBeVisible({ timeout: 5000 });
+    await page.locator('#wz-sort-field').selectOption({ value: 'QTY' });
+    await page.locator('#wz-sort-desc').check();
+    await page.locator('#wz-sort-target').fill('wiz_sorted');
+    await expect(page.locator('.wz-preview')).toContainText('SORT ON QTY/D TO wiz_sorted');
+  });
+});
+
+test.describe('Assistant wizards — aggregate', () => {
+  test.beforeEach(async ({ page }) => {
+    await boot(page);
+    const cmds = [
+      'USE DATABASE ASSISTDEMO',
+      'DROP TABLE wiz_agg',
+      'CREATE TABLE wiz_agg (NAME CHAR(20), QTY NUM(6))',
+      'APPEND RECORD', 'REPLACE NAME WITH "Anvil", QTY WITH 3',
+      'APPEND RECORD', 'REPLACE NAME WITH "Rope", QTY WITH 50',
+      'USE wiz_agg',
+    ];
+    for (const c of cmds) {
+      await page.locator('#terminal-input').fill(c);
+      await page.locator('#terminal-input').press('Enter');
+      await page.waitForTimeout(250);
+    }
+  });
+
+  test('Aggregate wizard sums a numeric field', async ({ page }) => {
+    await clickAction(page, 'Sum / Average…');
+    await expect(page.locator('#wizard-view')).toBeVisible({ timeout: 5000 });
+    await page.locator('#wz-agg-op').selectOption({ value: 'SUM' });
+    await page.locator('#wz-agg-field').selectOption({ value: 'QTY' });
+    await expect(page.locator('.wz-preview')).toContainText('SUM QTY');
+    await page.locator('#wizard-view button', { hasText: 'Compute' }).click();
+    await expect(page.locator('#terminal-output')).toContainText('53', { timeout: 5000 });
+  });
+
+  test('Aggregate wizard offers only numeric fields', async ({ page }) => {
+    await clickAction(page, 'Sum / Average…');
+    await expect(page.locator('#wizard-view')).toBeVisible({ timeout: 5000 });
+    const opts = page.locator('#wz-agg-field option');
+    await expect(opts).toHaveCount(1);          // only QTY (NUM); NAME (CHAR) excluded
+    await expect(opts.first()).toHaveText(/QTY/);
+  });
+});
+
+test.describe('Assistant — demo launchers', () => {
+  test('Run CRM demo launches the CRM and opens its menu', async ({ page }) => {
+    await boot(page);
+    await clickAction(page, 'Run CRM demo');
+    await expect(page.locator('#form-view')).toBeVisible({ timeout: 8000 });
+    await expect(page.locator('#form-view')).toContainText('CRM', { timeout: 6000 });
+  });
+
+  test('Run Inventory demo launches the inventory and opens its menu', async ({ page }) => {
+    await boot(page);
+    await clickAction(page, 'Run Inventory demo');
+    await expect(page.locator('#form-view')).toBeVisible({ timeout: 8000 });
+    await expect(page.locator('#form-view')).toContainText('INVENTORY', { timeout: 6000 });
   });
 });

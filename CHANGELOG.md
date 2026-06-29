@@ -7,6 +7,52 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
 
 ---
 
+## [1.1.0] — 2026-06-27 — Live multiuser data propagation
+
+### Added
+- e2e runs now clean up after themselves: a Playwright global teardown deletes the
+  scratch databases tests create in `data/` (keeping `system.sqlite3`), and a new
+  `npm run clean:data` does the same on demand. (#36)
+- `SUM`/`AVERAGE <field> [FOR <cond>] TO <var>` — the dBASE `TO` clause stores the
+  aggregate in a memory variable (and prints nothing) instead of echoing it, so programs
+  can compute a total and place it inline with `@ SAY`. (#29)
+- Rebuilt the `crm` and `inventory` demos into usable example apps — a mini-CRM
+  (companies / contacts / deals) and a stock manager (categories / products / stock
+  movements) — that double as a guided tour of the v1.0.0 + v1.1.0 feature set:
+  `SUM`/`AVERAGE … FOR`, `SORT ON … TO`, `JOIN`, `REPORT FORM`, CSV export, work-area
+  relations with `alias.field`, and a live-propagation tip. Each demo seeds a grouped
+  report definition (`demos/reports/*.json`, seeded by `DemoSeeder.seedDemoReports`).
+  The demos are now discoverable from the splash screen, `HELP`, and the Assistant
+  (Programs → Run CRM demo / Run Inventory demo). (#29)
+- Assistant sidebar parity for post-v0.6 commands: Export/Import CSV actions, a
+  Sort-to-new-table wizard, a Sum/Average wizard, and Reindex / Pack database
+  actions — closing the drift between the sidebar and the REPL language. (#33)
+- Definition of Done now requires every new user-facing command to be surfaced in
+  the Assistant (action and/or wizard) with a Playwright e2e case. (#33)
+- `CONTRIBUTING.md` rewritten for the GitFlow model: fork → branch off the active
+  `release/vX.Y.Z` → PR against that release branch (not `main`), plus a Definition of
+  Done section. Added a PR template and a README "Contributing" pointer. (#31)
+- `JOIN WITH <alias> TO <file> FOR <cond> [FIELDS <list>]` — materialize a combined
+  snapshot table from two open work areas, computed by SQLite's join planner.
+  Deviations from dBASE III (FOR required, `alias.field` dot syntax, SQL-predicate
+  FOR, active-wins collision handling with a warning) are documented in README. (#10)
+- Live multiuser data propagation (#11): when one session mutates a table, every
+  other session currently BROWSE-ing that same table refreshes automatically — no
+  manual re-query. Type in one browser window, watch another repaint.
+  - New `data-changed` WebSocket message and `SessionManager.broadcast(db, table)`
+    with server-side relevance filtering (only sessions viewing the affected
+    table are notified) and per-table debounce (a burst coalesces into one
+    refresh).
+  - Mutation chokepoint: `ServerDatabaseBridge.exec()` fires an `onMutate` hook,
+    so every write path (`REPLACE`, `APPEND`, `DELETE`, `PACK`, grid edits, …)
+    triggers propagation with no per-command bookkeeping.
+
+### Fixed
+- `closeDatabase` no longer closes the SQLite handle shared across sessions — one
+  user closing a database no longer breaks everyone else's queries.
+
+---
+
 ## [1.0.1] — 2026-06-28 — Hotfix
 
 ### Fixed
@@ -18,6 +64,10 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
   immediate side-effects via a new `Executor.onSideEffect` sink, so they fire at any
   nesting depth. (Bug present since v1.0.0 for CSV and v0.5.0 for `REPORT FORM`;
   REPL and Assistant usage were unaffected.)
+
+---
+
+## [1.0.0] — 2026-06-27 — dBASE III parity complete
 
 > The feature-complete parity milestone: `?`/`??`, `SUM`/`AVERAGE`, the extra
 > built-ins (#4), `SORT ON … TO` (#8), `COPY TO`/`APPEND FROM` CSV (#5), on top of

@@ -71,6 +71,16 @@ describe('ServerDatabaseBridge', () => {
     await expect(bridge.openDatabase('../../etc/passwd')).rejects.toThrow('Invalid database name');
   });
 
+  it('fires onMutate after a successful exec, not after a query', async () => {
+    const calls: number[] = [];
+    await bridge.openDatabase(TEST_DB);
+    bridge.onMutate = () => calls.push(1);
+    await bridge.exec('CREATE TABLE m (id INTEGER)');
+    await bridge.exec('INSERT INTO m (id) VALUES (1)');
+    await bridge.query('SELECT * FROM m');     // must NOT fire onMutate
+    expect(calls.length).toBe(2);
+  });
+
   it('keeps the shared handle usable after another session closes it', async () => {
     const a = new ServerDatabaseBridge();
     const b = new ServerDatabaseBridge();

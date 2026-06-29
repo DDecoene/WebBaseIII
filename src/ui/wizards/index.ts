@@ -8,6 +8,8 @@ import { openFilterWizard } from './FilterWizard';
 import { openIndexWizard } from './IndexWizard';
 import { openSearchWizard } from './SearchWizard';
 import { openReportWizard } from './ReportWizard';
+import { openSortWizard } from './SortWizard';
+import { openAggregateWizard } from './AggregateWizard';
 export { openModStructWizard } from './ModStructWizard';
 
 function showWizardView(terminal: Terminal): void {
@@ -40,5 +42,7 @@ export function openWizard(
     case 'index':    return openIndexWizard(getCatalog(), run, onClose);
     case 'search':   return openSearchWizard(getCatalog(), run, onClose);
     case 'report':   return openReportWizard(getCatalog(), arg, ws, run, refresh, onClose);
+    case 'sort':     return openSortWizard(getCatalog(), run, onClose);
+    case 'aggregate': return openAggregateWizard(getCatalog(), run, onClose);
   }
 }

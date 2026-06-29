@@ -156,7 +156,7 @@ export class Executor implements IndexCommandsHost {
         case 'LIST_COLS':   return this.doListCols(node.cols);
         case 'BROWSE':      return { output: [], action: 'BROWSE' };
         case 'PRINT':       return this.doPrint(node.exprs);
-        case 'AGGREGATE':   return this.doAggregate(node.op, node.field, node.forCond);
+        case 'AGGREGATE':   return this.doAggregate(node.op, node.field, node.forCond, node.toVar);
         case 'COPY_TO':     return this.doCopyTo(node.file);
         case 'APPEND_FROM': return this.doAppendFrom(node.file);
         case 'CLEAR':       return { output: [{ text: '', cls: 'clear' }] };
@@ -189,6 +189,7 @@ export class Executor implements IndexCommandsHost {
         case 'REINDEX':     return this.indexCmds.doReindex();
         case 'LIST_INDEXES':return this.indexCmds.doListIndexes();
         case 'SORT':        return this.doSort(node.field, node.descending, node.target);
+        case 'JOIN':        return this.doJoin(node.withAlias, node.target, node.forCond, node.fields);
         case 'SEEK':        return this.indexCmds.doSeek(node.value);
         case 'FIND':        return this.indexCmds.doFind(node.value);
         case 'DO_CASE':       return this.doCase(node.cases, node.otherwise);
@@ -647,7 +648,7 @@ export class Executor implements IndexCommandsHost {
   // dBASE SUM / AVERAGE — aggregate a numeric field over the current table,
   // honouring the active SET FILTER plus an optional FOR condition. SQLite does the
   // aggregation server-side. Result is printed right-justified like ?.
-  private async doAggregate(op: 'SUM' | 'AVERAGE', field: string, forCond: string | null): Promise<ExecResult> {
+  private async doAggregate(op: 'SUM' | 'AVERAGE', field: string, forCond: string | null, toVar: string | null = null): Promise<ExecResult> {
     this.requireTable();
     const fn = op === 'SUM' ? 'SUM' : 'AVG';
     const conds = [this.area.filter, forCond].filter((c): c is string => !!c);
@@ -656,6 +657,12 @@ export class Executor implements IndexCommandsHost {
       `SELECT ${fn}(${q(field)}) AS v FROM ${q(this.area.table!)}${where}`
     );
     const v = Number(rows[0]?.v ?? 0);
+    // dBASE `... TO <var>` assigns the result to a memory variable and prints
+    // nothing; otherwise the value is printed right-justified like ?.
+    if (toVar) {
+      this.vars.set(toVar, v);
+      return { output: [] };
+    }
     return { output: [{ text: fmtPrint(v), cls: 'info' }] };
   }
 
@@ -768,6 +775,74 @@ export class Executor implements IndexCommandsHost {
     );
     const count = await this.db.getRowCount(target);
     return { output: [{ text: `Sorted ${count} record(s) into ${target}.`, cls: 'ok' }] };
+  }
+
+  private async doJoin(
+    withAlias: string,
+    target: string,
+    forCond: string,
+    fields: string[] | null,
+  ): Promise<ExecResult> {
+    const activeArea = this.area;
+    const activeTable = activeArea.table;
+    if (!activeTable) {
+      return { output: [{ text: 'JOIN: no table in use', cls: 'error' }] };
+    }
+    const withArea = this.areas.get(withAlias);
+    if (!withArea || !withArea.table) {
+      return { output: [{ text: `JOIN: work area '${withAlias}' has no open table`, cls: 'error' }] };
+    }
+    if (withArea.db !== activeArea.db) {
+      return { output: [{ text: `JOIN: '${withAlias}' is in a different database — cross-database JOIN is not supported`, cls: 'error' }] };
+    }
+    if (await this.db.tableExists(target)) {
+      return { output: [{ text: `JOIN: target table already exists: ${target}`, cls: 'error' }] };
+    }
+    if (fields && fields.length === 0) {
+      return { output: [{ text: 'JOIN: FIELDS clause is empty — list at least one field or omit FIELDS', cls: 'error' }] };
+    }
+
+    const aQ = q(activeArea.alias);
+    const bQ = q(withArea.alias);
+    const warnings: OutputLine[] = [];
+
+    // Build the SELECT projection.
+    let projection: string;
+    if (fields && fields.length) {
+      projection = fields.map(f => {
+        const dot = f.indexOf('.');
+        if (dot !== -1) return `${q(f.slice(0, dot))}.${q(f.slice(dot + 1))}`;
+        return q(f);
+      }).join(', ');
+    } else {
+      const activeCols = await this.db.getStructure(activeTable);
+      const withCols = await this.db.getStructure(withArea.table);
+      const activeNames = new Set(activeCols.map(c => c.name.toUpperCase()));
+      const parts = activeCols.map(c => `${aQ}.${q(c.name)}`);
+      for (const c of withCols) {
+        if (activeNames.has(c.name.toUpperCase())) {
+          warnings.push({ text: `JOIN: dropped duplicate column '${c.name}' from ${withArea.alias} (active wins)`, cls: 'warn' });
+          continue;
+        }
+        parts.push(`${bQ}.${q(c.name)}`);
+      }
+      projection = parts.join(', ');
+    }
+
+    const where = activeArea.filter ? ` WHERE (${activeArea.filter})` : '';
+    const sql =
+      `CREATE TABLE ${q(target)} AS SELECT ${projection} ` +
+      `FROM ${q(activeTable)} AS ${aQ} ` +
+      `JOIN ${q(withArea.table)} AS ${bQ} ON (${forCond})${where}`;
+    try {
+      await this.db.exec(sql);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return { output: [{ text: `JOIN failed: ${msg}`, cls: 'error' }] };
+    }
+
+    const count = await this.db.getRowCount(target);
+    return { output: [...warnings, { text: `Joined ${count} record(s) into ${target}.`, cls: 'ok' }] };
   }
 
   private async doDropTable(name: string): Promise<ExecResult> {
@@ -915,6 +990,7 @@ export class Executor implements IndexCommandsHost {
       { text: 'SEEK <value>             — position to first match in active index' },
       { text: 'FIND <string>            — same as SEEK (legacy string form)' },
       { text: 'SORT ON <field>[/D] TO <newtable> — sorted copy of the table' },
+      { text: 'JOIN WITH <a> TO <file> FOR <cond> [FIELDS <list>] — materialize a combined table' },
       { text: 'CREATE REPORT <name>    — create a new report definition (opens editor)' },
       { text: 'MODIFY REPORT <name>    — edit an existing report definition' },
       { text: 'REPORT FORM <name>      — run report: ASCII + HTML preview' },
@@ -935,6 +1011,11 @@ export class Executor implements IndexCommandsHost {
       { text: 'DO <name>               — run a saved program' },
       { text: 'EDIT <name>             — create/edit a program' },
       { text: 'LIST PROGRAMS           — list saved programs' },
+      { text: '' },
+      { text: 'Demos / examples:' },
+      { text: 'DO crm        — usable CRM example app (EDIT crm to customize)' },
+      { text: 'DO inventory  — usable inventory example app (EDIT inventory to customize)' },
+      { text: '' },
       { text: 'QUIT                    — exit' },
     ]};
   }

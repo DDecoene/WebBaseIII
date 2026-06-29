@@ -32,7 +32,7 @@ export type ASTNode =
   | { type: 'LIST_REPORTS' }
   | { type: 'DELETE_REPORT'; name: string }
   | { type: 'BROWSE' }
-  | { type: 'AGGREGATE';   op: 'SUM' | 'AVERAGE'; field: string; forCond: string | null }
+  | { type: 'AGGREGATE';   op: 'SUM' | 'AVERAGE'; field: string; forCond: string | null; toVar: string | null }
   | { type: 'PRINT';       exprs: Expr[]; newline: boolean }
   | { type: 'CLEAR' }
   | { type: 'QUIT' }
@@ -70,6 +70,7 @@ export type ASTNode =
   | { type: 'REINDEX' }
   | { type: 'LIST_INDEXES' }
   | { type: 'SORT'; field: string; descending: boolean; target: string }
+  | { type: 'JOIN'; withAlias: string; target: string; forCond: string; fields: string[] | null }
   | { type: 'SEEK';        value: Expr }
   | { type: 'FIND';        value: string }
   | { type: 'UNKNOWN';     raw: string };
@@ -165,6 +166,7 @@ export class Parser {
       }
       case 'INDEX':    return this.parseIndexOn();
       case 'SORT':     return this.parseSort();
+      case 'JOIN':     return this.parseJoin();
       case 'REINDEX':  this.adv(); return { type: 'REINDEX' };
       case 'SEEK':     this.adv(); return { type: 'SEEK', value: this.expr() };
       case 'FIND':     { this.adv(); const val = this.peek().val; this.adv(); return { type: 'FIND', value: val }; }
@@ -262,6 +264,55 @@ export class Parser {
       this.adv();
     }
     return { type: 'SET_FILTER', expr: parts.length ? parts.join(' ') : null };
+  }
+
+  private parseJoin(): ASTNode {
+    this.adv(); // JOIN
+    this.expectKw('WITH');
+    const withAlias = this.ident();
+    this.expectKw('TO');
+    const target = this.ident();
+    if (!this.peekKw('FOR')) {
+      throw new Error('JOIN requires a FOR condition (e.g. JOIN WITH ord TO file FOR id = ord.id)');
+    }
+    this.adv(); // FOR
+    // Collect the FOR condition until FIELDS / end of statement.
+    // Re-quote STR tokens as SQL literals (like SET FILTER) and glue alias.field
+    // around DOT tokens so `ord.custid` stays a single qualified reference.
+    let forCond = '';
+    let prevWasDot = false;
+    const atEnd = () =>
+      this.end() || this.peekKw('FIELDS') ||
+      this.peek().type === 'NL' || this.peek().type === 'EOF' || this.peek().type === 'SEMI';
+    while (!atEnd()) {
+      const t = this.peek();
+      if (t.type === 'DOT') { forCond += '.'; prevWasDot = true; this.adv(); continue; }
+      const piece = t.type === 'STR' ? `'${t.val.replace(/'/g, "''")}'` : t.val;
+      forCond += (forCond === '' || prevWasDot) ? piece : ' ' + piece;
+      prevWasDot = false;
+      this.adv();
+    }
+    if (!forCond.trim()) throw new Error('JOIN requires a FOR condition');
+
+    // Optional FIELDS list: name, alias.field, ...
+    let fields: string[] | null = null;
+    if (this.peekKw('FIELDS')) {
+      this.adv();
+      const cols: string[] = [];
+      while (!this.end() && this.peek().type !== 'NL' && this.peek().type !== 'EOF' && this.peek().type !== 'SEMI') {
+        let col = this.peek().val; this.adv();
+        if (!this.end() && this.peek().type === 'DOT') {
+          this.adv();
+          col += '.' + this.peek().val; this.adv();
+        }
+        cols.push(col);
+        if (this.peek().type === 'COMMA') { this.adv(); continue; }
+        break;
+      }
+      fields = cols;
+    }
+
+    return { type: 'JOIN', withAlias, target, forCond: forCond.trim(), fields };
   }
 
   private parseSort(): ASTNode {
@@ -591,14 +642,22 @@ export class Parser {
     if (this.peekKw('FOR')) {
       this.adv();
       const parts: string[] = [];
-      while (!this.end() && this.peek().type !== 'NL' && this.peek().type !== 'SEMI' && this.peek().type !== 'EOF') {
+      // Collect the FOR condition, but stop at a trailing `TO <var>` clause.
+      while (!this.end() && this.peek().type !== 'NL' && this.peek().type !== 'SEMI'
+             && this.peek().type !== 'EOF' && !this.peekKw('TO')) {
         const t = this.peek();
         parts.push(t.type === 'STR' ? `'${t.val.replace(/'/g, "''")}'` : t.val);
         this.adv();
       }
       forCond = parts.length ? parts.join(' ') : null;
     }
-    return { type: 'AGGREGATE', op, field, forCond };
+    // Optional dBASE `TO <var>`: store the result in a variable instead of printing.
+    let toVar: string | null = null;
+    if (this.peekKw('TO')) {
+      this.adv();
+      toVar = this.ident();
+    }
+    return { type: 'AGGREGATE', op, field, forCond, toVar };
   }
 
   // A filename like customers.csv lexes as ID '.' ID; rebuild it by joining the raw

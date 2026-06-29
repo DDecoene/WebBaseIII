@@ -137,5 +137,6 @@ export type ServerMessage =
   | { type: 'report-preview'; html: string }
   | { type: 'error'; message: string }
   | { type: 'catalog'; catalog: Catalog }
+  | { type: 'data-changed'; db: string; table: string }
   | { type: 'csv-download'; filename: string; content: string }
   | { type: 'csv-upload-open'; table: string; filename: string };

@@ -26,17 +26,74 @@ See [CLAUDE.md](CLAUDE.md) for the full architecture overview and W3Script comma
 ## Running tests
 
 ```bash
-npm test                # Vitest — must be green before any PR
-npx playwright test     # E2E — requires the dev server running on :5173/:3000
+npm test                # Vitest — unit + integration; must be green before any PR
+npx playwright test     # E2E — auto-starts the dev server via playwright.config.ts
 ```
 
-## Making changes
+## Branching workflow (important — read this)
+
+WebBase-III uses **GitFlow with milestone-versioned release branches**, so the one
+thing that trips people up is the PR base: **you target the active release branch,
+not `main`.**
+
+- `main` holds only released, tagged code — it's branch-protected and PRs against it
+  can't be merged by contributors.
+- All work for a version integrates on that version's **`release/vX.Y.Z`** branch
+  (one per GitHub milestone). A [milestone](https://github.com/DDecoene/WebBaseIII/milestones)
+  maps 1:1 to its release branch — find the open milestone (e.g. `v1.1.0`) and that's
+  your base branch (`release/v1.1.0`).
+
+### Step by step
+
+```bash
+# 1. Fork on GitHub, then clone your fork and add upstream
+git clone https://github.com/<you>/WebBaseIII.git
+cd WebBaseIII
+git remote add upstream https://github.com/DDecoene/WebBaseIII.git
+git fetch upstream
+
+# 2. Branch off the CURRENT release branch (NOT main)
+git checkout -b feature/my-change upstream/release/v1.1.0
+
+# 3. ...make changes + tests, commit...
+
+# 4. Push to your fork
+git push -u origin feature/my-change
+```
+
+Then open the PR on GitHub and **change the base branch from `main` to
+`release/vX.Y.Z`** (the base dropdown defaults to `main` — you must switch it).
+Reference the issue with `Refs #N` in the body. Because the PR merges into a
+non-default branch, `Closes #N` won't auto-close the issue; the maintainer closes it
+on merge.
+
+To keep your branch current (we periodically merge `main` into open release
+branches): `git fetch upstream && git merge upstream/release/v1.1.0`.
 
 1. Open an issue first for anything non-trivial, so we can discuss the approach.
-2. Fork, branch, and keep PRs focused — one feature or fix per PR.
+2. Keep PRs focused — one feature or fix per PR.
 3. Add or update tests for what you change. Bug fixes need a regression test.
-4. Run `npm test` and make sure it passes.
-5. Update docs that your change makes stale: `README.md` command tables, `CHANGELOG.md` (Added / Fixed / Changed), and `CLAUDE.md` if architecture changed.
+
+## Definition of Done
+
+Your PR is expected to meet the project's
+[Definition of Done](CLAUDE.md#definition-of-done). In short:
+
+- **`npm test` and `npx playwright test` both pass.**
+- **Every user-facing command/feature ships with a Playwright e2e case** in the same
+  PR — a REPL command needs a `tests/*.spec.ts` case that types it and asserts the
+  rendered result. Unit coverage alone is not "done."
+- **CI gates the merge** — the `unit` and `e2e` jobs must be green on your PR. CI runs
+  for fork PRs automatically; the suite needs no secrets.
+- **Docs reflect the change** — update `README.md` command tables / feature list,
+  `CHANGELOG.md` (Added / Fixed / Changed under the milestone heading), and `CLAUDE.md`
+  if architecture changed. Retake screenshots if the UI changed.
+
+## Commit conventions
+
+Use concise, conventional-commit-style messages matching the existing history
+(`feat(...)`, `fix(...)`, `test(...)`, `docs: ...`). **Do not add `Co-Authored-By`
+trailers or any AI/assistant attribution** — commits are authored solely by you.
 
 ## What to work on
 

@@ -115,8 +115,9 @@ Wizards open in the main area with a live W3Script preview.
 | **DO CASE** | Multi-branch conditional, `OTHERWISE` fallback |
 | **Built-in functions** | `EOF()`, `BOF()`, `FOUND()`, `RECNO()`, `SUBSTR()`, `STR()`, `AT()`, `CTOD()`, `DTOC()` and more |
 | **Program files** | Save, edit, and run `.prg` scripts with `DO` / `EDIT` |
-| **The Assistant** | Permanent left sidebar — open databases/tables, browse, filter, index, search, design reports, run programs without typing |
+| **The Assistant** | Permanent left sidebar — open databases/tables, browse, filter, CSV import/export, sort, sum/average, index, search, reindex, pack, design reports, run programs without typing |
 | **Multi-user** | Each WebSocket connection gets its own isolated interpreter session |
+| **Live propagation** | Edit a record in one session and every other session BROWSE-ing that table refreshes automatically — no re-query |
 | **Persistent storage** | `better-sqlite3` with WAL mode — databases survive server restart |
 
 ---
@@ -124,10 +125,11 @@ Wizards open in the main area with a live W3Script preview.
 ## The Assistant
 
 The sidebar on the left drives everything without typing: open or create databases and tables,
-browse and filter data, build indexes, search, design and run reports, run programs, and modify
+browse and filter data, import/export CSV, sort into a new table, sum or average a numeric field,
+build indexes, search, reindex, pack the database, design and run reports, run programs, and modify
 table structure. Every click generates a real W3Script command that echoes into the terminal —
-watch it to learn the language. Wizards (New table, Filter, Modify structure, report designer, …)
-open in the main area and show a live preview of the command they will run.
+watch it to learn the language. Wizards (New table, Filter, Sort, Sum/Average, Modify structure,
+report designer, …) open in the main area and show a live preview of the command they will run.
 
 ---
 
@@ -215,8 +217,8 @@ WebBase-III supports **unlimited work areas** — each independently holding a t
 | `REPLACE <field> WITH <val>, ...` | Update field(s) on current row |
 | `REPLACE ALL <field> WITH <val>, ...` | Update all (filtered) rows |
 | `SET FILTER TO <expr>` | Set a WHERE clause; empty clears it |
-| `SUM <field> [FOR <cond>]` | Total a numeric field over the current table (honours active filter) |
-| `AVERAGE <field> [FOR <cond>]` | Mean of a numeric field over the current table (honours active filter) |
+| `SUM <field> [FOR <cond>] [TO <var>]` | Total a numeric field over the current table (honours active filter); `TO <var>` stores the result in a variable instead of printing |
+| `AVERAGE <field> [FOR <cond>] [TO <var>]` | Mean of a numeric field over the current table (honours active filter); `TO <var>` stores the result in a variable instead of printing |
 | `COPY TO <file>.csv` | Export current table to a CSV download (honours filter + index order) |
 | `APPEND FROM <file>.csv` | Import a CSV (browser file picker) into the current table |
 | `MODIFY STRUCTURE` | Open the Modify-structure wizard for the active table |
@@ -246,6 +248,18 @@ WebBase-III supports **unlimited work areas** — each independently holding a t
 | `SEEK <expr>` | Position record pointer at first index match |
 | `FIND <string>` | Alias for SEEK (unquoted string — dBASE III legacy form) |
 | `SORT ON <field>[/D] TO <newtable>` | Write a sorted copy of the table to a new table; `/D` = descending; honours the active filter |
+| `JOIN WITH <alias> TO <file> FOR <cond> [FIELDS <list>]` | Materialize a snapshot table by joining the active area with `<alias>`; honours the active filter |
+
+> **`JOIN` differs from classic dBASE III:** `FOR` is **required** (dBASE allowed
+> omitting it); cross-area fields use `alias.field` dot syntax (not `alias->field`);
+> `FOR` is a SQL predicate (like `SET FILTER`); the join runs on SQLite's planner,
+> not an O(n×m) nested loop; on a column-name clash the active table wins and the
+> duplicate is dropped **with a warning** (dBASE dropped it silently); and there
+> are no 128-field / 10-char-name limits.
+>
+> _Limitation:_ if a `SET FILTER` is active on the source area, its predicate is
+> applied to the joined query; a filter referencing a column whose name exists in
+> both joined tables may be ambiguous — qualify it or clear the filter before JOIN.
 
 ### Reports
 
@@ -267,7 +281,17 @@ WebBase-III supports **unlimited work areas** — each independently holding a t
 
 > Demo programs live in `demos/*.prg` and are the single source of truth: they are
 > seeded into the program store on every server start, overwriting any store copy.
-> Try `DO inventory` for a full interactive showcase (work areas, relations, indexes, forms).
+> Matching report definitions live in `demos/reports/*.json` and are seeded the same way.
+>
+> Two of them are **usable example apps** you can build off — run them, then `EDIT` to adapt:
+> - **`DO crm`** — a mini-CRM: companies, contacts, and deals with pipeline totals
+>   (`SUM … FOR`), top-deals sort, a grouped report, CSV export, and a companies+deals JOIN.
+> - **`DO inventory`** — a stock manager: categories, products (with reorder levels), and a
+>   stock-movements ledger, plus valuation totals, a low-stock report, sort, CSV export, and
+>   a products+categories JOIN.
+>
+> Both lean on multi-work-area relations (`alias.field`), indexes, and `@ SAY … GET`/`READ`
+> forms, and invite you to open a second window to watch live multiuser propagation.
 
 ### Variables & I/O
 
@@ -400,6 +424,13 @@ multi-work-area, the parity commands (`?`/`??`, `SUM`/`AVERAGE`, `SORT ON … TO
 and CSV `COPY TO`/`APPEND FROM`. CI runs both Vitest and Playwright on every PR.
 
 ---
+
+## Contributing
+
+Contributions are welcome! WebBase-III uses **GitFlow** — fork the repo and open your
+PR against the **active `release/vX.Y.Z` branch** (the open milestone), not `main`.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full fork → release-branch workflow and
+the Definition of Done.
 
 ## Contributors
 

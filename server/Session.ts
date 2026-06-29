@@ -16,13 +16,25 @@ export class Session {
   // running — its resumption must re-enter program scope (e.g. silent STORE).
   private pendingFromProgram = false;
 
-  constructor(private send: (msg: ServerMessage) => void) {
+  private dirty = false;
+
+  constructor(
+    private send: (msg: ServerMessage) => void,
+    private notifyChange?: (db: string, table: string) => void,
+  ) {
     this.bridge = new ServerDatabaseBridge();
     this.executor = new Executor(this.bridge, indexStore);
+    this.bridge.onMutate = () => { this.dirty = true; };
     // Fire-and-forget client side-effects (CSV download, report preview, CSV
     // upload picker) are emitted immediately so they work at any nesting depth,
     // including inside a program's DO WHILE / DO CASE / IF blocks.
     this.executor.onSideEffect = (e) => this.send(e);
+  }
+
+  /** The db + table this session is currently looking at (for relevance filtering). */
+  currentView(): { db: string | null; table: string | null } {
+    const a = this.executor.area;
+    return { db: a.db, table: a.table };
   }
 
   async handleMessage(msg: ClientMessage): Promise<void> {
@@ -178,6 +190,12 @@ export class Session {
       }
     } catch (err: unknown) {
       this.send({ type: 'output', lines: [{ text: `** Error: ${err instanceof Error ? err.message : String(err)}`, cls: 'error' }] });
+    } finally {
+      if (this.dirty) {
+        this.dirty = false;
+        const { db, table } = this.currentView();
+        if (db && table) this.notifyChange?.(db, table);
+      }
     }
   }
 
