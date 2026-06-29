@@ -8,7 +8,8 @@
     "dev": "concurrently \"vite\" \"tsx watch server/index.ts\"",
     "build": "tsc --noEmit && vite build",
     "serve": "npm run build && tsx server/index.ts",
-    "test": "vitest run --config vitest.config.ts"
+    "test": "vitest run --config vitest.config.ts",
+    "clean:data": "node scripts/clean-data.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.60.0",

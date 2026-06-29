@@ -4,6 +4,9 @@ export default defineConfig({
   testDir: './tests',
   testMatch: '*.spec.ts',
   timeout: 30000,
+  // After the whole run, delete the scratch databases the tests created in
+  // data/ (keeps system.sqlite3). See #36.
+  globalTeardown: './tests/global-teardown.ts',
   use: {
     baseURL: 'http://localhost:5173',
     headless: true,
