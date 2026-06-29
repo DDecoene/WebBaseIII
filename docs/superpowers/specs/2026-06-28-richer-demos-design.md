@@ -200,6 +200,14 @@ Notable events and deviations:
   the full run. `tests/crm.spec.ts` `beforeEach` now drops the demo tables for a clean
   first-run seed. (Per-test DB teardown is tracked as issue #36.)
 - **Discoverability:** all four surfaces shipped; `screenshot-assistant.png` retaken.
+- **Added `SUM`/`AVERAGE … TO <var>` (issue #39).** Manual testing showed the summary
+  screens rendered labels with no values: `SUM`/`AVERAGE` print to the terminal while
+  `@ SAY` renders in the form overlay, so "(above: …)" captions were stranded. Added the
+  dBASE `TO <var>` clause so a program can store a total and `@ SAY` it inline. Folded
+  into this branch (the demos depend on it); 3 new vitest cases.
+- **Demos start with `CLOSE ALL` (session-state hygiene).** Running one demo then another
+  in the same REPL session leaked work areas/relations (e.g. `DO crm` then `DO inventory`
+  → `** Error: no such table: COMPANIES`). Each demo now resets with `CLOSE ALL` first.
 
 ## Out of scope
 

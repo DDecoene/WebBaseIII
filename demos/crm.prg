@@ -10,6 +10,10 @@
 * COPY THIS FILE (or EDIT crm) to build your own CRM.
 * ============================================================
 
+* Start from a clean slate so work areas/relations left open by another
+* program (or a previous run) in this session can't leak in.
+CLOSE ALL
+
 USE DATABASE CRM
 
 SELECT COMP
@@ -215,14 +219,14 @@ DO WHILE running
     CASE UPPER(TRIM(choice)) == "5"
       CLEAR
       SELECT DEAL
+      SUM VALUE FOR STAGE != "Won" AND STAGE != "Lost" TO m_open
+      SUM VALUE FOR STAGE == "Won" TO m_won
+      AVERAGE VALUE TO m_avg
       @ 2, 5 SAY "--- PIPELINE SUMMARY ---"
-      SUM VALUE FOR STAGE != "Won" AND STAGE != "Lost"
-      @ 4, 5 SAY "(above: open pipeline value)"
-      SUM VALUE FOR STAGE == "Won"
-      @ 6, 5 SAY "(above: won value)"
-      AVERAGE VALUE
-      @ 8, 5 SAY "(above: average deal size)"
-      @ 10, 5 SAY "Deals on file: " + STR(RECCOUNT(), 5)
+      @ 4, 5 SAY "Open pipeline value : " + STR(m_open, 12, 2)
+      @ 5, 5 SAY "Won value           : " + STR(m_won, 12, 2)
+      @ 6, 5 SAY "Average deal size   : " + STR(m_avg, 12, 2)
+      @ 8, 5 SAY "Deals on file       : " + STR(RECCOUNT(), 5)
       INPUT "Press Enter to continue" TO pause
 
     CASE UPPER(TRIM(choice)) == "6"

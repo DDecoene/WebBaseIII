@@ -61,6 +61,9 @@ test.describe('CRM demo', () => {
   test('pipeline summary prints totals', async ({ page }) => {
     await menuChoice(page, '5');
     await expect(page.locator('#form-view')).toContainText(/pipeline/i, { timeout: 6000 });
+    // The open-pipeline total (48000 + 91000 + 22000 = 161000) must render inline
+    // next to its label in the form — not stranded on the hidden terminal.
+    await expect(page.locator('#form-view')).toContainText('161000', { timeout: 6000 });
   });
 
   test('top deals sorts into a new table', async ({ page }) => {

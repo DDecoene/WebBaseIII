@@ -75,4 +75,21 @@ describe('SUM / AVERAGE commands', () => {
     const lines = await run(['SET FILTER TO country == "BE"', 'SUM amount']);
     expect(lines.some(l => l.trim() === '1000')).toBe(true);
   });
+
+  it('SUM ... TO <var> stores the total in a variable instead of printing', async () => {
+    const lines = await run(['SUM amount TO m_total', '? m_total']);
+    // The SUM itself prints nothing; the value is shown only via ? m_total.
+    expect(lines.some(l => l.trim() === '1250')).toBe(true);
+    expect(lines.filter(l => l.trim() === '1250').length).toBe(1);
+  });
+
+  it('SUM ... FOR ... TO <var> applies the condition before storing', async () => {
+    const lines = await run(['SUM amount FOR country == "BE" TO m_be', '? m_be']);
+    expect(lines.some(l => l.trim() === '1000')).toBe(true);
+  });
+
+  it('AVERAGE ... TO <var> stores the mean in a variable', async () => {
+    const lines = await run(['AVERAGE amount FOR country == "BE" TO m_avg', '? m_avg']);
+    expect(lines.some(l => l.trim() === '500')).toBe(true);
+  });
 });

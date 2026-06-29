@@ -195,7 +195,9 @@ test.describe('Inventory demo — v1.0/v1.1 features', () => {
 
   test('option 6 — valuation & stock summary prints totals', async ({ page }) => {
     await menuChoice(page, '6');
-    await expect(page.locator('#form-view')).toContainText(/valuation|stock/i, { timeout: 6000 });
+    // Totals must render inline next to their labels (value, not just caption).
+    await expect(page.locator('#form-view')).toContainText(/stock units\s*:\s*\d/i, { timeout: 6000 });
+    await expect(page.locator('#form-view')).toContainText(/average price\s*:\s*\d/i, { timeout: 6000 });
   });
 
   test('option 7 — low-stock report renders the HTML preview', async ({ page }) => {

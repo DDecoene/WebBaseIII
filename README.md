@@ -217,8 +217,8 @@ WebBase-III supports **unlimited work areas** — each independently holding a t
 | `REPLACE <field> WITH <val>, ...` | Update field(s) on current row |
 | `REPLACE ALL <field> WITH <val>, ...` | Update all (filtered) rows |
 | `SET FILTER TO <expr>` | Set a WHERE clause; empty clears it |
-| `SUM <field> [FOR <cond>]` | Total a numeric field over the current table (honours active filter) |
-| `AVERAGE <field> [FOR <cond>]` | Mean of a numeric field over the current table (honours active filter) |
+| `SUM <field> [FOR <cond>] [TO <var>]` | Total a numeric field over the current table (honours active filter); `TO <var>` stores the result in a variable instead of printing |
+| `AVERAGE <field> [FOR <cond>] [TO <var>]` | Mean of a numeric field over the current table (honours active filter); `TO <var>` stores the result in a variable instead of printing |
 | `COPY TO <file>.csv` | Export current table to a CSV download (honours filter + index order) |
 | `APPEND FROM <file>.csv` | Import a CSV (browser file picker) into the current table |
 | `MODIFY STRUCTURE` | Open the Modify-structure wizard for the active table |

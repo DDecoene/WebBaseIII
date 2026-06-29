@@ -10,6 +10,10 @@
 * COPY THIS FILE (or EDIT inventory) to build your own.
 * ============================================================
 
+* Start from a clean slate so work areas/relations left open by another
+* program (or a previous run) in this session can't leak in.
+CLOSE ALL
+
 USE DATABASE INVDEMO
 
 SELECT CAT
@@ -221,12 +225,12 @@ DO WHILE running
     CASE UPPER(TRIM(choice)) == "6"
       CLEAR
       SELECT INV
+      SUM STOCK FOR ACTIVE == .T. TO m_units
+      AVERAGE PRICE TO m_avgprice
       @ 2, 5 SAY "--- VALUATION & STOCK SUMMARY ---"
-      SUM STOCK FOR ACTIVE == .T.
-      @ 4, 5 SAY "(above: total active stock units)"
-      AVERAGE PRICE
-      @ 6, 5 SAY "(above: average price)"
-      @ 8, 5 SAY "Products on file: " + STR(RECCOUNT(), 5)
+      @ 4, 5 SAY "Total active stock units : " + STR(m_units, 8)
+      @ 6, 5 SAY "Average price            : " + STR(m_avgprice, 10, 2)
+      @ 8, 5 SAY "Products on file         : " + STR(RECCOUNT(), 5)
       INPUT "Press Enter to continue" TO pause
 
     CASE UPPER(TRIM(choice)) == "7"

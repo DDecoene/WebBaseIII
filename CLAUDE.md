@@ -153,8 +153,8 @@ WebBase-III supports **unlimited work areas** (no DOS 10-area limit). Cross-area
 | `REPLACE <field> WITH <val>, ...` | Update field(s) on current row |
 | `REPLACE ALL <field> WITH <val>, ...` | Update all (filtered) rows |
 | `SET FILTER TO <expr>` | Set a WHERE clause; empty clears it |
-| `SUM <field> [FOR <cond>]` | Total a numeric field over the current table (honours active filter) |
-| `AVERAGE <field> [FOR <cond>]` | Mean of a numeric field over the current table (honours active filter) |
+| `SUM <field> [FOR <cond>] [TO <var>]` | Total a numeric field over the current table (honours active filter); `TO <var>` stores the result in a variable instead of printing |
+| `AVERAGE <field> [FOR <cond>] [TO <var>]` | Mean of a numeric field over the current table (honours active filter); `TO <var>` stores the result in a variable instead of printing |
 | `COPY TO <file>.csv` | Export current table to a CSV the browser downloads (header CSV, honours filter + index order; max 50k rows) |
 | `APPEND FROM <file>.csv` | Import a header CSV (browser file picker) into the current table; lenient ≤10 bad rows, else abort; max 5 MB |
 | `MODIFY STRUCTURE` | Open the Modify-structure wizard for the active table |
@@ -257,7 +257,7 @@ Both styles accepted: `TRUE`/`FALSE` and `.T.`/`.TRUE.`/`.F.`/`.FALSE.` (dBASE I
 ## Testing
 
 ```bash
-npm test                # Vitest unit + integration (262 tests)
+npm test                # Vitest unit + integration (265 tests)
 npx playwright test     # E2E browser tests — requires dev server on :5173/:3000
 ```
 
