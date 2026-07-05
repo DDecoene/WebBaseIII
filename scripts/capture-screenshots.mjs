@@ -52,7 +52,7 @@ async function snap(page, name) {
 }
 
 // ── 1. screenshot-terminal.png ─────────────────────────────────────────────
-console.log('1. terminal (splash + v1.0.0 banner)');
+console.log('1. terminal (splash + version banner)');
 {
   const page = await newPage();
   await boot(page);
