@@ -7,6 +7,15 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
 
 ---
 
+## [1.1.1] — 2026-07-05 — Docs refresh
+
+### Changed
+- Regenerated all `docs/screenshots/*.png` and the README `demo.gif` against the current
+  build — the imagery previously showed the stale `v1.0.0` banner. Screenshots and GIF
+  now render the `v1.1.1` status bar so the README matches the shipped version.
+
+---
+
 ## [1.1.0] — 2026-06-27 — Live multiuser data propagation
 
 ### Added
