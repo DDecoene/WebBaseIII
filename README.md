@@ -288,14 +288,17 @@ WebBase-III supports **unlimited work areas** — each independently holding a t
 > seeded into the program store on every server start, overwriting any store copy.
 > Matching report definitions live in `demos/reports/*.json` and are seeded the same way.
 >
-> Two of them are **usable example apps** you can build off — run them, then `EDIT` to adapt:
+> Three of them are **usable example apps** you can build off — run them, then `EDIT` to adapt:
 > - **`DO crm`** — a mini-CRM: companies, contacts, and deals with pipeline totals
 >   (`SUM … FOR`), top-deals sort, a grouped report, CSV export, and a companies+deals JOIN.
 > - **`DO inventory`** — a stock manager: categories, products (with reorder levels), and a
 >   stock-movements ledger, plus valuation totals, a low-stock report, sort, CSV export, and
 >   a products+categories JOIN.
+> - **`DO overtime`** — an overtime tracker: per-employee weekly schedules, `TIME(15)`
+>   timesheets you edit in the validated grid, `WEEK()` / `DATEADD()` week handling, a live
+>   overtime balance (banked minus leave taken), a grouped report, and CSV export.
 >
-> Both lean on multi-work-area relations (`alias.field`), indexes, and `@ SAY … GET`/`READ`
+> They lean on multi-work-area relations (`alias.field`), indexes, and `@ SAY … GET`/`READ`
 > forms, and invite you to open a second window to watch live multiuser propagation.
 
 ### Variables & I/O

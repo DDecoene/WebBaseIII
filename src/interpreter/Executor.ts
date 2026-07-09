@@ -1063,6 +1063,7 @@ export class Executor implements IndexCommandsHost {
       { text: 'Demos / examples:' },
       { text: 'DO crm        — usable CRM example app (EDIT crm to customize)' },
       { text: 'DO inventory  — usable inventory example app (EDIT inventory to customize)' },
+      { text: 'DO overtime   — overtime tracker example app (TIME(15), WEEK(), DATEADD())' },
       { text: '' },
       { text: 'QUIT                    — exit' },
     ]};

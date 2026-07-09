@@ -65,6 +65,7 @@ const CATEGORIES: { name: string; actions: ActionDef[] }[] = [
   { name: 'Programs', actions: [
     { label: 'Run CRM demo', command: 'DO crm' },
     { label: 'Run Inventory demo', command: 'DO inventory' },
+    { label: 'Run Overtime demo', command: 'DO overtime' },
     { label: 'Run program…', picker: 'programs', onPick: (n, h) => h.run(`DO ${n}`) },
     { label: 'Edit program…', picker: 'programs', onPick: (n, h) => h.run(`EDIT ${n}`) },
   ]},

@@ -1,0 +1,14 @@
+{
+  "title": "Overtime by Employee",
+  "pageWidth": 80,
+  "columns": [
+    { "field": "WEEKDATE", "heading": "Week of", "width": 12 },
+    { "field": "WEEKNO", "heading": "Wk", "width": 5 },
+    { "field": "WORKEDHOURS", "heading": "Worked", "width": 10, "total": true },
+    { "field": "STANDARDHOURS", "heading": "Standard", "width": 10, "total": true },
+    { "field": "OVERTIME", "heading": "Overtime", "width": 10, "total": true }
+  ],
+  "groupBy": "EMPID",
+  "pageHeader": "WebBase-III Overtime — Weekly Summary",
+  "pageFooter": "Page {PAGE}"
+}

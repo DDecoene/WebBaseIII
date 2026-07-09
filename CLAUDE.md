@@ -93,8 +93,9 @@ data/
 demos/
   *.prg                 Demo programs — single source of truth; seeded into the
                         program store on every server start (overwrites store copies).
-                        crm.prg + INVENTORY.prg are usable example apps.
+                        crm.prg, INVENTORY.prg + overtime.prg are usable example apps.
   reports/*.json        Demo report definitions — seeded into the report store at startup
+                        (dealsbystage, lowstock, overtimebyemp)
 
 .devcontainer/
   devcontainer.json     GitHub Codespaces config — auto npm install + npm run dev
@@ -322,7 +323,10 @@ line.
 - ~~BROWSE per-cell validation~~ — grid rejects invalid edits per column type, validated on both client and server via `src/shared/cellValidation.ts` (#45) ✅
 - ~~Test hardening~~ — strict `CREATE TABLE` grammar, golden demo schemas, coverage for every
   grid WS message, per-database index/column metadata scoping, `npm run coverage` (#50) ✅
-- `demos/overtime.prg` — overtime tracker showcasing all three of the above (#46)
+- ~~`demos/overtime.prg`~~ — overtime tracker: per-employee weekly schedules, `TIME(15)`
+  timesheets edited in the validated grid, `WEEK()`/`DATEADD()`, live overtime balance,
+  grouped report, CSV export (#46) ✅
+- ~~`DATEADD()` built-in~~ — day arithmetic; W3Script had none (#52) ✅
 
 ## Boolean literals
 
@@ -331,12 +335,12 @@ Both styles accepted: `TRUE`/`FALSE` and `.T.`/`.TRUE.`/`.F.`/`.FALSE.` (dBASE I
 ## Testing
 
 ```bash
-npm test                # Vitest unit + integration (369 tests)
+npm test                # Vitest unit + integration (379 tests)
 npm run coverage        # Vitest + v8 coverage report (reporting only, no thresholds)
 npx playwright test     # E2E browser tests — requires dev server on :5173/:3000
 ```
 
-Playwright suites (84 tests): `tests/assistant.spec.ts` (23 tests — sidebar, wizards, report designer, MODIFY STRUCTURE round-trip, `TIME(15)` column + REPLACE validation, `NUM(p,s)` wizard, Browse-action grid validation, program run, CSV/SORT/SUM-AVERAGE/REINDEX/PACK actions, demo launchers), `tests/integration.spec.ts` (20 tests — full REPL scenario), `tests/inventory.spec.ts` (8 tests — INVENTORY.prg menu + valuation/low-stock report/sort/CSV/JOIN), `tests/crm.spec.ts` (6 tests — CRM demo menu, pipeline summary, sort, report, CSV, JOIN), `tests/parity-commands.spec.ts` (6 tests — `?`/`??`, built-in functions, `WEEK()`, `DATEADD()`, `SUM`/`AVERAGE`, `SORT ON … TO`), `tests/multiarea.spec.ts` (4 tests — multi-work-area, relations, alias.field), `tests/demos.spec.ts` (4 tests — demo program + report seeding), `tests/grid-validation.spec.ts` (3 tests — BROWSE per-cell validation: TIME(15), NUM(p,s)/DATE, Esc abandons), `tests/schema-errors.spec.ts` (3 tests — malformed CREATE TABLE errors, NUM(p,s) column count, bare INPUT stores its value), `tests/copycsv.spec.ts` (2 tests — COPY TO download + APPEND FROM upload), `tests/splash.spec.ts` (2 tests — version banner + demo discoverability), `tests/join.spec.ts` (1 test — JOIN materialization), `tests/propagation.spec.ts` (1 test — live multiuser refresh), `tests/program-side-effects.spec.ts` (1 test — CSV/report side-effects fire from inside a program block).
+Playwright suites (94 tests): `tests/assistant.spec.ts` (23 tests — sidebar, wizards, report designer, MODIFY STRUCTURE round-trip, `TIME(15)` column + REPLACE validation, `NUM(p,s)` wizard, Browse-action grid validation, program run, CSV/SORT/SUM-AVERAGE/REINDEX/PACK actions, demo launchers), `tests/integration.spec.ts` (20 tests — full REPL scenario), `tests/overtime.spec.ts` (9 tests — overtime.prg: menu, seeding, DATEADD week prep, TIME(15) grid rejection, recalculation, live balance, quarter-hour leave check, report, CSV), `tests/inventory.spec.ts` (8 tests — INVENTORY.prg menu + valuation/low-stock report/sort/CSV/JOIN), `tests/crm.spec.ts` (6 tests — CRM demo menu, pipeline summary, sort, report, CSV, JOIN), `tests/parity-commands.spec.ts` (6 tests — `?`/`??`, built-in functions, `WEEK()`, `DATEADD()`, `SUM`/`AVERAGE`, `SORT ON … TO`), `tests/multiarea.spec.ts` (4 tests — multi-work-area, relations, alias.field), `tests/demos.spec.ts` (4 tests — demo program + report seeding), `tests/grid-validation.spec.ts` (3 tests — BROWSE per-cell validation: TIME(15), NUM(p,s)/DATE, Esc abandons), `tests/schema-errors.spec.ts` (3 tests — malformed CREATE TABLE errors, NUM(p,s) column count, bare INPUT stores its value), `tests/copycsv.spec.ts` (2 tests — COPY TO download + APPEND FROM upload), `tests/splash.spec.ts` (2 tests — version banner + demo discoverability), `tests/join.spec.ts` (1 test — JOIN materialization), `tests/propagation.spec.ts` (1 test — live multiuser refresh), `tests/program-side-effects.spec.ts` (1 test — CSV/report side-effects fire from inside a program block).
 
 ## Test discipline
 
