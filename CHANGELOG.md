@@ -7,6 +7,13 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
 
 ---
 
+## [Unreleased] — v1.2.0 — TIME columns, WEEK(), grid validation, Overtime demo
+
+### Added
+- (pending)
+
+---
+
 ## [1.1.1] — 2026-07-05 — Docs refresh
 
 ### Changed
