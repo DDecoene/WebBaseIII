@@ -166,6 +166,21 @@ WebBase-III supports **unlimited work areas** (no DOS 10-area limit). Cross-area
 
 > Column ops that can invalidate an index (DROP, RENAME, ALTER type) drop all of the table's indexes and warn to rebuild with `INDEX ON`.
 
+#### Column types
+
+`CREATE TABLE`/`ALTER TABLE ADD`/`ALTER TABLE ALTER` accept:
+
+| Type | Aliases | Storage |
+|---|---|---|
+| `CHAR(n)` | `CHARACTER`, `VARCHAR`, `STRING`, `MEMO` | `TEXT` |
+| `NUM` | `NUMERIC`, `FLOAT`, `DOUBLE`, `DECIMAL` | `REAL` |
+| `INT` | `INTEGER` | `INTEGER` |
+| `LOGICAL` | `BOOLEAN` | `INTEGER` |
+| `DATE` | | `TEXT` |
+| `TIME` / `TIME(n)` | | `TEXT` |
+
+`TIME` stores `HH:MM` (24-hour). The optional `TIME(n)` qualifier (only via `CREATE TABLE` — not yet carried through `ALTER TABLE`) requires minutes to be a multiple of `n`, e.g. `TIME(15)` only accepts `:00`/`:15`/`:30`/`:45`. `APPEND RECORD` leaves new fields `NULL` (unvalidated); `REPLACE ... WITH` rejects a malformed or off-granularity `TIME` value with `** Error: ...` and does not write it. `LIST STRUCTURE` prints the declared type (`TIME`, `TIME(15)`) rather than the raw SQLite storage class.
+
 ### Indexing & search
 | Command | What it does |
 |---|---|

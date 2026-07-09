@@ -229,6 +229,8 @@ WebBase-III supports **unlimited work areas** — each independently holding a t
 
 > Column ops that can invalidate an index (DROP, RENAME, ALTER type) drop all of the table's indexes and warn you to rebuild with `INDEX ON`.
 
+**Column types**: `CHAR(n)` (aliases `CHARACTER`/`VARCHAR`/`STRING`/`MEMO`), `NUM` (`NUMERIC`/`FLOAT`/`DOUBLE`/`DECIMAL`), `INT`/`INTEGER`, `LOGICAL`/`BOOLEAN`, `DATE`, and `TIME`/`TIME(n)`. `TIME` stores `HH:MM` (24-hour); the optional `TIME(n)` qualifier (e.g. `TIME(15)`) requires minutes to be a multiple of `n`. `REPLACE ... WITH` rejects a malformed or off-granularity `TIME` value instead of silently coercing it.
+
 > **CSV format (`COPY TO` / `APPEND FROM`):** Unlike dBASE III's headerless,
 > positional `DELIMITED`/`SDF` formats, WebBase-III uses modern **header-based CSV**
 > (RFC-4180, mapped by column name). Export downloads through the browser and

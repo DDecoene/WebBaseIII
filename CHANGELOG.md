@@ -10,7 +10,11 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
 ## [Unreleased] — v1.2.0 — TIME columns, WEEK(), grid validation, Overtime demo
 
 ### Added
-- (pending)
+- `TIME` column type — `CREATE TABLE ... (col TIME)` / `TIME(n)` for a minute-granularity
+  qualifier (e.g. `TIME(15)` for quarter-hour increments). Stores canonical `HH:MM`,
+  validated on `REPLACE ... WITH` (rejects malformed or off-granularity values —
+  no silent coercion), and `LIST STRUCTURE` prints the declared type instead of the
+  raw SQLite storage class. (#43)
 
 ---
 
