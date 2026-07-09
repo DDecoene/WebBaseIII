@@ -11,3 +11,4 @@ webbase-screenshot.png
 playwright-report/
 test-results/
 out/
+coverage/

@@ -92,8 +92,8 @@ export class Executor implements IndexCommandsHost {
     return this.areas.get(this.activeAlias)!;
   }
 
-  /** Database key for column metadata — same-named tables in different DBs must not collide. */
-  private get metaDb(): string {
+  /** Database key for index/column metadata — same-named tables in different DBs must not collide. */
+  get metaDb(): string {
     return this.area.db ?? '';
   }
 
@@ -238,7 +238,7 @@ export class Executor implements IndexCommandsHost {
     this.area.table = name;
     this.area.filter = null;
     this.area.rowPtr = 1;
-    this.area.activeIndex = this.indexStore?.getActive(name) ?? null;
+    this.area.activeIndex = this.indexStore?.getActive(this.metaDb, name) ?? null;
     const exists = await this.db.tableExists(name);
     const storage = this.area.opfsAvailable ? 'OPFS (persistent)' : 'server-side persistent';
     const lines: OutputLine[] = [
@@ -889,7 +889,7 @@ export class Executor implements IndexCommandsHost {
 
   private async doDropTable(name: string): Promise<ExecResult> {
     await this.db.exec(`DROP TABLE IF EXISTS ${q(name)}`);
-    this.indexStore?.dropTable(name);
+    this.indexStore?.dropTable(this.metaDb, name);
     this.columnMetaStore?.dropTable(this.metaDb, name);
     if (this.area.table === name) {
       this.area.table = null;
@@ -991,12 +991,12 @@ export class Executor implements IndexCommandsHost {
   // Used by column ops that can invalidate an index expression.
   private async dropAllIndexes(table: string): Promise<string[]> {
     if (!this.indexStore) return [];
-    const tags = this.indexStore.listIndexes(table).map(i => i.tag);
+    const tags = this.indexStore.listIndexes(this.metaDb, table).map(i => i.tag);
     for (const tag of tags) {
       const sqlName = `idx_${table}_${tag}`.replace(/"/g, '""');
       await this.db.exec(`DROP INDEX IF EXISTS "${sqlName}"`);
     }
-    this.indexStore.dropTable(table);          // clears metadata + active marker
+    this.indexStore.dropTable(this.metaDb, table);   // clears metadata + active marker
     if (this.area.table === table) this.area.activeIndex = null;
     return tags;
   }

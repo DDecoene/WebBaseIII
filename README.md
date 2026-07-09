@@ -229,6 +229,9 @@ WebBase-III supports **unlimited work areas** — each independently holding a t
 
 > Column ops that can invalidate an index (DROP, RENAME, ALTER type) drop all of the table's indexes and warn you to rebuild with `INDEX ON`.
 
+> `CREATE TABLE` rejects a malformed column list (missing comma, missing type, unclosed paren, a third
+> type argument) with a parse error naming the offending column, and creates nothing.
+
 **Column types**: `CHAR(n)` (aliases `CHARACTER`/`VARCHAR`/`STRING`/`MEMO`), `NUM`/`NUM(p,s)` (`NUMERIC`/`FLOAT`/`DOUBLE`/`DECIMAL`), `INT`/`INTEGER`, `LOGICAL`/`BOOLEAN`, `DATE`, and `TIME`/`TIME(n)`. `TIME` stores `HH:MM` (24-hour); the optional `TIME(n)` qualifier (e.g. `TIME(15)`) requires minutes to be a multiple of `n`. `REPLACE ... WITH` rejects a malformed or off-granularity `TIME` value instead of silently coercing it, and `LIST STRUCTURE` prints the declared type (`NUM(8,2)`, `TIME(15)`) rather than SQLite's storage class.
 
 > **CSV format (`COPY TO` / `APPEND FROM`):** Unlike dBASE III's headerless,

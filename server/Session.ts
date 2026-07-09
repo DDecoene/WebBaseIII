@@ -46,11 +46,14 @@ export class Session {
           await this.runCommand(msg.text);
           break;
 
-        case 'form-submit':
+        case 'form-submit': {
+          // Always store what the form collected. A bare `INPUT "…" TO var` at the
+          // REPL leaves no continuation (there is no following statement), and
+          // gating the assignment on one silently discarded the typed value. (#50)
+          for (const [k, v] of Object.entries(msg.values)) {
+            this.executor.setVar(k, v);
+          }
           if (this.pendingContinuation !== null) {
-            for (const [k, v] of Object.entries(msg.values)) {
-              this.executor.setVar(k, v);
-            }
             const cont = this.pendingContinuation;
             const fromProgram = this.pendingFromProgram;
             this.pendingContinuation = null;
@@ -61,8 +64,12 @@ export class Session {
             } finally {
               if (fromProgram) this.executor.exitProgram();
             }
+          } else {
+            this.send({ type: 'view-terminal' });
+            this.sendStatus();
           }
           break;
+        }
 
         case 'grid-edit': {
           const { rowid, col, value } = msg;
@@ -138,8 +145,8 @@ export class Session {
             }
             if (area.table && await this.bridge.tableExists(area.table)) {
               columns = await this.bridge.getStructure(area.table);
-              const active = indexStore.getActive(area.table);
-              indexes = indexStore.listIndexes(area.table)
+              const active = indexStore.getActive(area.db ?? '', area.table);
+              indexes = indexStore.listIndexes(area.db ?? '', area.table)
                 .map(i => ({ tag: i.tag, expression: i.expression, active: active?.tag === i.tag }));
             }
           }

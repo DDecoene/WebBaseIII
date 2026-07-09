@@ -7,7 +7,7 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
 
 ---
 
-## [Unreleased] — v1.2.0 — TIME columns, WEEK(), grid validation, Overtime demo
+## [Unreleased] — v1.2.0 — TIME columns, WEEK(), grid validation, test hardening, Overtime demo
 
 ### Added
 - `TIME` column type — `CREATE TABLE ... (col TIME)` / `TIME(n)` for a minute-granularity
@@ -27,6 +27,14 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
   live in `src/shared/cellValidation.ts` and run on both the client (instant feedback) and
   the server (`grid-edit` is now validated authoritatively — previously it wrote straight
   to SQLite with no check at all). (#45)
+- `NUM(p,s)` is now a genuinely supported qualifier — the precision and scale are parsed,
+  recorded, and enforced on grid edits (`NUM(8,2)` accepts `123456.78`, rejects `1.234`).
+  Previously the scale silently corrupted the schema; see Fixed. (#45) The Assistant's
+  **New table** wizard accepts a width (`8`) or a precision,scale pair (`8,2`). (#50)
+- `LIST STRUCTURE` prints the **declared** type of every column (`CHAR(10)`, `NUM(8,2)`,
+  `DATE`, `TIME(15)`, `LOGICAL`, `INT`) rather than SQLite's storage class (`TEXT`/`REAL`/
+  `INTEGER`). Declared types are recorded per `(database, table, column)` in
+  `server/ColumnMetaStore.ts`. (#45)
 
 ### Fixed
 - `CREATE TABLE t (price NUM(8,2))` silently created a **phantom column named `2`** of
@@ -38,6 +46,28 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
   tables previously shared (and overwrote) one another's declared column types, so a
   `TIME(15)` column in one database could be validated against another database's
   `CHAR(20)` declaration of the same name. (#45)
+- `CREATE TABLE` now **rejects a malformed column list** instead of silently inventing
+  columns from tokens it doesn't understand. `CREATE TABLE t (a CHAR(10) b INT)` (missing
+  comma), `(a)` (no type), `(a NUM(8,2,9))` and an unclosed paren all now raise a parse
+  error naming the offending column, and create nothing. This permissiveness was the root
+  cause of the phantom-column bug above. (#50)
+- **Index metadata is now scoped per database.** `indexes`/`active_indexes` were keyed by
+  table name alone, so opening `PEOPLE` in one database silently activated an index defined
+  on a *different* database's `PEOPLE` — pointing the record order at a column that need not
+  even exist there, and breaking `BROWSE`/`LIST`. On first run, existing index definitions
+  are adopted into the one database that owns the table; definitions whose owner is ambiguous
+  (same table name in two databases) or missing are dropped and must be recreated with
+  `INDEX ON`. The underlying SQLite indexes are untouched. (#50)
+- A bare `INPUT "prompt" TO <var>` typed at the REPL silently discarded the value: the
+  submitted form was only applied when a continuation existed, which is never the case for
+  a single statement. Values a form collects are now always stored. (#50)
+
+### Changed
+- Removed the `input-request` / `input-response` WebSocket message types. They were declared
+  in the protocol but never sent or handled by anything — `INPUT` collects its value through
+  `form-open` / `form-submit`. (#50)
+- New `npm run coverage` (vitest + v8, reporting only, no thresholds), so modules no test ever
+  executes stop hiding. (#50)
 
 ---
 
