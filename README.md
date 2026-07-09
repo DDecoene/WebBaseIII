@@ -88,6 +88,16 @@ Wizards open in the main area with a live W3Script preview.
 
 ---
 
+### BROWSE — per-cell validation
+
+Grid edits are checked against the column's declared type before they commit. An invalid
+value keeps the cell in edit mode, outlined in red, and says why; the error clears as soon
+as you fix it, and `Esc` abandons the edit. Here a `TIME(15)` column rejects `08:07`.
+
+![BROWSE rejecting an invalid TIME(15) cell edit](docs/screenshots/screenshot-grid-validation.png)
+
+---
+
 ### Aggregate commands & dBASE III parity
 
 `SUM`, `AVERAGE`, `? ROUND(…)`, `? MAX(…)`, and `SORT ON … TO` — numeric aggregates and sorted copies, honouring the active filter.
@@ -229,6 +239,11 @@ WebBase-III supports **unlimited work areas** — each independently holding a t
 
 > Column ops that can invalidate an index (DROP, RENAME, ALTER type) drop all of the table's indexes and warn you to rebuild with `INDEX ON`.
 
+> `CREATE TABLE` rejects a malformed column list (missing comma, missing type, unclosed paren, a third
+> type argument) with a parse error naming the offending column, and creates nothing.
+
+**Column types**: `CHAR(n)` (aliases `CHARACTER`/`VARCHAR`/`STRING`/`MEMO`), `NUM`/`NUM(p,s)` (`NUMERIC`/`FLOAT`/`DOUBLE`/`DECIMAL`), `INT`/`INTEGER`, `LOGICAL`/`BOOLEAN`, `DATE`, and `TIME`/`TIME(n)`. `TIME` stores `HH:MM` (24-hour); the optional `TIME(n)` qualifier (e.g. `TIME(15)`) requires minutes to be a multiple of `n`. `REPLACE ... WITH` rejects a malformed or off-granularity `TIME` value instead of silently coercing it, and `LIST STRUCTURE` prints the declared type (`NUM(8,2)`, `TIME(15)`) rather than SQLite's storage class.
+
 > **CSV format (`COPY TO` / `APPEND FROM`):** Unlike dBASE III's headerless,
 > positional `DELIMITED`/`SDF` formats, WebBase-III uses modern **header-based CSV**
 > (RFC-4180, mapped by column name). Export downloads through the browser and
@@ -283,14 +298,17 @@ WebBase-III supports **unlimited work areas** — each independently holding a t
 > seeded into the program store on every server start, overwriting any store copy.
 > Matching report definitions live in `demos/reports/*.json` and are seeded the same way.
 >
-> Two of them are **usable example apps** you can build off — run them, then `EDIT` to adapt:
+> Three of them are **usable example apps** you can build off — run them, then `EDIT` to adapt:
 > - **`DO crm`** — a mini-CRM: companies, contacts, and deals with pipeline totals
 >   (`SUM … FOR`), top-deals sort, a grouped report, CSV export, and a companies+deals JOIN.
 > - **`DO inventory`** — a stock manager: categories, products (with reorder levels), and a
 >   stock-movements ledger, plus valuation totals, a low-stock report, sort, CSV export, and
 >   a products+categories JOIN.
+> - **`DO overtime`** — an overtime tracker: per-employee weekly schedules, `TIME(15)`
+>   timesheets you edit in the validated grid, `WEEK()` / `DATEADD()` week handling, a live
+>   overtime balance (banked minus leave taken), a grouped report, and CSV export.
 >
-> Both lean on multi-work-area relations (`alias.field`), indexes, and `@ SAY … GET`/`READ`
+> They lean on multi-work-area relations (`alias.field`), indexes, and `@ SAY … GET`/`READ`
 > forms, and invite you to open a second window to watch live multiuser propagation.
 
 ### Variables & I/O
@@ -348,6 +366,8 @@ Functions work anywhere an expression is accepted — `IF`, `DO WHILE`, `STORE`,
 | `YEAR(date)` | Numeric year from ISO date string |
 | `MONTH(date)` | Numeric month from ISO date string |
 | `DAY(date)` | Numeric day from ISO date string |
+| `WEEK(date)` | ISO-8601 week number (1–53) — Monday-start weeks, week 1 holds the year's first Thursday |
+| `DATEADD(date, n)` | ISO date `n` days later (`n` may be negative); `''` for an invalid date |
 
 ### Boolean literals
 
@@ -376,6 +396,8 @@ Logical operators are accepted in both styles too: `NOT` / `.NOT.`, `AND` / `.AN
 | Delete | Delete current row |
 | F5 | Refresh from DB |
 | Esc | Exit grid, return to terminal |
+
+> **Cell validation.** An edit is checked against the column's declared type before it commits. An invalid value keeps the cell in edit mode, outlined in red, with the reason shown (`HH:MM`, `multiple of 15`, `at most 2 decimal place(s)`, `not a real date`); the error clears as soon as you fix it, and `Esc` abandons the edit. `DATE`, `TIME`/`TIME(n)`, `NUM(p,s)`, `INT` and `LOGICAL` are validated; `CHAR`/`MEMO` are not. The server re-checks every edit independently.
 
 ---
 

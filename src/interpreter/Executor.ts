@@ -1,10 +1,11 @@
-import { IDatabaseBridge, IIndexStore, OutputLine, FormField, WorkArea, ClientSideEffect } from '../shared/types';
+import { IDatabaseBridge, IIndexStore, IColumnMetaStore, ColumnTypeInfo, OutputLine, FormField, WorkArea, ClientSideEffect } from '../shared/types';
 import { ASTNode, Expr, ColDef, Parser } from './Parser';
 import { Lexer } from './Lexer';
 import { callStateless } from './Builtins';
 import { IndexCommands, IndexCommandsHost } from './IndexCommands';
 import { ReportCommands } from './ReportCommands';
 import { toCSV, parseCSV, MAX_EXPORT_ROWS, MAX_IMPORT_BYTES, MAX_IMPORT_SKIPS } from '../shared/csv';
+import { validateCellValue } from '../shared/cellValidation';
 
 export type { OutputLine, FormField } from '../shared/types';
 
@@ -35,11 +36,19 @@ type DbType = 'TEXT' | 'REAL' | 'INTEGER' | 'BLOB';
 
 function mapType(t: string): DbType {
   switch (t.toUpperCase()) {
-    case 'CHAR': case 'CHARACTER': case 'VARCHAR': case 'STRING': case 'MEMO': case 'DATE': return 'TEXT';
+    case 'CHAR': case 'CHARACTER': case 'VARCHAR': case 'STRING': case 'MEMO': case 'DATE': case 'TIME': return 'TEXT';
     case 'NUM': case 'NUMERIC': case 'FLOAT': case 'DOUBLE': case 'DECIMAL': return 'REAL';
     case 'INT': case 'INTEGER': case 'LOGICAL': case 'BOOLEAN': return 'INTEGER';
     default: return 'TEXT';
   }
+}
+
+/** Render a declared column type the way it was written: NUM(8,2), TIME(15), DATE. */
+function declaredTypeText(info: ColumnTypeInfo | undefined): string | null {
+  if (!info) return null;
+  if (info.qualifier === null) return info.baseType;
+  if (info.scale !== null && info.scale !== undefined) return `${info.baseType}(${info.qualifier},${info.scale})`;
+  return `${info.baseType}(${info.qualifier})`;
 }
 
 function makeArea(alias: string): WorkArea {
@@ -69,6 +78,7 @@ export class Executor implements IndexCommandsHost {
   constructor(
     public db: IDatabaseBridge,
     public indexStore: IIndexStore | null = null,
+    public columnMetaStore: IColumnMetaStore | null = null,
   ) {
     this.areas = new Map([['1', makeArea('1')]]);
     this.activeAlias = '1';
@@ -80,6 +90,11 @@ export class Executor implements IndexCommandsHost {
 
   get area(): WorkArea {
     return this.areas.get(this.activeAlias)!;
+  }
+
+  /** Database key for index/column metadata — same-named tables in different DBs must not collide. */
+  get metaDb(): string {
+    return this.area.db ?? '';
   }
 
   /** Backwards-compat shim — Session.ts and legacy tests still read executor.state */
@@ -223,7 +238,7 @@ export class Executor implements IndexCommandsHost {
     this.area.table = name;
     this.area.filter = null;
     this.area.rowPtr = 1;
-    this.area.activeIndex = this.indexStore?.getActive(name) ?? null;
+    this.area.activeIndex = this.indexStore?.getActive(this.metaDb, name) ?? null;
     const exists = await this.db.tableExists(name);
     const storage = this.area.opfsAvailable ? 'OPFS (persistent)' : 'server-side persistent';
     const lines: OutputLine[] = [
@@ -367,13 +382,15 @@ export class Executor implements IndexCommandsHost {
   private async doListStruct(): Promise<ExecResult> {
     this.requireTable();
     const cols = await this.db.getStructure(this.area.table!);
+    const meta = this.columnMetaStore?.listColumnTypes(this.metaDb, this.area.table!) ?? {};
     const out: OutputLine[] = [
       { text: `Structure of table: ${this.area.table}`, cls: 'hdr' },
       { text: `${'#'.padEnd(4)}  ${'Field'.padEnd(20)}  ${'Type'.padEnd(10)}  ${'Null'.padEnd(5)}  ${'PK'}`, cls: 'hdr' },
       { text: `${'─'.repeat(55)}`, cls: 'sep' },
     ];
     cols.forEach(c => {
-      out.push({ text: `${String(c.cid + 1).padEnd(4)}  ${c.name.padEnd(20)}  ${c.type.padEnd(10)}  ${c.notnull ? 'NO' : 'YES'.padEnd(5)}  ${c.pk ? 'PK' : ''}` });
+      const typeText = declaredTypeText(meta[c.name]) ?? c.type;
+      out.push({ text: `${String(c.cid + 1).padEnd(4)}  ${c.name.padEnd(20)}  ${typeText.padEnd(10)}  ${c.notnull ? 'NO' : 'YES'.padEnd(5)}  ${c.pk ? 'PK' : ''}` });
     });
     return { output: out };
   }
@@ -411,6 +428,17 @@ export class Executor implements IndexCommandsHost {
     this.requireTable();
     await this.refreshRecCount();
     const pairs = fields.map(f => ({ field: f.field, value: this.evalExpr(f.value) }));
+    // TIME is the only declared type REPLACE enforces (#43). The grid validates
+    // every declared type (#45) because it has no other guard; widening REPLACE
+    // would change the semantics of existing programs.
+    for (const p of pairs) {
+      if (p.value === null || p.value === undefined) continue;
+      const info = this.columnMetaStore?.getColumnType(this.metaDb, this.area.table!, p.field);
+      if (info?.baseType === 'TIME') {
+        const err = validateCellValue(p.field, String(p.value), info);
+        if (err) throw new Error(err);
+      }
+    }
     const setClauses = pairs.map(p => `${q(p.field)} = ?`).join(', ');
     const params = pairs.map(p => typeof p.value === 'boolean' ? (p.value ? 1 : 0) : p.value);
     if (scope === 'ALL') {
@@ -740,8 +768,22 @@ export class Executor implements IndexCommandsHost {
     const colsSql = cols.length
       ? cols.map(c => `${q(c.name)} ${mapType(c.colType)}`).join(', ')
       : '"id" INTEGER PRIMARY KEY AUTOINCREMENT';
+    for (const c of cols) {
+      if (c.colType.toUpperCase() === 'TIME' && c.size !== undefined && (!Number.isInteger(c.size) || c.size < 1 || c.size > 59)) {
+        throw new Error(`CREATE TABLE: invalid TIME granularity qualifier TIME(${c.size}) — must be an integer between 1 and 59`);
+      }
+    }
     const sql = `CREATE TABLE IF NOT EXISTS ${q(name)} (${colsSql})`;
     await this.db.exec(sql);
+    // Record the *declared* type of every column. SQLite only stores an affinity
+    // (TEXT/REAL/INTEGER), which can't tell TIME from DATE from CHAR, LOGICAL from
+    // INT, or recover a NUM(p,s) precision — the grid needs the declared type to
+    // validate edits.
+    for (const c of cols) {
+      this.columnMetaStore?.setColumnType(
+        this.metaDb, name, c.name, c.colType.toUpperCase(), c.size ?? null, c.scale ?? null,
+      );
+    }
     this.area.table = name;
     this.area.filter = null;
     this.area.rowPtr = 1;
@@ -847,7 +889,8 @@ export class Executor implements IndexCommandsHost {
 
   private async doDropTable(name: string): Promise<ExecResult> {
     await this.db.exec(`DROP TABLE IF EXISTS ${q(name)}`);
-    this.indexStore?.dropTable(name);
+    this.indexStore?.dropTable(this.metaDb, name);
+    this.columnMetaStore?.dropTable(this.metaDb, name);
     if (this.area.table === name) {
       this.area.table = null;
       this.area.activeIndex = null;
@@ -873,6 +916,8 @@ export class Executor implements IndexCommandsHost {
     if (node.op === 'ADD') {
       if (has(node.col)) return { output: [{ text: `ALTER TABLE: column already exists: ${node.col}`, cls: 'error' }] };
       await this.db.exec(`ALTER TABLE ${q(name)} ADD COLUMN ${q(node.col)} ${mapType(node.colType)}`);
+      // ALTER TABLE drops any (n)/(p,s) qualifier — the parser skips it.
+      this.columnMetaStore?.setColumnType(this.metaDb, name, node.col, node.colType.toUpperCase(), null, null);
       await this.refreshIfActive(name);
       return { output: [{ text: `Added column ${node.col} to ${name}.`, cls: 'ok' }] };
     }
@@ -881,6 +926,7 @@ export class Executor implements IndexCommandsHost {
       if (cols.length <= 1) return { output: [{ text: 'ALTER TABLE: cannot drop the only column', cls: 'error' }] };
       const dropped = await this.dropAllIndexes(name);
       await this.db.exec(`ALTER TABLE ${q(name)} DROP COLUMN ${q(node.col)}`);
+      this.columnMetaStore?.dropColumn(this.metaDb, name, node.col);
       await this.refreshIfActive(name);
       return { output: [
         { text: `Dropped column ${node.col} from ${name}.`, cls: 'ok' },
@@ -893,6 +939,7 @@ export class Executor implements IndexCommandsHost {
       if (has(node.newName)) return { output: [{ text: `ALTER TABLE: column already exists: ${node.newName}`, cls: 'error' }] };
       const dropped = await this.dropAllIndexes(name);
       await this.db.exec(`ALTER TABLE ${q(name)} RENAME COLUMN ${q(node.col)} TO ${q(node.newName)}`);
+      this.columnMetaStore?.renameColumn(this.metaDb, name, node.col, node.newName);
       await this.refreshIfActive(name);
       return { output: [
         { text: `Renamed ${node.col} to ${node.newName} in ${name}.`, cls: 'ok' },
@@ -921,6 +968,7 @@ export class Executor implements IndexCommandsHost {
       await this.db.exec(`CREATE TABLE ${q(name)} (${colDefs})`);
       await this.db.exec(`INSERT INTO ${q(name)} SELECT ${colList} FROM ${q(tmp)}`);
       await this.db.exec(`DROP TABLE ${q(tmp)}`);
+      this.columnMetaStore?.setColumnType(this.metaDb, name, node.col, node.colType.toUpperCase(), null, null);
       await this.refreshIfActive(name);
       return { output: [
         { text: `Changed type of ${node.col} to ${node.colType} in ${name}.`, cls: 'ok' },
@@ -943,12 +991,12 @@ export class Executor implements IndexCommandsHost {
   // Used by column ops that can invalidate an index expression.
   private async dropAllIndexes(table: string): Promise<string[]> {
     if (!this.indexStore) return [];
-    const tags = this.indexStore.listIndexes(table).map(i => i.tag);
+    const tags = this.indexStore.listIndexes(this.metaDb, table).map(i => i.tag);
     for (const tag of tags) {
       const sqlName = `idx_${table}_${tag}`.replace(/"/g, '""');
       await this.db.exec(`DROP INDEX IF EXISTS "${sqlName}"`);
     }
-    this.indexStore.dropTable(table);          // clears metadata + active marker
+    this.indexStore.dropTable(this.metaDb, table);   // clears metadata + active marker
     if (this.area.table === table) this.area.activeIndex = null;
     return tags;
   }
@@ -1015,6 +1063,7 @@ export class Executor implements IndexCommandsHost {
       { text: 'Demos / examples:' },
       { text: 'DO crm        — usable CRM example app (EDIT crm to customize)' },
       { text: 'DO inventory  — usable inventory example app (EDIT inventory to customize)' },
+      { text: 'DO overtime   — overtime tracker example app (TIME(15), WEEK(), DATEADD())' },
       { text: '' },
       { text: 'QUIT                    — exit' },
     ]};

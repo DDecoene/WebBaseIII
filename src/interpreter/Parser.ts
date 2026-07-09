@@ -9,6 +9,7 @@ const BUILTIN_FUNCTIONS = new Set([
   // #4 (PR #17, @kas2804) — implemented in Builtins.ts; must be whitelisted here
   // too or the parser won't recognise the call.
   'ROUND','MOD','MAX','MIN','TIME','YEAR','MONTH','DAY',
+  'WEEK','DATEADD',
 ]);
 
 // ── AST Node Types ──────────────────────────────────────────────────────────
@@ -75,7 +76,7 @@ export type ASTNode =
   | { type: 'FIND';        value: string }
   | { type: 'UNKNOWN';     raw: string };
 
-export interface ColDef { name: string; colType: string; size?: number; }
+export interface ColDef { name: string; colType: string; size?: number; scale?: number; }
 
 export type Expr =
   | { k: 'lit';  v: string | number | boolean }
@@ -472,20 +473,62 @@ export class Parser {
     if (this.peek().type === 'LPAREN') {
       this.adv();
       while (!this.end() && this.peek().type !== 'RPAREN') {
-        const cname = this.ident();
-        const ctype = this.ident();
+        const cname = this.colName();
+        const ctype = this.colType(cname);
         let size: number | undefined;
+        let scale: number | undefined;
         if (this.peek().type === 'LPAREN') {
           this.adv();
-          size = this.tryNum() ?? undefined;
-          if (this.peek().type === 'RPAREN') this.adv();
+          size = this.typeArg(cname);
+          // NUM(p,s) — the second argument is the scale. Without consuming it the
+          // comma ends the column and the scale is parsed as the next column name.
+          if (this.peek().type === 'COMMA') {
+            this.adv();
+            scale = this.typeArg(cname);
+          }
+          this.expectRParen(`type qualifier for column '${cname}'`);
         }
-        cols.push({ name: cname, colType: ctype, size });
+        cols.push({ name: cname, colType: ctype, size, scale });
         if (this.peek().type === 'COMMA') this.adv();
+        else break;                       // no comma → the list must end here
       }
-      if (this.peek().type === 'RPAREN') this.adv();
+      this.expectRParen(`column list of table '${name}'`);
     }
     return { type: 'CREATE_TABLE', name, cols };
+  }
+
+  // ── CREATE TABLE column-list parsing ───────────────────────────────────────
+  // Strict on purpose (#50). The old code called ident() — "take the next token,
+  // whatever it is" — so a stray ')' or ',' became a column name or a type, and
+  // NUM(8,2) silently produced a phantom column named "2" of type ")".
+
+  private createErr(msg: string): never {
+    const t = this.peek();
+    const at = t.type === 'EOF' ? 'end of input' : `'${t.val}'`;
+    throw new Error(`CREATE TABLE: ${msg} (at ${at}, line ${t.line})`);
+  }
+
+  private colName(): string {
+    const t = this.peek();
+    if (t.type !== 'ID' && t.type !== 'KW') this.createErr('expected a column name');
+    return this.adv().val;
+  }
+
+  private colType(colName: string): string {
+    const t = this.peek();
+    if (t.type !== 'ID' && t.type !== 'KW') this.createErr(`expected a type for column '${colName}'`);
+    return this.adv().val;
+  }
+
+  private typeArg(colName: string): number {
+    const n = this.tryNum();
+    if (n === null) this.createErr(`expected a number in the type qualifier for column '${colName}'`);
+    return n;
+  }
+
+  private expectRParen(what: string): void {
+    if (this.peek().type !== 'RPAREN') this.createErr(`expected ')' to close the ${what}`);
+    this.adv();
   }
 
   private parseDrop(): ASTNode {
@@ -505,12 +548,13 @@ export class Parser {
     throw new Error('Expected ADD, DROP, RENAME, or ALTER after ALTER TABLE <name>');
   }
 
-  // Consume an optional "(n)" length suffix on a type (e.g. CHAR(20)); the
-  // length is ignored — SQLite types are not length-bound (matches CREATE TABLE).
+  // Consume an optional "(n)" or "(p,s)" suffix on a type (e.g. CHAR(20), NUM(8,2));
+  // the values are ignored — ALTER TABLE does not carry the qualifier through.
   private skipTypeSize(): void {
     if (this.peek().type === 'LPAREN') {
       this.adv();
       this.tryNum();
+      if (this.peek().type === 'COMMA') { this.adv(); this.tryNum(); }
       if (this.peek().type === 'RPAREN') this.adv();
     }
   }

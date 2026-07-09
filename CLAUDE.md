@@ -50,7 +50,8 @@ server/
   SessionManager.ts     Tracks all active sessions; broadcast() fans data-changed to peers viewing a mutated table
   ServerDatabaseBridge.ts  IDatabaseBridge impl wrapping better-sqlite3
   ProgramStore.ts       .prg program storage in data/system.sqlite3
-  IndexStore.ts         Index metadata + active index in data/system.sqlite3
+  IndexStore.ts         Index metadata + active index per (db, table) in data/system.sqlite3
+  ColumnMetaStore.ts    Declared column types per (db, table, column) in data/system.sqlite3 — SQLite affinity can't distinguish TIME/DATE/CHAR, LOGICAL/INT, or recover NUM(p,s)
   ReportStore.ts        Report definition storage in data/system.sqlite3 (reports table)
   ReportRunner.ts       ASCII and HTML report rendering, group breaks, subtotals, grand totals
   DemoSeeder.ts         Seeds demos/*.prg into the program store and demos/reports/*.json into the report store at startup (demos win)
@@ -67,7 +68,7 @@ src/
     Terminal.ts         REPL UI — command history, multi-line block accumulation
 
   ui/
-    Grid.ts             BROWSE spreadsheet — inline cell editing, keyboard nav
+    Grid.ts             BROWSE spreadsheet — inline cell editing with per-column type validation, keyboard nav
     FormLayout.ts       @ SAY GET form engine — character-cell coordinates
     ProgramEditor.ts    .prg source editor UI
     ReportPreview.ts    iframe-based HTML report preview panel (Esc to close, Ctrl+P to print)
@@ -80,7 +81,8 @@ src/
     WsClient.ts         Browser WebSocket client — sends commands, receives messages
 
   shared/
-    types.ts            Shared TS types (IDatabaseBridge, IIndexStore, WS message shapes)
+    types.ts            Shared TS types (IDatabaseBridge, IIndexStore, IColumnMetaStore, WS message shapes)
+    cellValidation.ts   Declared-type cell validation, shared by Grid.ts (inline UX) and Session (authoritative)
 
   main.ts               Boot: connect WS → wire terminal/grid/form/editor
 
@@ -91,8 +93,9 @@ data/
 demos/
   *.prg                 Demo programs — single source of truth; seeded into the
                         program store on every server start (overwrites store copies).
-                        crm.prg + INVENTORY.prg are usable example apps.
+                        crm.prg, INVENTORY.prg + overtime.prg are usable example apps.
   reports/*.json        Demo report definitions — seeded into the report store at startup
+                        (dealsbystage, lowstock, overtimebyemp)
 
 .devcontainer/
   devcontainer.json     GitHub Codespaces config — auto npm install + npm run dev
@@ -109,6 +112,14 @@ tests/
   ServerDatabaseBridge.test.ts
   ProgramStore.test.ts
   AlterTable.test.ts    ALTER TABLE + MODIFY STRUCTURE integration tests
+  TimeType.test.ts      TIME / TIME(n) columns — creation, structure, write validation
+  ColumnMeta.test.ts    NUM(p,s) parsing, declared types in LIST STRUCTURE, grid-open columnTypes, server-side grid-edit validation
+  ColumnMetaStore.test.ts  Per-(db,table,column) type metadata + legacy-schema migration
+  CellValidation.test.ts   Shared per-type cell validation rules
+  CreateTableParse.test.ts Strict CREATE TABLE grammar — malformed column lists must throw
+  DemoSchemas.test.ts   Golden column lists for every table the demos create
+  GridMessages.test.ts  grid-edit / grid-delete / grid-new-row / grid-refresh + INPUT form round-trip
+  IndexStoreMigration.test.ts  Adopting pre-#50 unscoped index rows into their owning database
   Print.test.ts         `?` / `??` print command
   Aggregate.test.ts     `SUM` / `AVERAGE`
   Builtins.test.ts / BuiltinsParse.test.ts   built-in functions (direct + through the parser)
@@ -166,6 +177,38 @@ WebBase-III supports **unlimited work areas** (no DOS 10-area limit). Cross-area
 
 > Column ops that can invalidate an index (DROP, RENAME, ALTER type) drop all of the table's indexes and warn to rebuild with `INDEX ON`.
 
+#### Column types
+
+`CREATE TABLE`/`ALTER TABLE ADD`/`ALTER TABLE ALTER` accept:
+
+| Type | Aliases | Storage |
+|---|---|---|
+| `CHAR(n)` | `CHARACTER`, `VARCHAR`, `STRING`, `MEMO` | `TEXT` |
+| `NUM` | `NUMERIC`, `FLOAT`, `DOUBLE`, `DECIMAL` | `REAL` |
+| `INT` | `INTEGER` | `INTEGER` |
+| `LOGICAL` | `BOOLEAN` | `INTEGER` |
+| `DATE` | | `TEXT` |
+| `TIME` / `TIME(n)` | | `TEXT` |
+
+`TIME` stores `HH:MM` (24-hour). The optional `TIME(n)` qualifier (only via `CREATE TABLE` — not carried through `ALTER TABLE`) requires minutes to be a multiple of `n`, e.g. `TIME(15)` only accepts `:00`/`:15`/`:30`/`:45`. `APPEND RECORD` leaves new fields `NULL` (unvalidated); `REPLACE ... WITH` rejects a malformed or off-granularity `TIME` value with `** Error: ...` and does not write it. `LIST STRUCTURE` prints the declared type (`TIME`, `NUM(8,2)`, `TIME(15)`) rather than the raw SQLite storage class.
+
+Declared types are recorded per `(database, table, column)` in `server/ColumnMetaStore.ts`, because SQLite only keeps a storage affinity: `TIME`/`DATE`/`CHAR` are all `TEXT`, `LOGICAL`/`INT` are both `INTEGER`, and a `NUM(p,s)` qualifier is lost entirely.
+
+#### Cell validation (`BROWSE`)
+
+`src/shared/cellValidation.ts` holds the rules and runs on **both** sides: `Grid.ts` checks before commit (an invalid edit keeps the cell in edit mode, outlined red, with the reason shown; the error clears as the value becomes valid), and `Session`'s `grid-edit` handler re-checks authoritatively before writing — a WS message can reach the server without passing through the grid.
+
+| Type | Accepted |
+|---|---|
+| `DATE` | `YYYY-MM-DD`, a real calendar date (rejects `2023-02-29`) |
+| `TIME` / `TIME(n)` | `HH:MM`; minutes a multiple of `n` when set |
+| `NUM(p,s)` | numeric; ≤ `s` decimals, ≤ `p - s` integer digits |
+| `INT` | a whole number |
+| `LOGICAL` | `.T.`/`.F.`/`.TRUE.`/`.FALSE.`/`T`/`F`/`TRUE`/`FALSE`/`1`/`0` |
+| `CHAR` / `MEMO` | anything (length is not enforced) |
+
+An empty value is always allowed (clears the cell). Columns with no recorded declared type are unconstrained. `REPLACE` enforces only `TIME` — widening it would change the semantics of existing programs.
+
 ### Indexing & search
 | Command | What it does |
 |---|---|
@@ -206,6 +249,26 @@ WebBase-III supports **unlimited work areas** (no DOS 10-area limit). Cross-area
 | `@ r,c SAY "text" GET <var>` | Define a form field |
 | `READ` | Display form and wait for submit |
 
+### Built-in functions
+
+Implemented in `src/interpreter/Builtins.ts` (stateless) and `Executor.ts` (stateful:
+`EOF()`, `BOF()`, `FOUND()`, `RECNO()`, `RECCOUNT()`).
+
+> **Adding a built-in:** implementing it in `Builtins.ts` is not enough — it must also be
+> added to `BUILTIN_FUNCTIONS` in `src/interpreter/Parser.ts` or the parser rejects the
+> call (`Unknown command: (`). This is how the #4 built-ins shipped broken. Always cover a
+> new built-in in **both** `tests/Builtins.test.ts` (direct) and `tests/BuiltinsParse.test.ts`
+> (through the parser), plus a Playwright case.
+
+Strings: `SUBSTR`, `LEN`, `TRIM`, `LTRIM`, `UPPER`, `LOWER`, `AT`, `STR`, `VAL`, `SPACE`, `REPLICATE`.
+Numbers: `INT`, `ABS`, `ROUND`, `MOD`, `MAX`, `MIN`.
+Dates/times: `DATE()`, `TIME()`, `DTOC`, `CTOD`, `YEAR`, `MONTH`, `DAY`, `WEEK`, `DATEADD`.
+
+| Function | What it returns |
+|---|---|
+| `WEEK(date)` | ISO-8601 week number (1–53). Monday-start weeks; week 1 is the week containing the year's first Thursday, so early-January dates can return 52/53 (belonging to the previous year's last week) and late-December dates can return 1. Accepts ISO `YYYY-MM-DD` or `MM/DD/YY`; invalid input → 0. |
+| `DATEADD(date, n)` | The ISO date `n` days later (`n` may be negative), as `YYYY-MM-DD`. Computed in UTC, so month/year/leap-day boundaries are exact. Accepts ISO `YYYY-MM-DD` or `MM/DD/YY`; invalid or impossible input → `''`. |
+
 ### Control flow
 | Command | What it does |
 |---|---|
@@ -233,12 +296,12 @@ WebBase-III supports **unlimited work areas** (no DOS 10-area limit). Cross-area
 **v1.0.0 — dBASE III parity: complete ✅.** All sub-projects below shipped, plus the
 closing parity commands: `?`/`??` print (#2), `SUM`/`AVERAGE` (#3), the extra
 built-ins (#4), `SORT ON … TO` (#8), and `COPY TO`/`APPEND FROM` CSV (#5).
-Beyond-parity work (e.g. live multiuser propagation, #11) lands on the `release/v1.1.0`
-line.
+Beyond-parity work lands on the milestone's own `release/vX.Y.Z` line.
 
 1. ~~Indexing & Search~~ — `INDEX ON`, `SET INDEX TO`, `SEEK`, `FIND`, `REINDEX`, `LIST INDEXES` ✅
 2. ~~Language Completeness~~ — `DO CASE/ENDCASE`, built-in functions (`EOF()`, `BOF()`, `FOUND()`, `RECNO()`, `RECCOUNT()`, `SUBSTR()`, `STR()`, `AT()`, `UPPER()`, `LOWER()`, `ROUND()`, `MOD()`, `MAX()`, `MIN()`, `TIME()`, `YEAR()`, `MONTH()`, `DAY()`, and more) ✅
    - `ROUND`/`MOD`/`MAX`/`MIN`/`TIME`/`YEAR`/`MONTH`/`DAY` contributed by [@kas2804](https://github.com/kas2804) in PR #17 (#4). 🙏
+   - `WEEK()` (#44) and `DATEADD()` (#52) added in v1.2.0.
 3. ~~Multi-Work-Area~~ — unlimited `SELECT <alias>`, `SET RELATION TO`, `alias.field` notation ✅
 4. ~~Report & Label Engine~~ — `REPORT FORM`, group breaks, subtotals, HTML preview ✅
 5. ~~The Assistant~~ — sidebar GUI, wizards, catalog protocol ✅
@@ -251,6 +314,19 @@ line.
   so other sessions BROWSE-ing that table refresh automatically (#11) ✅
 - ~~JOIN to materialize a combined table~~ — `JOIN WITH <alias> TO <file> FOR <cond> [FIELDS <list>]`, snapshot table via SQLite join (#10) ✅
 
+### Beyond parity (v1.2.0)
+
+- ~~`TIME` column type~~ — `TIME`/`TIME(n)` columns storing `HH:MM`, with a minute-granularity
+  qualifier validated on write; declared types tracked in `server/ColumnMetaStore.ts` (#43) ✅
+- ~~`WEEK()` built-in~~ — ISO-8601 week number (#44) ✅
+- ~~BROWSE per-cell validation~~ — grid rejects invalid edits per column type, validated on both client and server via `src/shared/cellValidation.ts` (#45) ✅
+- ~~Test hardening~~ — strict `CREATE TABLE` grammar, golden demo schemas, coverage for every
+  grid WS message, per-database index/column metadata scoping, `npm run coverage` (#50) ✅
+- ~~`demos/overtime.prg`~~ — overtime tracker: per-employee weekly schedules, `TIME(15)`
+  timesheets edited in the validated grid, `WEEK()`/`DATEADD()`, live overtime balance,
+  grouped report, CSV export (#46) ✅
+- ~~`DATEADD()` built-in~~ — day arithmetic; W3Script had none (#52) ✅
+
 ## Boolean literals
 
 Both styles accepted: `TRUE`/`FALSE` and `.T.`/`.TRUE.`/`.F.`/`.FALSE.` (dBASE III style). Output always uses `.T.`/`.F.`. Logical operators likewise: `NOT`/`.NOT.`, `AND`/`.AND.`, `OR`/`.OR.`.
@@ -258,11 +334,42 @@ Both styles accepted: `TRUE`/`FALSE` and `.T.`/`.TRUE.`/`.F.`/`.FALSE.` (dBASE I
 ## Testing
 
 ```bash
-npm test                # Vitest unit + integration (265 tests)
+npm test                # Vitest unit + integration (379 tests)
+npm run coverage        # Vitest + v8 coverage report (reporting only, no thresholds)
 npx playwright test     # E2E browser tests — requires dev server on :5173/:3000
 ```
 
-Playwright suites (73 tests): `tests/integration.spec.ts` (20 tests — full REPL scenario), `tests/assistant.spec.ts` (20 tests — sidebar, wizards, report designer, MODIFY STRUCTURE round-trip, program run, CSV/SORT/SUM-AVERAGE/REINDEX/PACK actions, demo launchers), `tests/inventory.spec.ts` (8 tests — INVENTORY.prg menu + valuation/low-stock report/sort/CSV/JOIN), `tests/crm.spec.ts` (6 tests — CRM demo menu, pipeline summary, sort, report, CSV, JOIN), `tests/multiarea.spec.ts` (4 tests — multi-work-area, relations, alias.field), `tests/parity-commands.spec.ts` (4 tests — `?`/`??`, built-in functions, `SUM`/`AVERAGE`, `SORT ON … TO`), `tests/demos.spec.ts` (4 tests — demo program + report seeding), `tests/copycsv.spec.ts` (2 tests — COPY TO download + APPEND FROM upload), `tests/splash.spec.ts` (2 tests — version banner + demo discoverability), `tests/join.spec.ts` (1 test — JOIN materialization), `tests/propagation.spec.ts` (1 test — live multiuser refresh), `tests/program-side-effects.spec.ts` (1 test — CSV/report side-effects fire from inside a program block).
+Playwright suites (94 tests): `tests/assistant.spec.ts` (23 tests — sidebar, wizards, report designer, MODIFY STRUCTURE round-trip, `TIME(15)` column + REPLACE validation, `NUM(p,s)` wizard, Browse-action grid validation, program run, CSV/SORT/SUM-AVERAGE/REINDEX/PACK actions, demo launchers), `tests/integration.spec.ts` (20 tests — full REPL scenario), `tests/overtime.spec.ts` (9 tests — overtime.prg: menu, seeding, DATEADD week prep, TIME(15) grid rejection, recalculation, live balance, quarter-hour leave check, report, CSV), `tests/inventory.spec.ts` (8 tests — INVENTORY.prg menu + valuation/low-stock report/sort/CSV/JOIN), `tests/crm.spec.ts` (6 tests — CRM demo menu, pipeline summary, sort, report, CSV, JOIN), `tests/parity-commands.spec.ts` (6 tests — `?`/`??`, built-in functions, `WEEK()`, `DATEADD()`, `SUM`/`AVERAGE`, `SORT ON … TO`), `tests/multiarea.spec.ts` (4 tests — multi-work-area, relations, alias.field), `tests/demos.spec.ts` (4 tests — demo program + report seeding), `tests/grid-validation.spec.ts` (3 tests — BROWSE per-cell validation: TIME(15), NUM(p,s)/DATE, Esc abandons), `tests/schema-errors.spec.ts` (3 tests — malformed CREATE TABLE errors, NUM(p,s) column count, bare INPUT stores its value), `tests/copycsv.spec.ts` (2 tests — COPY TO download + APPEND FROM upload), `tests/splash.spec.ts` (2 tests — version banner + demo discoverability), `tests/join.spec.ts` (1 test — JOIN materialization), `tests/propagation.spec.ts` (1 test — live multiuser refresh), `tests/program-side-effects.spec.ts` (1 test — CSV/report side-effects fire from inside a program block).
+
+## Test discipline
+
+Two bugs shipped through a 283-test suite (found in #45/#50). Both were structural blind
+spots, not bad luck. When adding tests, remember what the existing ones cannot see:
+
+- **`toContain` can only prove presence, never absence.** Almost every assertion in this
+  repo greps rendered text for a substring, so a *phantom extra column* (`NUM(8,2)` used to
+  create a column literally named `2`) sailed through every `LIST`/`LIST STRUCTURE` check.
+  Assert **exact** structure — column lists, record counts — with `toEqual`/`toHaveLength`
+  wherever you can. `tests/DemoSchemas.test.ts` pins the demo tables for exactly this reason.
+- **Test the surface, not the happy path through it.** Four of twelve `ClientMessage` types
+  had zero tests; `grid-edit` wrote straight to SQLite with no validation and nobody noticed,
+  because the grid tests only opened the grid and pressed Escape. Every WS message type
+  should have a test that drives it and asserts the database/UI effect
+  (`tests/GridMessages.test.ts`).
+- **Green CI does not mean correct.** The cross-database `ColumnMetaStore` leak shipped with
+  seven passing tests, because they all used a single database. When state is keyed by name,
+  write the test that uses two.
+- **Prefer failing loudly to guessing.** The parser used to absorb any token it didn't
+  understand and invent a column from it. `CREATE TABLE` is now strict; keep it that way.
+- **`toContainText` / `toBeVisible` do not see clipping.** The BROWSE validation message was
+  present, styled `visible`, and clipped to nothing by the cell's `overflow: hidden` — users
+  saw a red border and no reason, while the tests passed. Assert `toBeInViewport()` (backed by
+  an IntersectionObserver, so it accounts for ancestor clipping) for anything that must be
+  *readable*, and look at a screenshot of a UI change before believing it works.
+
+Run `npm run coverage` when touching an area you suspect is untested. **Never run `npm test`
+and `npx playwright test` concurrently** — both mutate `data/` and `data/system.sqlite3`, and
+a state-dependent e2e test will fail for reasons that have nothing to do with your change.
 
 ## Definition of done
 

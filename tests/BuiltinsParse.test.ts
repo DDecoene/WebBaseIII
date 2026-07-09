@@ -23,4 +23,8 @@ describe('built-in functions reachable through the REPL parser', () => {
   it('YEAR', async () => { expect(await evalPrint('YEAR(CTOD("12/25/2026"))')).toContain('2026'); });
   it('MONTH', async () => { expect(await evalPrint('MONTH(CTOD("12/25/2026"))')).toContain('12'); });
   it('DAY', async () => { expect(await evalPrint('DAY(CTOD("12/25/2026"))')).toContain('25'); });
+  it('WEEK', async () => { expect(await evalPrint('WEEK("2024-05-12")')).toContain('19'); });
+  it('WEEK across a year boundary', async () => { expect(await evalPrint('WEEK("2021-01-01")')).toContain('53'); });
+  it('DATEADD', async () => { expect(await evalPrint('DATEADD("2024-01-31", 1)')).toContain('2024-02-01'); });
+  it('DATEADD composes with CTOD', async () => { expect(await evalPrint('DATEADD(CTOD("05/12/24"), 4)')).toContain('2024-05-16'); });
 });

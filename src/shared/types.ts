@@ -41,13 +41,30 @@ export interface IndexDef {
   expression: string;
 }
 
+// Scoped by database: two databases can hold same-named tables with different indexes.
 export interface IIndexStore {
-  saveIndex(tableName: string, tag: string, expression: string): void;
-  listIndexes(tableName: string): IndexDef[];
-  getActive(tableName: string): IndexDef | null;
-  setActive(tableName: string, tag: string): void;
-  clearActive(tableName: string): void;
-  dropTable(tableName: string): void;
+  saveIndex(dbName: string, tableName: string, tag: string, expression: string): void;
+  listIndexes(dbName: string, tableName: string): IndexDef[];
+  getActive(dbName: string, tableName: string): IndexDef | null;
+  setActive(dbName: string, tableName: string, tag: string): void;
+  clearActive(dbName: string, tableName: string): void;
+  dropTable(dbName: string, tableName: string): void;
+}
+
+// Metadata for the column types SQLite's own affinity can't distinguish (TIME vs
+// DATE vs CHAR are all TEXT; LOGICAL vs INT are both INTEGER; NUM(p,s) loses its
+// precision/scale). qualifier carries CHAR(n) length / TIME(n) granularity /
+// NUM(p,s) precision; scale carries the NUM(p,s) scale.
+export type ColumnTypeInfo = import('./cellValidation').ColumnMeta;
+
+// Scoped by database: two databases can hold same-named tables with different types.
+export interface IColumnMetaStore {
+  setColumnType(dbName: string, tableName: string, colName: string, baseType: string, qualifier: number | null, scale: number | null): void;
+  getColumnType(dbName: string, tableName: string, colName: string): ColumnTypeInfo | null;
+  listColumnTypes(dbName: string, tableName: string): Record<string, ColumnTypeInfo>;
+  renameColumn(dbName: string, tableName: string, oldName: string, newName: string): void;
+  dropColumn(dbName: string, tableName: string, colName: string): void;
+  dropTable(dbName: string, tableName: string): void;
 }
 
 export interface ReportColumn {
@@ -111,7 +128,6 @@ export interface Catalog {
 // Client → Server
 export type ClientMessage =
   | { type: 'command'; text: string }
-  | { type: 'input-response'; value: string }
   | { type: 'form-submit'; values: Record<string, string> }
   | { type: 'grid-edit'; rowid: number; col: string; value: string }
   | { type: 'grid-delete'; rowid: number }
@@ -127,8 +143,7 @@ export type ClientMessage =
 export type ServerMessage =
   | { type: 'output'; lines: OutputLine[] }
   | { type: 'status'; db: string | null; table: string | null; record: number; total: number }
-  | { type: 'input-request'; prompt: string }
-  | { type: 'grid-open'; table: string; filter: string | null; columns: ColInfo[]; rows: Record<string, unknown>[] }
+  | { type: 'grid-open'; table: string; filter: string | null; columns: ColInfo[]; columnTypes: Record<string, ColumnTypeInfo>; rows: Record<string, unknown>[] }
   | { type: 'modstruct-open'; table: string; columns: ColInfo[] }
   | { type: 'form-open'; fields: FormField[] }
   | { type: 'program-open'; name: string; content: string }

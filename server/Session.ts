@@ -6,6 +6,8 @@ import { ServerDatabaseBridge } from './ServerDatabaseBridge.js';
 import { programStore } from './ProgramStore.js';
 import { reportStore } from './ReportStore.js';
 import { indexStore } from './IndexStore.js';
+import { columnMetaStore } from './ColumnMetaStore.js';
+import { validateCellValue } from '../src/shared/cellValidation.js';
 import type { ClientMessage, ServerMessage, ColInfo } from '../src/shared/types.js';
 
 export class Session {
@@ -23,7 +25,7 @@ export class Session {
     private notifyChange?: (db: string, table: string) => void,
   ) {
     this.bridge = new ServerDatabaseBridge();
-    this.executor = new Executor(this.bridge, indexStore);
+    this.executor = new Executor(this.bridge, indexStore, columnMetaStore);
     this.bridge.onMutate = () => { this.dirty = true; };
     // Fire-and-forget client side-effects (CSV download, report preview, CSV
     // upload picker) are emitted immediately so they work at any nesting depth,
@@ -44,11 +46,14 @@ export class Session {
           await this.runCommand(msg.text);
           break;
 
-        case 'form-submit':
+        case 'form-submit': {
+          // Always store what the form collected. A bare `INPUT "…" TO var` at the
+          // REPL leaves no continuation (there is no following statement), and
+          // gating the assignment on one silently discarded the typed value. (#50)
+          for (const [k, v] of Object.entries(msg.values)) {
+            this.executor.setVar(k, v);
+          }
           if (this.pendingContinuation !== null) {
-            for (const [k, v] of Object.entries(msg.values)) {
-              this.executor.setVar(k, v);
-            }
             const cont = this.pendingContinuation;
             const fromProgram = this.pendingFromProgram;
             this.pendingContinuation = null;
@@ -59,13 +64,26 @@ export class Session {
             } finally {
               if (fromProgram) this.executor.exitProgram();
             }
+          } else {
+            this.send({ type: 'view-terminal' });
+            this.sendStatus();
           }
           break;
+        }
 
         case 'grid-edit': {
           const { rowid, col, value } = msg;
           const table = this.executor.area.table;
           if (table) {
+            // Authoritative check — the grid validates client-side for fast
+            // feedback, but a message can reach here without passing through it.
+            const db = this.executor.area.db ?? '';
+            const err = validateCellValue(col, value, columnMetaStore.getColumnType(db, table, col));
+            if (err) {
+              this.send({ type: 'output', lines: [{ text: `** ${err}`, cls: 'error' }] });
+              await this.sendGridData();
+              break;
+            }
             await this.bridge.exec(
               `UPDATE ${q(table)} SET ${q(col)} = ? WHERE rowid = ?`,
               [value, rowid]
@@ -127,8 +145,8 @@ export class Session {
             }
             if (area.table && await this.bridge.tableExists(area.table)) {
               columns = await this.bridge.getStructure(area.table);
-              const active = indexStore.getActive(area.table);
-              indexes = indexStore.listIndexes(area.table)
+              const active = indexStore.getActive(area.db ?? '', area.table);
+              indexes = indexStore.listIndexes(area.db ?? '', area.table)
                 .map(i => ({ tag: i.tag, expression: i.expression, active: active?.tag === i.tag }));
             }
           }
@@ -345,8 +363,9 @@ export class Session {
       return;
     }
     const columns = await this.bridge.getStructure(area.table);
+    const columnTypes = columnMetaStore.listColumnTypes(area.db ?? '', area.table);
     const rows = await this.executor.getOrderedRowsWithIds(2000);
-    this.send({ type: 'grid-open', table: area.table, filter: area.filter, columns, rows });
+    this.send({ type: 'grid-open', table: area.table, filter: area.filter, columns, columnTypes, rows });
   }
 
   private sendStatus(): void {

@@ -7,6 +7,92 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
 
 ---
 
+## [1.2.0] — 2026-07-09 — TIME columns, WEEK()/DATEADD(), BROWSE cell validation, Overtime demo
+
+### Added
+- `TIME` column type — `CREATE TABLE ... (col TIME)` / `TIME(n)` for a minute-granularity
+  qualifier (e.g. `TIME(15)` for quarter-hour increments). Stores canonical `HH:MM`,
+  validated on `REPLACE ... WITH` (rejects malformed or off-granularity values —
+  no silent coercion), and `LIST STRUCTURE` prints the declared type instead of the
+  raw SQLite storage class. (#43)
+- `WEEK(date)` built-in — ISO-8601 week number (1–53): Monday-start weeks, week 1 is the
+  week containing the year's first Thursday. Early-January dates correctly report the
+  previous year's week 52/53, and late-December dates week 1 of the next year. Accepts
+  ISO `YYYY-MM-DD` or `MM/DD/YY`; invalid input returns 0. (#44)
+- `DATEADD(date, n)` built-in — the ISO date `n` days later (`n` may be negative). Computed
+  in UTC so month, year and leap-day boundaries are exact (`2024-02-28` + 1 = `2024-02-29`,
+  `2023-02-28` + 1 = `2023-03-01`). Accepts ISO `YYYY-MM-DD` or `MM/DD/YY` and composes with
+  `CTOD()`; invalid or impossible input returns `''`. W3Script previously had no date
+  arithmetic at all. (#52)
+- `BROWSE` now validates each cell edit against its column's declared type before
+  committing. An invalid edit keeps the cell in edit mode, outlines it in red and shows
+  why (`HH:MM`, `multiple of 15`, `at most 2 decimal place(s)`, `not a real date`, …);
+  the error clears as soon as the value becomes valid. `DATE`, `TIME`/`TIME(n)`,
+  `NUM(p,s)`, `INT` and `LOGICAL` are checked; `CHAR`/`MEMO` stay unconstrained. The rules
+  live in `src/shared/cellValidation.ts` and run on both the client (instant feedback) and
+  the server (`grid-edit` is now validated authoritatively — previously it wrote straight
+  to SQLite with no check at all). (#45)
+- `NUM(p,s)` is now a genuinely supported qualifier — the precision and scale are parsed,
+  recorded, and enforced on grid edits (`NUM(8,2)` accepts `123456.78`, rejects `1.234`).
+  Previously the scale silently corrupted the schema; see Fixed. The Assistant's **New table**
+  wizard accepts a width (`8`) or a precision,scale pair (`8,2`). (#45, #50)
+- `LIST STRUCTURE` prints the **declared** type of every column (`CHAR(10)`, `NUM(8,2)`,
+  `DATE`, `TIME(15)`, `LOGICAL`, `INT`) rather than SQLite's storage class (`TEXT`/`REAL`/
+  `INTEGER`). Declared types are recorded per `(database, table, column)` in
+  `server/ColumnMetaStore.ts`. (#45)
+- `demos/overtime.prg` — an Overtime Tracker example app, and the showcase for this
+  release's engine work: `TIME(15)` columns validated per-cell as you type in `BROWSE`,
+  `WEEK()` for the ISO week number, and `DATEADD()` to walk a week's Monday through Friday.
+  Employees have their own weekly schedule, so standard hours are a real per-employee sum
+  rather than a flat 40; overtime is banked per week and drawn down as leave, with the
+  balance computed live from the source rows (no running-total field to drift when a week
+  is re-edited). Seeds a grouped report (`demos/reports/overtimebyemp.json`) and is
+  reachable from the splash screen, `HELP`, and the Assistant (Programs → Run Overtime
+  demo). (#46)
+
+### Fixed
+- `CREATE TABLE t (price NUM(8,2))` silently created a **phantom column named `2`** of
+  type `)`: the parser read the precision, then treated the scale as the next column
+  definition. The shipped `PRODUCTS`, `DEALS` and `SALES` demo tables all carried this
+  stray column. `NUM(p,s)` now parses correctly. Tables created before this fix keep the
+  stray column until recreated. (#45)
+- Column type metadata is now scoped per database. Two databases holding same-named
+  tables previously shared (and overwrote) one another's declared column types, so a
+  `TIME(15)` column in one database could be validated against another database's
+  `CHAR(20)` declaration of the same name. (#45)
+- `CREATE TABLE` now **rejects a malformed column list** instead of silently inventing
+  columns from tokens it doesn't understand. `CREATE TABLE t (a CHAR(10) b INT)` (missing
+  comma), `(a)` (no type), `(a NUM(8,2,9))` and an unclosed paren all now raise a parse
+  error naming the offending column, and create nothing. This permissiveness was the root
+  cause of the phantom-column bug above. (#50)
+- **Index metadata is now scoped per database.** `indexes`/`active_indexes` were keyed by
+  table name alone, so opening `PEOPLE` in one database silently activated an index defined
+  on a *different* database's `PEOPLE` — pointing the record order at a column that need not
+  even exist there, and breaking `BROWSE`/`LIST`. On first run, existing index definitions
+  are adopted into the one database that owns the table; definitions whose owner is ambiguous
+  (same table name in two databases) or missing are dropped and must be recreated with
+  `INDEX ON`. The underlying SQLite indexes are untouched. (#50)
+- A bare `INPUT "prompt" TO <var>` typed at the REPL silently discarded the value: the
+  submitted form was only applied when a continuation existed, which is never the case for
+  a single statement. Values a form collects are now always stored. (#50)
+- The `BROWSE` cell-validation message was invisible. Grid cells set `overflow: hidden`
+  (for the ellipsis on long values), which clipped the absolutely-positioned error tooltip
+  away entirely — an invalid edit showed a red border and no reason. The e2e tests missed
+  it because `toContainText`/`toBeVisible` do not account for clipping by an ancestor's
+  overflow; the assertions now use `toBeInViewport()`, which does. (#46)
+
+### Changed
+- Removed the `input-request` / `input-response` WebSocket message types. They were declared
+  in the protocol but never sent or handled by anything — `INPUT` collects its value through
+  `form-open` / `form-submit`. (#50)
+- New `npm run coverage` (vitest + v8, reporting only, no thresholds), so modules no test ever
+  executes stop hiding. (#50)
+- Regenerated every `docs/screenshots/*.png` and the README `demo.gif` against v1.2.0, and
+  added `screenshot-grid-validation.png` showing `BROWSE` rejecting an off-quarter
+  `TIME(15)` edit. (#46)
+
+---
+
 ## [1.1.1] — 2026-07-05 — Docs refresh
 
 ### Changed

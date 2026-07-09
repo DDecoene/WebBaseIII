@@ -240,12 +240,24 @@ html, body {
   outline-offset: -2px;
 }
 
-#grid-table td.editing { padding: 0; }
+#grid-table td.editing { padding: 0; position: relative; }
 #grid-table td input.cell-ed {
   width: 100%; height: 100%; min-height: 25px;
   padding: 3px 10px;
   background: #001428; border: 2px solid #0066cc;
   color: #ffffff; font-family: var(--font); font-size: 13px; outline: none;
+}
+
+/* A rejected edit (#45): the cell stays in edit mode and explains why.
+   Cells clip their content (`overflow: hidden` above, for ellipsis), which would
+   swallow the message entirely — the user would see only a red border. */
+#grid-table td.cell-invalid { overflow: visible; }
+#grid-table td.cell-invalid input.cell-ed { border-color: #cc0000; background: #2a0000; }
+#grid-table td.cell-invalid .cell-error {
+  position: absolute; left: 0; top: 100%; z-index: 20;
+  max-width: 320px; padding: 3px 8px;
+  background: #cc0000; color: #ffffff;
+  font-family: var(--font); font-size: 12px; white-space: normal;
 }
 
 /* ── FORM VIEW ── */
