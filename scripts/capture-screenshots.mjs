@@ -270,5 +270,30 @@ console.log('13. NEW: COPY TO CSV output');
   await page.close();
 }
 
+// ── 14. screenshot-grid-validation.png (NEW in v1.2.0) ────────────────────
+console.log('14. NEW: BROWSE per-cell validation rejecting a TIME(15) edit');
+{
+  const page = await newPage();
+  await boot(page);
+  await cmd(page, 'USE DATABASE screenshotdb', 800);
+  await cmd(page, 'DROP TABLE shifts', 400);
+  await cmd(page, 'CREATE TABLE shifts (PERSON CHAR(20), STARTTIME TIME(15), DUE DATE)', 700);
+  await cmd(page, 'USE shifts', 500);
+  await cmd(page, 'APPEND RECORD', 500);
+  await cmd(page, 'REPLACE PERSON WITH "Ada Lovelace", STARTTIME WITH "08:15"', 700);
+  await cmd(page, 'BROWSE', 1200);
+  await page.waitForSelector('#grid-view:not(.hidden)', { timeout: 8000 });
+
+  // Type an off-quarter time into the TIME(15) column and let the grid reject it.
+  const td = page.locator('#grid-tbody td[data-ri="0"][data-ci="1"]');
+  await td.dblclick();
+  await td.locator('input.cell-ed').fill('08:07');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('#grid-tbody td.cell-invalid .cell-error', { timeout: 5000 });
+  await page.waitForTimeout(300);
+  await snap(page, 'screenshot-grid-validation.png');
+  await page.close();
+}
+
 await browser.close();
 console.log('\nDone. All screenshots written to docs/screenshots/');
