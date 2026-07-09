@@ -22,6 +22,13 @@ const DEMO_SCHEMAS: Record<string, string[]> = {
   PRODUCTS:   ['PRODID', 'CATID', 'NAME', 'STOCK', 'REORDER', 'PRICE', 'ACTIVE'],
   MOVEMENTS:  ['MOVID', 'PRODID', 'KIND', 'QTY', 'MMONTH', 'REASON'],
   SALES:      ['REGION', 'PRODUCT', 'AMOUNT', 'QTY'],
+
+  // overtime.prg (#46)
+  EMPLOYEES:    ['EMPID', 'NAME', 'SCHEDID'],
+  SCHEDULEDAYS: ['SCHEDID', 'DOW', 'TIMEIN', 'BSTART', 'BEND', 'TIMEOUT'],
+  TIMESHEET:    ['EMPID', 'WEEKDATE', 'DOW', 'WORKDATE', 'TIMEIN', 'BSTART', 'BEND', 'TIMEOUT', 'WORKEDHOURS'],
+  WEEKSUMMARY:  ['EMPID', 'WEEKDATE', 'WEEKNO', 'WORKEDHOURS', 'STANDARDHOURS', 'OVERTIME'],
+  LEAVETAKEN:   ['EMPID', 'LDATE', 'HOURS', 'NOTES'],
 };
 
 const DEMOS_DIR = path.join(process.cwd(), 'demos');

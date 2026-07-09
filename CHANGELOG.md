@@ -41,6 +41,16 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
   `INTEGER`). Declared types are recorded per `(database, table, column)` in
   `server/ColumnMetaStore.ts`. (#45)
 
+- `demos/overtime.prg` — an Overtime Tracker example app, and the showcase for this
+  release's engine work: `TIME(15)` columns validated per-cell as you type in `BROWSE`,
+  `WEEK()` for the ISO week number, and `DATEADD()` to walk a week's Monday through Friday.
+  Employees have their own weekly schedule, so standard hours are a real per-employee sum
+  rather than a flat 40; overtime is banked per week and drawn down as leave, with the
+  balance computed live from the source rows (no running-total field to drift when a week
+  is re-edited). Seeds a grouped report (`demos/reports/overtimebyemp.json`) and is
+  reachable from the splash screen, `HELP`, and the Assistant (Programs → Run Overtime
+  demo). (#46)
+
 ### Fixed
 - `CREATE TABLE t (price NUM(8,2))` silently created a **phantom column named `2`** of
   type `)`: the parser read the precision, then treated the scale as the next column
