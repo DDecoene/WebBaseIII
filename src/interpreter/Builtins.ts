@@ -92,6 +92,31 @@ export function callStateless(fn: string, args: unknown[]): unknown {
       const d = new Date(s(0));
       return isNaN(d.getTime()) ? 0 : d.getDate();
     }
+    case 'WEEK': {
+      // ISO-8601 week number: Monday-start weeks, week 1 holds the year's first
+      // Thursday. Dates in early January can therefore belong to week 52/53 of
+      // the previous year, and late December to week 1 of the next.
+      const raw = s(0);
+      const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      let y: number, m: number, day: number;
+      if (iso) {
+        y = Number(iso[1]); m = Number(iso[2]); day = Number(iso[3]);
+      } else {
+        const d = new Date(raw);
+        if (isNaN(d.getTime())) return 0;
+        y = d.getFullYear(); m = d.getMonth() + 1; day = d.getDate();
+      }
+      // Work in UTC so no local timezone offset can shift the day.
+      const dt = new Date(Date.UTC(y, m - 1, day));
+      if (isNaN(dt.getTime())) return 0;
+      // Date.UTC rolls impossible dates over (Feb 30 → Mar 1), so reject any
+      // input the round-trip doesn't reproduce exactly.
+      if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== day) return 0;
+      const dow = dt.getUTCDay() || 7;                  // Mon=1 … Sun=7
+      dt.setUTCDate(dt.getUTCDate() + 4 - dow);         // Thursday fixes the week's year
+      const yearStart = Date.UTC(dt.getUTCFullYear(), 0, 1);
+      return Math.ceil(((dt.getTime() - yearStart) / 86400000 + 1) / 7);
+    }
     default:
       throw new Error(`Unknown function: ${fn}`);
   }

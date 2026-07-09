@@ -18,6 +18,14 @@ async function boot(page: Page, dbName: string): Promise<void> {
   await waitForOutput(page, 'Opened database', 3000);
 }
 
+// Run `? <expr>` and return the printed value — the last rendered output line,
+// which is the result rather than the echoed command.
+async function printResult(page: Page, expr: string): Promise<string> {
+  await cmd(page, `? ${expr}`);
+  const text = await page.locator('#terminal-output .t-line').last().textContent() ?? '';
+  return text.trim();
+}
+
 test.describe('Parity commands e2e', () => {
 
   test('1. ? / ?? print expressions', async ({ page }) => {
@@ -61,6 +69,27 @@ test.describe('Parity commands e2e', () => {
     // TIME() -> HH:MM:SS
     await cmd(page, '? TIME()');
     await expect(page.locator('#terminal-output')).toContainText(/\d\d:\d\d:\d\d/, { timeout: 3000 });
+  });
+
+  // #44 — WEEK() ISO-8601 week number, asserted on the printed value (not just
+  // "the digits appear somewhere in the scrollback").
+  test('2b. WEEK() built-in via ?', async ({ page }) => {
+    await boot(page, `e2e_parity_week_${Date.now()}`);
+
+    expect(await printResult(page, 'WEEK("2024-05-12")')).toBe('19');
+
+    // Week 1 is the week holding the year's first Thursday.
+    expect(await printResult(page, 'WEEK("2026-01-01")')).toBe('1');
+
+    // Early January can fall in the previous year's last week …
+    expect(await printResult(page, 'WEEK("2021-01-01")')).toBe('53');
+    expect(await printResult(page, 'WEEK("2023-01-01")')).toBe('52');
+
+    // … and late December in week 1 of the next.
+    expect(await printResult(page, 'WEEK("2024-12-30")')).toBe('1');
+
+    // Composes with CTOD, like the other date built-ins.
+    expect(await printResult(page, 'WEEK(CTOD("05/12/24"))')).toBe('19');
   });
 
   test('3. SUM and AVERAGE', async ({ page }) => {

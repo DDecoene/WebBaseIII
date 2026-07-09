@@ -124,6 +124,36 @@ describe('DAY', () => {
   it('invalid date returns 0', () => expect(callStateless('DAY', ['not-a-date'])).toBe(0));
 });
 
+describe('WEEK', () => {
+  it('returns the ISO week number of a mid-year date', () => expect(callStateless('WEEK', ['2024-05-12'])).toBe(19));
+  it('week 1 starts on the Monday of the week holding the first Thursday', () => {
+    expect(callStateless('WEEK', ['2024-01-01'])).toBe(1);  // Monday, Jan 1
+    expect(callStateless('WEEK', ['2026-01-01'])).toBe(1);  // Thursday, Jan 1
+  });
+  it('early-January dates can belong to the last week of the previous year', () => {
+    expect(callStateless('WEEK', ['2021-01-01'])).toBe(53); // Friday → week 53 of 2020
+    expect(callStateless('WEEK', ['2022-01-01'])).toBe(52); // Saturday → week 52 of 2021
+    expect(callStateless('WEEK', ['2023-01-01'])).toBe(52); // Sunday → week 52 of 2022
+  });
+  it('late-December dates can belong to week 1 of the next year', () => {
+    expect(callStateless('WEEK', ['2024-12-30'])).toBe(1);  // Monday → week 1 of 2025
+    expect(callStateless('WEEK', ['2019-12-30'])).toBe(1);  // Monday → week 1 of 2020
+  });
+  it('handles 53-week years', () => {
+    expect(callStateless('WEEK', ['2020-12-31'])).toBe(53);
+    expect(callStateless('WEEK', ['2026-12-31'])).toBe(53);
+    expect(callStateless('WEEK', ['2016-01-03'])).toBe(53); // Sunday → week 53 of 2015
+  });
+  it('accepts MM/DD/YY display dates', () => expect(callStateless('WEEK', ['05/12/24'])).toBe(19));
+  it('invalid date returns 0', () => expect(callStateless('WEEK', ['not-a-date'])).toBe(0));
+  it('ISO-shaped but impossible dates return 0 rather than rolling over', () => {
+    expect(callStateless('WEEK', ['2024-13-45'])).toBe(0);  // month 13, day 45
+    expect(callStateless('WEEK', ['2024-02-30'])).toBe(0);  // Feb 30 never exists
+    expect(callStateless('WEEK', ['2023-02-29'])).toBe(0);  // 2023 is not a leap year
+  });
+  it('accepts a real leap day', () => expect(callStateless('WEEK', ['2024-02-29'])).toBe(9));
+});
+
 describe('unknown function', () => {
   it('throws', () => expect(() => callStateless('FOOBAR', [])).toThrow('Unknown function: FOOBAR'));
 });

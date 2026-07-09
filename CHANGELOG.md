@@ -15,6 +15,10 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
   validated on `REPLACE ... WITH` (rejects malformed or off-granularity values —
   no silent coercion), and `LIST STRUCTURE` prints the declared type instead of the
   raw SQLite storage class. (#43)
+- `WEEK(date)` built-in — ISO-8601 week number (1–53): Monday-start weeks, week 1 is the
+  week containing the year's first Thursday. Early-January dates correctly report the
+  previous year's week 52/53, and late-December dates week 1 of the next year. Accepts
+  ISO `YYYY-MM-DD` or `MM/DD/YY`; invalid input returns 0. (#44)
 
 ---
 
