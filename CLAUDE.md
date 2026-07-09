@@ -362,6 +362,11 @@ spots, not bad luck. When adding tests, remember what the existing ones cannot s
   write the test that uses two.
 - **Prefer failing loudly to guessing.** The parser used to absorb any token it didn't
   understand and invent a column from it. `CREATE TABLE` is now strict; keep it that way.
+- **`toContainText` / `toBeVisible` do not see clipping.** The BROWSE validation message was
+  present, styled `visible`, and clipped to nothing by the cell's `overflow: hidden` — users
+  saw a red border and no reason, while the tests passed. Assert `toBeInViewport()` (backed by
+  an IntersectionObserver, so it accounts for ancestor clipping) for anything that must be
+  *readable*, and look at a screenshot of a UI change before believing it works.
 
 Run `npm run coverage` when touching an area you suspect is untested. **Never run `npm test`
 and `npx playwright test` concurrently** — both mutate `data/` and `data/system.sqlite3`, and

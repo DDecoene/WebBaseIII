@@ -248,7 +248,10 @@ html, body {
   color: #ffffff; font-family: var(--font); font-size: 13px; outline: none;
 }
 
-/* A rejected edit (#45): the cell stays in edit mode and explains why. */
+/* A rejected edit (#45): the cell stays in edit mode and explains why.
+   Cells clip their content (`overflow: hidden` above, for ellipsis), which would
+   swallow the message entirely — the user would see only a red border. */
+#grid-table td.cell-invalid { overflow: visible; }
 #grid-table td.cell-invalid input.cell-ed { border-color: #cc0000; background: #2a0000; }
 #grid-table td.cell-invalid .cell-error {
   position: absolute; left: 0; top: 100%; z-index: 20;

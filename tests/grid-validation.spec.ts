@@ -37,6 +37,11 @@ test.describe('BROWSE cell validation', () => {
     await page.keyboard.press('Enter');
     await expect(td).toHaveClass(/cell-invalid/);
     await expect(td.locator('.cell-error')).toContainText('HH:MM');
+    // The cell has `overflow: hidden`, so the message can be present, styled
+    // visible, and still clipped away from the user. toBeInViewport uses an
+    // IntersectionObserver and therefore accounts for ancestor clipping;
+    // toContainText / toBeVisible do not.
+    await expect(td.locator('.cell-error')).toBeInViewport();
     await expect(td.locator('input.cell-ed')).toBeVisible();   // still editing
 
     // Off-granularity time — rejected for a different reason.

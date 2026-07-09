@@ -88,6 +88,16 @@ Wizards open in the main area with a live W3Script preview.
 
 ---
 
+### BROWSE — per-cell validation
+
+Grid edits are checked against the column's declared type before they commit. An invalid
+value keeps the cell in edit mode, outlined in red, and says why; the error clears as soon
+as you fix it, and `Esc` abandons the edit. Here a `TIME(15)` column rejects `08:07`.
+
+![BROWSE rejecting an invalid TIME(15) cell edit](docs/screenshots/screenshot-grid-validation.png)
+
+---
+
 ### Aggregate commands & dBASE III parity
 
 `SUM`, `AVERAGE`, `? ROUND(…)`, `? MAX(…)`, and `SORT ON … TO` — numeric aggregates and sorted copies, honouring the active filter.

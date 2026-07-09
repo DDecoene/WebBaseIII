@@ -76,6 +76,11 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
 - A bare `INPUT "prompt" TO <var>` typed at the REPL silently discarded the value: the
   submitted form was only applied when a continuation existed, which is never the case for
   a single statement. Values a form collects are now always stored. (#50)
+- The `BROWSE` cell-validation message was invisible. Grid cells set `overflow: hidden`
+  (for the ellipsis on long values), which clipped the absolutely-positioned error tooltip
+  away entirely — an invalid edit showed a red border and no reason. The e2e tests missed
+  it because `toContainText`/`toBeVisible` do not account for clipping by an ancestor's
+  overflow; the assertions now use `toBeInViewport()`, which does. (#46)
 
 ### Changed
 - Removed the `input-request` / `input-response` WebSocket message types. They were declared
