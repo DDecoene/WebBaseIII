@@ -7,7 +7,7 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
 
 ---
 
-## [Unreleased] — v1.2.0 — TIME columns, WEEK(), grid validation, test hardening, Overtime demo
+## [1.2.0] — 2026-07-09 — TIME columns, WEEK()/DATEADD(), BROWSE cell validation, Overtime demo
 
 ### Added
 - `TIME` column type — `CREATE TABLE ... (col TIME)` / `TIME(n)` for a minute-granularity
@@ -34,13 +34,12 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
   to SQLite with no check at all). (#45)
 - `NUM(p,s)` is now a genuinely supported qualifier — the precision and scale are parsed,
   recorded, and enforced on grid edits (`NUM(8,2)` accepts `123456.78`, rejects `1.234`).
-  Previously the scale silently corrupted the schema; see Fixed. (#45) The Assistant's
-  **New table** wizard accepts a width (`8`) or a precision,scale pair (`8,2`). (#50)
+  Previously the scale silently corrupted the schema; see Fixed. The Assistant's **New table**
+  wizard accepts a width (`8`) or a precision,scale pair (`8,2`). (#45, #50)
 - `LIST STRUCTURE` prints the **declared** type of every column (`CHAR(10)`, `NUM(8,2)`,
   `DATE`, `TIME(15)`, `LOGICAL`, `INT`) rather than SQLite's storage class (`TEXT`/`REAL`/
   `INTEGER`). Declared types are recorded per `(database, table, column)` in
   `server/ColumnMetaStore.ts`. (#45)
-
 - `demos/overtime.prg` — an Overtime Tracker example app, and the showcase for this
   release's engine work: `TIME(15)` columns validated per-cell as you type in `BROWSE`,
   `WEEK()` for the ISO week number, and `DATEADD()` to walk a week's Monday through Friday.
@@ -88,6 +87,9 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
   `form-open` / `form-submit`. (#50)
 - New `npm run coverage` (vitest + v8, reporting only, no thresholds), so modules no test ever
   executes stop hiding. (#50)
+- Regenerated every `docs/screenshots/*.png` and the README `demo.gif` against v1.2.0, and
+  added `screenshot-grid-validation.png` showing `BROWSE` rejecting an off-quarter
+  `TIME(15)` edit. (#46)
 
 ---
 
