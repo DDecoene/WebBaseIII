@@ -354,6 +354,7 @@ Functions work anywhere an expression is accepted — `IF`, `DO WHILE`, `STORE`,
 | `MONTH(date)` | Numeric month from ISO date string |
 | `DAY(date)` | Numeric day from ISO date string |
 | `WEEK(date)` | ISO-8601 week number (1–53) — Monday-start weeks, week 1 holds the year's first Thursday |
+| `DATEADD(date, n)` | ISO date `n` days later (`n` may be negative); `''` for an invalid date |
 
 ### Boolean literals
 

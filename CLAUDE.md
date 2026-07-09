@@ -261,11 +261,12 @@ Implemented in `src/interpreter/Builtins.ts` (stateless) and `Executor.ts` (stat
 
 Strings: `SUBSTR`, `LEN`, `TRIM`, `LTRIM`, `UPPER`, `LOWER`, `AT`, `STR`, `VAL`, `SPACE`, `REPLICATE`.
 Numbers: `INT`, `ABS`, `ROUND`, `MOD`, `MAX`, `MIN`.
-Dates/times: `DATE()`, `TIME()`, `DTOC`, `CTOD`, `YEAR`, `MONTH`, `DAY`, `WEEK`.
+Dates/times: `DATE()`, `TIME()`, `DTOC`, `CTOD`, `YEAR`, `MONTH`, `DAY`, `WEEK`, `DATEADD`.
 
 | Function | What it returns |
 |---|---|
 | `WEEK(date)` | ISO-8601 week number (1–53). Monday-start weeks; week 1 is the week containing the year's first Thursday, so early-January dates can return 52/53 (belonging to the previous year's last week) and late-December dates can return 1. Accepts ISO `YYYY-MM-DD` or `MM/DD/YY`; invalid input → 0. |
+| `DATEADD(date, n)` | The ISO date `n` days later (`n` may be negative), as `YYYY-MM-DD`. Computed in UTC, so month/year/leap-day boundaries are exact. Accepts ISO `YYYY-MM-DD` or `MM/DD/YY`; invalid or impossible input → `''`. |
 
 ### Control flow
 | Command | What it does |
@@ -300,7 +301,7 @@ line.
 1. ~~Indexing & Search~~ — `INDEX ON`, `SET INDEX TO`, `SEEK`, `FIND`, `REINDEX`, `LIST INDEXES` ✅
 2. ~~Language Completeness~~ — `DO CASE/ENDCASE`, built-in functions (`EOF()`, `BOF()`, `FOUND()`, `RECNO()`, `RECCOUNT()`, `SUBSTR()`, `STR()`, `AT()`, `UPPER()`, `LOWER()`, `ROUND()`, `MOD()`, `MAX()`, `MIN()`, `TIME()`, `YEAR()`, `MONTH()`, `DAY()`, and more) ✅
    - `ROUND`/`MOD`/`MAX`/`MIN`/`TIME`/`YEAR`/`MONTH`/`DAY` contributed by [@kas2804](https://github.com/kas2804) in PR #17 (#4). 🙏
-   - `WEEK()` added in v1.2.0 (#44).
+   - `WEEK()` (#44) and `DATEADD()` (#52) added in v1.2.0.
 3. ~~Multi-Work-Area~~ — unlimited `SELECT <alias>`, `SET RELATION TO`, `alias.field` notation ✅
 4. ~~Report & Label Engine~~ — `REPORT FORM`, group breaks, subtotals, HTML preview ✅
 5. ~~The Assistant~~ — sidebar GUI, wizards, catalog protocol ✅
@@ -330,12 +331,12 @@ Both styles accepted: `TRUE`/`FALSE` and `.T.`/`.TRUE.`/`.F.`/`.FALSE.` (dBASE I
 ## Testing
 
 ```bash
-npm test                # Vitest unit + integration (358 tests)
+npm test                # Vitest unit + integration (369 tests)
 npm run coverage        # Vitest + v8 coverage report (reporting only, no thresholds)
 npx playwright test     # E2E browser tests — requires dev server on :5173/:3000
 ```
 
-Playwright suites (83 tests): `tests/assistant.spec.ts` (23 tests — sidebar, wizards, report designer, MODIFY STRUCTURE round-trip, `TIME(15)` column + REPLACE validation, `NUM(p,s)` wizard, Browse-action grid validation, program run, CSV/SORT/SUM-AVERAGE/REINDEX/PACK actions, demo launchers), `tests/integration.spec.ts` (20 tests — full REPL scenario), `tests/inventory.spec.ts` (8 tests — INVENTORY.prg menu + valuation/low-stock report/sort/CSV/JOIN), `tests/crm.spec.ts` (6 tests — CRM demo menu, pipeline summary, sort, report, CSV, JOIN), `tests/parity-commands.spec.ts` (5 tests — `?`/`??`, built-in functions, `WEEK()`, `SUM`/`AVERAGE`, `SORT ON … TO`), `tests/multiarea.spec.ts` (4 tests — multi-work-area, relations, alias.field), `tests/demos.spec.ts` (4 tests — demo program + report seeding), `tests/grid-validation.spec.ts` (3 tests — BROWSE per-cell validation: TIME(15), NUM(p,s)/DATE, Esc abandons), `tests/schema-errors.spec.ts` (3 tests — malformed CREATE TABLE errors, NUM(p,s) column count, bare INPUT stores its value), `tests/copycsv.spec.ts` (2 tests — COPY TO download + APPEND FROM upload), `tests/splash.spec.ts` (2 tests — version banner + demo discoverability), `tests/join.spec.ts` (1 test — JOIN materialization), `tests/propagation.spec.ts` (1 test — live multiuser refresh), `tests/program-side-effects.spec.ts` (1 test — CSV/report side-effects fire from inside a program block).
+Playwright suites (84 tests): `tests/assistant.spec.ts` (23 tests — sidebar, wizards, report designer, MODIFY STRUCTURE round-trip, `TIME(15)` column + REPLACE validation, `NUM(p,s)` wizard, Browse-action grid validation, program run, CSV/SORT/SUM-AVERAGE/REINDEX/PACK actions, demo launchers), `tests/integration.spec.ts` (20 tests — full REPL scenario), `tests/inventory.spec.ts` (8 tests — INVENTORY.prg menu + valuation/low-stock report/sort/CSV/JOIN), `tests/crm.spec.ts` (6 tests — CRM demo menu, pipeline summary, sort, report, CSV, JOIN), `tests/parity-commands.spec.ts` (6 tests — `?`/`??`, built-in functions, `WEEK()`, `DATEADD()`, `SUM`/`AVERAGE`, `SORT ON … TO`), `tests/multiarea.spec.ts` (4 tests — multi-work-area, relations, alias.field), `tests/demos.spec.ts` (4 tests — demo program + report seeding), `tests/grid-validation.spec.ts` (3 tests — BROWSE per-cell validation: TIME(15), NUM(p,s)/DATE, Esc abandons), `tests/schema-errors.spec.ts` (3 tests — malformed CREATE TABLE errors, NUM(p,s) column count, bare INPUT stores its value), `tests/copycsv.spec.ts` (2 tests — COPY TO download + APPEND FROM upload), `tests/splash.spec.ts` (2 tests — version banner + demo discoverability), `tests/join.spec.ts` (1 test — JOIN materialization), `tests/propagation.spec.ts` (1 test — live multiuser refresh), `tests/program-side-effects.spec.ts` (1 test — CSV/report side-effects fire from inside a program block).
 
 ## Test discipline
 

@@ -92,6 +92,21 @@ test.describe('Parity commands e2e', () => {
     expect(await printResult(page, 'WEEK(CTOD("05/12/24"))')).toBe('19');
   });
 
+  // #52 — DATEADD() day arithmetic, asserted on the printed value.
+  test('2c. DATEADD() built-in via ?', async ({ page }) => {
+    await boot(page, `e2e_parity_dateadd_${Date.now()}`);
+
+    expect(await printResult(page, 'DATEADD("2024-05-12", 1)')).toBe('2024-05-13');
+    expect(await printResult(page, 'DATEADD("2024-01-31", 1)')).toBe('2024-02-01');   // month rollover
+    expect(await printResult(page, 'DATEADD("2024-12-31", 1)')).toBe('2025-01-01');   // year rollover
+    expect(await printResult(page, 'DATEADD("2024-02-28", 1)')).toBe('2024-02-29');   // leap day
+    expect(await printResult(page, 'DATEADD("2023-02-28", 1)')).toBe('2023-03-01');   // non-leap
+    expect(await printResult(page, 'DATEADD("2024-03-01", -1)')).toBe('2024-02-29');  // negative
+
+    // The Monday-to-Friday span a timesheet week needs.
+    expect(await printResult(page, 'DATEADD("2026-07-06", 4)')).toBe('2026-07-10');
+  });
+
   test('3. SUM and AVERAGE', async ({ page }) => {
     const db = `e2e_parity_sum_${Date.now()}`;
     await boot(page, db);
