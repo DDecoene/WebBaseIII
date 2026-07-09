@@ -51,6 +51,7 @@ server/
   ServerDatabaseBridge.ts  IDatabaseBridge impl wrapping better-sqlite3
   ProgramStore.ts       .prg program storage in data/system.sqlite3
   IndexStore.ts         Index metadata + active index in data/system.sqlite3
+  ColumnMetaStore.ts    Declared column types (TIME, TIME(n)) in data/system.sqlite3 — SQLite affinity can't distinguish TIME from CHAR/DATE
   ReportStore.ts        Report definition storage in data/system.sqlite3 (reports table)
   ReportRunner.ts       ASCII and HTML report rendering, group breaks, subtotals, grand totals
   DemoSeeder.ts         Seeds demos/*.prg into the program store and demos/reports/*.json into the report store at startup (demos win)
@@ -109,6 +110,7 @@ tests/
   ServerDatabaseBridge.test.ts
   ProgramStore.test.ts
   AlterTable.test.ts    ALTER TABLE + MODIFY STRUCTURE integration tests
+  TimeType.test.ts      TIME / TIME(n) columns — creation, structure, write validation
   Print.test.ts         `?` / `??` print command
   Aggregate.test.ts     `SUM` / `AVERAGE`
   Builtins.test.ts / BuiltinsParse.test.ts   built-in functions (direct + through the parser)
@@ -221,6 +223,25 @@ WebBase-III supports **unlimited work areas** (no DOS 10-area limit). Cross-area
 | `@ r,c SAY "text" GET <var>` | Define a form field |
 | `READ` | Display form and wait for submit |
 
+### Built-in functions
+
+Implemented in `src/interpreter/Builtins.ts` (stateless) and `Executor.ts` (stateful:
+`EOF()`, `BOF()`, `FOUND()`, `RECNO()`, `RECCOUNT()`).
+
+> **Adding a built-in:** implementing it in `Builtins.ts` is not enough — it must also be
+> added to `BUILTIN_FUNCTIONS` in `src/interpreter/Parser.ts` or the parser rejects the
+> call (`Unknown command: (`). This is how the #4 built-ins shipped broken. Always cover a
+> new built-in in **both** `tests/Builtins.test.ts` (direct) and `tests/BuiltinsParse.test.ts`
+> (through the parser), plus a Playwright case.
+
+Strings: `SUBSTR`, `LEN`, `TRIM`, `LTRIM`, `UPPER`, `LOWER`, `AT`, `STR`, `VAL`, `SPACE`, `REPLICATE`.
+Numbers: `INT`, `ABS`, `ROUND`, `MOD`, `MAX`, `MIN`.
+Dates/times: `DATE()`, `TIME()`, `DTOC`, `CTOD`, `YEAR`, `MONTH`, `DAY`, `WEEK`.
+
+| Function | What it returns |
+|---|---|
+| `WEEK(date)` | ISO-8601 week number (1–53). Monday-start weeks; week 1 is the week containing the year's first Thursday, so early-January dates can return 52/53 (belonging to the previous year's last week) and late-December dates can return 1. Accepts ISO `YYYY-MM-DD` or `MM/DD/YY`; invalid input → 0. |
+
 ### Control flow
 | Command | What it does |
 |---|---|
@@ -254,6 +275,7 @@ line.
 1. ~~Indexing & Search~~ — `INDEX ON`, `SET INDEX TO`, `SEEK`, `FIND`, `REINDEX`, `LIST INDEXES` ✅
 2. ~~Language Completeness~~ — `DO CASE/ENDCASE`, built-in functions (`EOF()`, `BOF()`, `FOUND()`, `RECNO()`, `RECCOUNT()`, `SUBSTR()`, `STR()`, `AT()`, `UPPER()`, `LOWER()`, `ROUND()`, `MOD()`, `MAX()`, `MIN()`, `TIME()`, `YEAR()`, `MONTH()`, `DAY()`, and more) ✅
    - `ROUND`/`MOD`/`MAX`/`MIN`/`TIME`/`YEAR`/`MONTH`/`DAY` contributed by [@kas2804](https://github.com/kas2804) in PR #17 (#4). 🙏
+   - `WEEK()` added in v1.2.0 (#44).
 3. ~~Multi-Work-Area~~ — unlimited `SELECT <alias>`, `SET RELATION TO`, `alias.field` notation ✅
 4. ~~Report & Label Engine~~ — `REPORT FORM`, group breaks, subtotals, HTML preview ✅
 5. ~~The Assistant~~ — sidebar GUI, wizards, catalog protocol ✅
@@ -266,6 +288,14 @@ line.
   so other sessions BROWSE-ing that table refresh automatically (#11) ✅
 - ~~JOIN to materialize a combined table~~ — `JOIN WITH <alias> TO <file> FOR <cond> [FIELDS <list>]`, snapshot table via SQLite join (#10) ✅
 
+### Beyond parity (v1.2.0 — in progress)
+
+- ~~`TIME` column type~~ — `TIME`/`TIME(n)` columns storing `HH:MM`, with a minute-granularity
+  qualifier validated on write; declared types tracked in `server/ColumnMetaStore.ts` (#43) ✅
+- ~~`WEEK()` built-in~~ — ISO-8601 week number (#44) ✅
+- BROWSE per-cell validation — grid rejects invalid edits per column type (#45)
+- `demos/overtime.prg` — overtime tracker showcasing all three of the above (#46)
+
 ## Boolean literals
 
 Both styles accepted: `TRUE`/`FALSE` and `.T.`/`.TRUE.`/`.F.`/`.FALSE.` (dBASE III style). Output always uses `.T.`/`.F.`. Logical operators likewise: `NOT`/`.NOT.`, `AND`/`.AND.`, `OR`/`.OR.`.
@@ -273,11 +303,11 @@ Both styles accepted: `TRUE`/`FALSE` and `.T.`/`.TRUE.`/`.F.`/`.FALSE.` (dBASE I
 ## Testing
 
 ```bash
-npm test                # Vitest unit + integration (265 tests)
+npm test                # Vitest unit + integration (281 tests)
 npx playwright test     # E2E browser tests — requires dev server on :5173/:3000
 ```
 
-Playwright suites (73 tests): `tests/integration.spec.ts` (20 tests — full REPL scenario), `tests/assistant.spec.ts` (20 tests — sidebar, wizards, report designer, MODIFY STRUCTURE round-trip, program run, CSV/SORT/SUM-AVERAGE/REINDEX/PACK actions, demo launchers), `tests/inventory.spec.ts` (8 tests — INVENTORY.prg menu + valuation/low-stock report/sort/CSV/JOIN), `tests/crm.spec.ts` (6 tests — CRM demo menu, pipeline summary, sort, report, CSV, JOIN), `tests/multiarea.spec.ts` (4 tests — multi-work-area, relations, alias.field), `tests/parity-commands.spec.ts` (4 tests — `?`/`??`, built-in functions, `SUM`/`AVERAGE`, `SORT ON … TO`), `tests/demos.spec.ts` (4 tests — demo program + report seeding), `tests/copycsv.spec.ts` (2 tests — COPY TO download + APPEND FROM upload), `tests/splash.spec.ts` (2 tests — version banner + demo discoverability), `tests/join.spec.ts` (1 test — JOIN materialization), `tests/propagation.spec.ts` (1 test — live multiuser refresh), `tests/program-side-effects.spec.ts` (1 test — CSV/report side-effects fire from inside a program block).
+Playwright suites (75 tests): `tests/integration.spec.ts` (20 tests — full REPL scenario), `tests/assistant.spec.ts` (21 tests — sidebar, wizards, report designer, MODIFY STRUCTURE round-trip, `TIME(15)` column + REPLACE validation, program run, CSV/SORT/SUM-AVERAGE/REINDEX/PACK actions, demo launchers), `tests/inventory.spec.ts` (8 tests — INVENTORY.prg menu + valuation/low-stock report/sort/CSV/JOIN), `tests/crm.spec.ts` (6 tests — CRM demo menu, pipeline summary, sort, report, CSV, JOIN), `tests/parity-commands.spec.ts` (5 tests — `?`/`??`, built-in functions, `WEEK()`, `SUM`/`AVERAGE`, `SORT ON … TO`), `tests/multiarea.spec.ts` (4 tests — multi-work-area, relations, alias.field), `tests/demos.spec.ts` (4 tests — demo program + report seeding), `tests/copycsv.spec.ts` (2 tests — COPY TO download + APPEND FROM upload), `tests/splash.spec.ts` (2 tests — version banner + demo discoverability), `tests/join.spec.ts` (1 test — JOIN materialization), `tests/propagation.spec.ts` (1 test — live multiuser refresh), `tests/program-side-effects.spec.ts` (1 test — CSV/report side-effects fire from inside a program block).
 
 ## Definition of done
 

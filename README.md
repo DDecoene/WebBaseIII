@@ -350,6 +350,7 @@ Functions work anywhere an expression is accepted — `IF`, `DO WHILE`, `STORE`,
 | `YEAR(date)` | Numeric year from ISO date string |
 | `MONTH(date)` | Numeric month from ISO date string |
 | `DAY(date)` | Numeric day from ISO date string |
+| `WEEK(date)` | ISO-8601 week number (1–53) — Monday-start weeks, week 1 holds the year's first Thursday |
 
 ### Boolean literals
 
