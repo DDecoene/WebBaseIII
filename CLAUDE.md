@@ -50,7 +50,7 @@ server/
   SessionManager.ts     Tracks all active sessions; broadcast() fans data-changed to peers viewing a mutated table
   ServerDatabaseBridge.ts  IDatabaseBridge impl wrapping better-sqlite3
   ProgramStore.ts       .prg program storage in data/system.sqlite3
-  IndexStore.ts         Index metadata + active index in data/system.sqlite3
+  IndexStore.ts         Index metadata + active index per (db, table) in data/system.sqlite3
   ColumnMetaStore.ts    Declared column types per (db, table, column) in data/system.sqlite3 — SQLite affinity can't distinguish TIME/DATE/CHAR, LOGICAL/INT, or recover NUM(p,s)
   ReportStore.ts        Report definition storage in data/system.sqlite3 (reports table)
   ReportRunner.ts       ASCII and HTML report rendering, group breaks, subtotals, grand totals
@@ -115,6 +115,10 @@ tests/
   ColumnMeta.test.ts    NUM(p,s) parsing, declared types in LIST STRUCTURE, grid-open columnTypes, server-side grid-edit validation
   ColumnMetaStore.test.ts  Per-(db,table,column) type metadata + legacy-schema migration
   CellValidation.test.ts   Shared per-type cell validation rules
+  CreateTableParse.test.ts Strict CREATE TABLE grammar — malformed column lists must throw
+  DemoSchemas.test.ts   Golden column lists for every table the demos create
+  GridMessages.test.ts  grid-edit / grid-delete / grid-new-row / grid-refresh + INPUT form round-trip
+  IndexStoreMigration.test.ts  Adopting pre-#50 unscoped index rows into their owning database
   Print.test.ts         `?` / `??` print command
   Aggregate.test.ts     `SUM` / `AVERAGE`
   Builtins.test.ts / BuiltinsParse.test.ts   built-in functions (direct + through the parser)
@@ -315,6 +319,8 @@ line.
   qualifier validated on write; declared types tracked in `server/ColumnMetaStore.ts` (#43) ✅
 - ~~`WEEK()` built-in~~ — ISO-8601 week number (#44) ✅
 - ~~BROWSE per-cell validation~~ — grid rejects invalid edits per column type, validated on both client and server via `src/shared/cellValidation.ts` (#45) ✅
+- ~~Test hardening~~ — strict `CREATE TABLE` grammar, golden demo schemas, coverage for every
+  grid WS message, per-database index/column metadata scoping, `npm run coverage` (#50) ✅
 - `demos/overtime.prg` — overtime tracker showcasing all three of the above (#46)
 
 ## Boolean literals
@@ -324,11 +330,37 @@ Both styles accepted: `TRUE`/`FALSE` and `.T.`/`.TRUE.`/`.F.`/`.FALSE.` (dBASE I
 ## Testing
 
 ```bash
-npm test                # Vitest unit + integration (316 tests)
+npm test                # Vitest unit + integration (358 tests)
+npm run coverage        # Vitest + v8 coverage report (reporting only, no thresholds)
 npx playwright test     # E2E browser tests — requires dev server on :5173/:3000
 ```
 
-Playwright suites (79 tests): `tests/assistant.spec.ts` (22 tests — sidebar, wizards, report designer, MODIFY STRUCTURE round-trip, `TIME(15)` column + REPLACE validation, Browse-action grid validation, program run, CSV/SORT/SUM-AVERAGE/REINDEX/PACK actions, demo launchers), `tests/integration.spec.ts` (20 tests — full REPL scenario), `tests/inventory.spec.ts` (8 tests — INVENTORY.prg menu + valuation/low-stock report/sort/CSV/JOIN), `tests/crm.spec.ts` (6 tests — CRM demo menu, pipeline summary, sort, report, CSV, JOIN), `tests/parity-commands.spec.ts` (5 tests — `?`/`??`, built-in functions, `WEEK()`, `SUM`/`AVERAGE`, `SORT ON … TO`), `tests/multiarea.spec.ts` (4 tests — multi-work-area, relations, alias.field), `tests/demos.spec.ts` (4 tests — demo program + report seeding), `tests/grid-validation.spec.ts` (3 tests — BROWSE per-cell validation: TIME(15), NUM(p,s)/DATE, Esc abandons), `tests/copycsv.spec.ts` (2 tests — COPY TO download + APPEND FROM upload), `tests/splash.spec.ts` (2 tests — version banner + demo discoverability), `tests/join.spec.ts` (1 test — JOIN materialization), `tests/propagation.spec.ts` (1 test — live multiuser refresh), `tests/program-side-effects.spec.ts` (1 test — CSV/report side-effects fire from inside a program block).
+Playwright suites (83 tests): `tests/assistant.spec.ts` (23 tests — sidebar, wizards, report designer, MODIFY STRUCTURE round-trip, `TIME(15)` column + REPLACE validation, `NUM(p,s)` wizard, Browse-action grid validation, program run, CSV/SORT/SUM-AVERAGE/REINDEX/PACK actions, demo launchers), `tests/integration.spec.ts` (20 tests — full REPL scenario), `tests/inventory.spec.ts` (8 tests — INVENTORY.prg menu + valuation/low-stock report/sort/CSV/JOIN), `tests/crm.spec.ts` (6 tests — CRM demo menu, pipeline summary, sort, report, CSV, JOIN), `tests/parity-commands.spec.ts` (5 tests — `?`/`??`, built-in functions, `WEEK()`, `SUM`/`AVERAGE`, `SORT ON … TO`), `tests/multiarea.spec.ts` (4 tests — multi-work-area, relations, alias.field), `tests/demos.spec.ts` (4 tests — demo program + report seeding), `tests/grid-validation.spec.ts` (3 tests — BROWSE per-cell validation: TIME(15), NUM(p,s)/DATE, Esc abandons), `tests/schema-errors.spec.ts` (3 tests — malformed CREATE TABLE errors, NUM(p,s) column count, bare INPUT stores its value), `tests/copycsv.spec.ts` (2 tests — COPY TO download + APPEND FROM upload), `tests/splash.spec.ts` (2 tests — version banner + demo discoverability), `tests/join.spec.ts` (1 test — JOIN materialization), `tests/propagation.spec.ts` (1 test — live multiuser refresh), `tests/program-side-effects.spec.ts` (1 test — CSV/report side-effects fire from inside a program block).
+
+## Test discipline
+
+Two bugs shipped through a 283-test suite (found in #45/#50). Both were structural blind
+spots, not bad luck. When adding tests, remember what the existing ones cannot see:
+
+- **`toContain` can only prove presence, never absence.** Almost every assertion in this
+  repo greps rendered text for a substring, so a *phantom extra column* (`NUM(8,2)` used to
+  create a column literally named `2`) sailed through every `LIST`/`LIST STRUCTURE` check.
+  Assert **exact** structure — column lists, record counts — with `toEqual`/`toHaveLength`
+  wherever you can. `tests/DemoSchemas.test.ts` pins the demo tables for exactly this reason.
+- **Test the surface, not the happy path through it.** Four of twelve `ClientMessage` types
+  had zero tests; `grid-edit` wrote straight to SQLite with no validation and nobody noticed,
+  because the grid tests only opened the grid and pressed Escape. Every WS message type
+  should have a test that drives it and asserts the database/UI effect
+  (`tests/GridMessages.test.ts`).
+- **Green CI does not mean correct.** The cross-database `ColumnMetaStore` leak shipped with
+  seven passing tests, because they all used a single database. When state is keyed by name,
+  write the test that uses two.
+- **Prefer failing loudly to guessing.** The parser used to absorb any token it didn't
+  understand and invent a column from it. `CREATE TABLE` is now strict; keep it that way.
+
+Run `npm run coverage` when touching an area you suspect is untested. **Never run `npm test`
+and `npx playwright test` concurrently** — both mutate `data/` and `data/system.sqlite3`, and
+a state-dependent e2e test will fail for reasons that have nothing to do with your change.
 
 ## Definition of done
 

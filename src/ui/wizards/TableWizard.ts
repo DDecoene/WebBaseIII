@@ -27,7 +27,18 @@ export function openTableWizard(run: (cmd: string) => void, onClose: () => void)
       if (!n) continue;                       // blank rows are skipped
       if (!NAME_RE.test(n)) return { cmd: null, err: `Invalid column name: ${n}` };
       const t = r.type.value;
-      if (NEEDS_LEN.has(t)) {
+      if (t === 'NUM') {
+        // Accept a plain width ("8") or a precision,scale pair ("8,2").
+        const raw = r.len.value.trim();
+        const m = raw.match(/^(\d+)\s*(?:,\s*(\d+))?$/);
+        if (!m) return { cmd: null, err: `Length required for ${n} (NUM) — e.g. 8 or 8,2` };
+        const p = parseInt(m[1], 10);
+        if (!p || p < 1) return { cmd: null, err: `Length required for ${n} (NUM)` };
+        if (m[2] === undefined) { cols.push(`${n} NUM(${p})`); continue; }
+        const s = parseInt(m[2], 10);
+        if (s >= p) return { cmd: null, err: `Scale must be smaller than precision for ${n} (NUM)` };
+        cols.push(`${n} NUM(${p},${s})`);
+      } else if (NEEDS_LEN.has(t)) {
         const len = parseInt(r.len.value, 10);
         if (!len || len < 1) return { cmd: null, err: `Length required for ${n} (${t})` };
         cols.push(`${n} ${t}(${len})`);
@@ -66,7 +77,7 @@ export function openTableWizard(run: (cmd: string) => void, onClose: () => void)
       type.appendChild(o);
     }
     const len = document.createElement('input');
-    len.type = 'text'; len.className = 'wz-col-len'; len.placeholder = 'len'; len.style.minWidth = '50px'; len.style.width = '50px';
+    len.type = 'text'; len.className = 'wz-col-len'; len.placeholder = 'len'; len.title = 'CHAR: length · NUM: width or precision,scale (8,2) · TIME: minute granularity'; len.style.minWidth = '56px'; len.style.width = '56px';
     row.append(name, type, len);
     colsWrap.appendChild(row);
     rows.push({ name, type, len });
@@ -75,7 +86,7 @@ export function openTableWizard(run: (cmd: string) => void, onClose: () => void)
 
   shell = new WizardShell(
     'New table',
-    'Define columns; blank rows are ignored. CHAR and NUM need a length; TIME takes an optional minute-granularity (e.g. 15).',
+    'Define columns; blank rows are ignored. CHAR needs a length, NUM a width or precision,scale (8 or 8,2); TIME takes an optional minute-granularity (e.g. 15).',
     { okLabel: 'Create table', onOk: () => {
         const { cmd } = buildCommand();
         if (cmd) { run(cmd); shell.close(); }

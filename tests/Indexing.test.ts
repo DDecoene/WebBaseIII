@@ -25,8 +25,8 @@ afterEach(() => {
 describe('IndexStore', () => {
   it('saves and retrieves an index definition', () => {
     const store = new IndexStore(tmpPath());
-    store.saveIndex('customers', 'byname', 'lastname+firstname');
-    const indexes = store.listIndexes('customers');
+    store.saveIndex('DB', 'customers', 'byname', 'lastname+firstname');
+    const indexes = store.listIndexes('DB', 'customers');
     expect(indexes).toHaveLength(1);
     expect(indexes[0].tag).toBe('byname');
     expect(indexes[0].expression).toBe('lastname+firstname');
@@ -34,36 +34,61 @@ describe('IndexStore', () => {
 
   it('sets and gets active index', () => {
     const store = new IndexStore(tmpPath());
-    store.saveIndex('customers', 'byname', 'lastname');
-    store.setActive('customers', 'byname');
-    expect(store.getActive('customers')).toEqual({ tag: 'byname', expression: 'lastname' });
+    store.saveIndex('DB', 'customers', 'byname', 'lastname');
+    store.setActive('DB', 'customers', 'byname');
+    expect(store.getActive('DB', 'customers')).toEqual({ tag: 'byname', expression: 'lastname' });
   });
 
   it('clears active index', () => {
     const store = new IndexStore(tmpPath());
-    store.saveIndex('customers', 'byname', 'lastname');
-    store.setActive('customers', 'byname');
-    store.clearActive('customers');
-    expect(store.getActive('customers')).toBeNull();
+    store.saveIndex('DB', 'customers', 'byname', 'lastname');
+    store.setActive('DB', 'customers', 'byname');
+    store.clearActive('DB', 'customers');
+    expect(store.getActive('DB', 'customers')).toBeNull();
   });
 
   it('returns null getActive when no index set', () => {
     const store = new IndexStore(tmpPath());
-    expect(store.getActive('customers')).toBeNull();
+    expect(store.getActive('DB', 'customers')).toBeNull();
   });
 
   it('upserts index definition on duplicate tag', () => {
     const store = new IndexStore(tmpPath());
-    store.saveIndex('customers', 'byname', 'lastname');
-    store.saveIndex('customers', 'byname', 'firstname');
-    const indexes = store.listIndexes('customers');
+    store.saveIndex('DB', 'customers', 'byname', 'lastname');
+    store.saveIndex('DB', 'customers', 'byname', 'firstname');
+    const indexes = store.listIndexes('DB', 'customers');
     expect(indexes).toHaveLength(1);
     expect(indexes[0].expression).toBe('firstname');
   });
 
   it('setActive throws when tag does not exist', () => {
     const store = new IndexStore(tmpPath());
-    expect(() => store.setActive('customers', 'ghost')).toThrow("Index 'ghost' not found on table 'customers'");
+    expect(() => store.setActive('DB', 'customers', 'ghost')).toThrow("Index 'ghost' not found on table 'customers'");
+  });
+
+  // #50 — the key used to omit the database, so opening PEOPLE in one database
+  // activated an index defined on another database's PEOPLE.
+  it('scopes index definitions and the active marker per database', () => {
+    const store = new IndexStore(tmpPath());
+    store.saveIndex('A', 'PEOPLE', 'BYNAME', 'LASTNAME');
+    store.setActive('A', 'PEOPLE', 'BYNAME');
+
+    expect(store.listIndexes('B', 'PEOPLE')).toEqual([]);
+    expect(store.getActive('B', 'PEOPLE')).toBeNull();
+    expect(store.getActive('A', 'PEOPLE')).toEqual({ tag: 'BYNAME', expression: 'LASTNAME' });
+
+    store.saveIndex('B', 'PEOPLE', 'BYFULL', 'FULLNAME');
+    store.setActive('B', 'PEOPLE', 'BYFULL');
+    expect(store.getActive('A', 'PEOPLE')?.tag).toBe('BYNAME');   // unchanged
+  });
+
+  it('dropTable only clears the named database', () => {
+    const store = new IndexStore(tmpPath());
+    store.saveIndex('A', 'PEOPLE', 'BYNAME', 'LASTNAME');
+    store.saveIndex('B', 'PEOPLE', 'BYNAME', 'LASTNAME');
+    store.dropTable('A', 'PEOPLE');
+    expect(store.listIndexes('A', 'PEOPLE')).toEqual([]);
+    expect(store.listIndexes('B', 'PEOPLE')).toHaveLength(1);
   });
 });
 

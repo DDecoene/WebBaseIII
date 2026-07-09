@@ -167,6 +167,43 @@ test.describe('Assistant wizards — table', () => {
     await page.waitForTimeout(400);
     await expect(page.locator('#terminal-output')).toContainText('08:15');
   });
+
+  // #50 — NUM(p,s) is a real qualifier now, so the wizard must be able to express it.
+  test('New table wizard emits NUM(p,s) and the table has exactly the declared columns', async ({ page }) => {
+    await boot(page);
+    for (const c of ['USE DATABASE ASSISTDEMO', 'DROP TABLE wiz_priced']) {
+      await page.locator('#terminal-input').fill(c);
+      await page.locator('#terminal-input').press('Enter');
+      await page.waitForTimeout(400);
+    }
+
+    await clickAction(page, 'New table…');
+    await expect(page.locator('#wizard-view')).toBeVisible({ timeout: 5000 });
+
+    await page.locator('#wz-table-name').fill('wiz_priced');
+    await page.locator('.wz-col-name').first().fill('PRICE');
+    await page.locator('.wz-col-type').first().selectOption('NUM');
+    await page.locator('.wz-col-len').first().fill('8,2');
+    await expect(page.locator('.wz-preview')).toContainText('CREATE TABLE wiz_priced (PRICE NUM(8,2))');
+
+    // Scale must be smaller than precision — the wizard blocks it.
+    await page.locator('.wz-col-len').first().fill('2,8');
+    await expect(page.locator('.wz-error')).toContainText('Scale must be smaller');
+
+    await page.locator('.wz-col-len').first().fill('8,2');
+    await page.locator('#wizard-view button', { hasText: 'Create table' }).click();
+    await expect(page.locator('#terminal-view')).toBeVisible({ timeout: 5000 });
+
+    await page.locator('#terminal-input').fill('LIST STRUCTURE');
+    await page.locator('#terminal-input').press('Enter');
+    await page.waitForTimeout(500);
+    await expect(page.locator('#terminal-output')).toContainText('NUM(8,2)');
+
+    // Exactly one column — no phantom "2" from the scale.
+    const lines = await page.locator('#terminal-output .t-line').allTextContents();
+    const numbered = lines.filter(l => /^\s*\d+\s+\w+/.test(l) && !/record/i.test(l));
+    expect(numbered).toHaveLength(1);
+  });
 });
 
 test.describe('Assistant wizards — filter / index / search', () => {

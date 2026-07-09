@@ -8,6 +8,8 @@ export interface IndexCommandsHost {
   readonly area: WorkArea;
   readonly activeAlias: string;
   readonly indexStore: IIndexStore | null;
+  /** Database key for index/column metadata — same-named tables in different DBs must not collide. */
+  readonly metaDb: string;
   readonly db: IDatabaseBridge;
   evalExpr(e: Expr): unknown;
   requireTable(): void;
@@ -23,7 +25,7 @@ export class IndexCommands {
     this.host.requireTable();
     if (!this.host.indexStore) return { output: [{ text: '** IndexStore not available', cls: 'error' }] };
     const table = this.host.area.table!;
-    this.host.indexStore.saveIndex(table, tag, expression);
+    this.host.indexStore.saveIndex(this.host.metaDb, table, tag, expression);
     if (/^[A-Z_][A-Z0-9_]*$/i.test(expression.trim())) {
       try {
         await this.host.db.exec(
@@ -31,7 +33,7 @@ export class IndexCommands {
         );
       } catch { /* ignore — expression may not be a valid SQL column ref */ }
     }
-    this.host.indexStore.setActive(table, tag);
+    this.host.indexStore.setActive(this.host.metaDb, table, tag);
     this.host.area.activeIndex = { tag, expression };
     return { output: [{ text: `Index created: ${tag}  ON  ${expression}`, cls: 'ok' }] };
   }
@@ -41,13 +43,13 @@ export class IndexCommands {
     if (!this.host.indexStore) return { output: [{ text: '** IndexStore not available', cls: 'error' }] };
     const table = this.host.area.table!;
     if (tag === null) {
-      this.host.indexStore.clearActive(table);
+      this.host.indexStore.clearActive(this.host.metaDb, table);
       this.host.area.activeIndex = null;
       return { output: [{ text: 'Active index cleared', cls: 'ok' }] };
     }
-    const def = this.host.indexStore.listIndexes(table).find(i => i.tag.toUpperCase() === tag.toUpperCase());
+    const def = this.host.indexStore.listIndexes(this.host.metaDb, table).find(i => i.tag.toUpperCase() === tag.toUpperCase());
     if (!def) return { output: [{ text: `Index '${tag}' not found — use INDEX ON to create it`, cls: 'warn' }] };
-    this.host.indexStore.setActive(table, def.tag);
+    this.host.indexStore.setActive(this.host.metaDb, table, def.tag);
     this.host.area.activeIndex = { tag: def.tag, expression: def.expression };
     return { output: [{ text: `Index active: ${def.tag}  (${def.expression})`, cls: 'ok' }] };
   }
@@ -62,7 +64,7 @@ export class IndexCommands {
     this.host.requireTable();
     if (!this.host.indexStore) return { output: [{ text: '** IndexStore not available', cls: 'error' }] };
     const table = this.host.area.table!;
-    const indexes = this.host.indexStore.listIndexes(table);
+    const indexes = this.host.indexStore.listIndexes(this.host.metaDb, table);
     if (!indexes.length) return { output: [{ text: '(No indexes defined)', cls: 'info' }] };
     const out: OutputLine[] = [
       { text: `Indexes for table: ${table}`, cls: 'hdr' },

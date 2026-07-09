@@ -41,13 +41,14 @@ export interface IndexDef {
   expression: string;
 }
 
+// Scoped by database: two databases can hold same-named tables with different indexes.
 export interface IIndexStore {
-  saveIndex(tableName: string, tag: string, expression: string): void;
-  listIndexes(tableName: string): IndexDef[];
-  getActive(tableName: string): IndexDef | null;
-  setActive(tableName: string, tag: string): void;
-  clearActive(tableName: string): void;
-  dropTable(tableName: string): void;
+  saveIndex(dbName: string, tableName: string, tag: string, expression: string): void;
+  listIndexes(dbName: string, tableName: string): IndexDef[];
+  getActive(dbName: string, tableName: string): IndexDef | null;
+  setActive(dbName: string, tableName: string, tag: string): void;
+  clearActive(dbName: string, tableName: string): void;
+  dropTable(dbName: string, tableName: string): void;
 }
 
 // Metadata for the column types SQLite's own affinity can't distinguish (TIME vs
@@ -127,7 +128,6 @@ export interface Catalog {
 // Client → Server
 export type ClientMessage =
   | { type: 'command'; text: string }
-  | { type: 'input-response'; value: string }
   | { type: 'form-submit'; values: Record<string, string> }
   | { type: 'grid-edit'; rowid: number; col: string; value: string }
   | { type: 'grid-delete'; rowid: number }
@@ -143,7 +143,6 @@ export type ClientMessage =
 export type ServerMessage =
   | { type: 'output'; lines: OutputLine[] }
   | { type: 'status'; db: string | null; table: string | null; record: number; total: number }
-  | { type: 'input-request'; prompt: string }
   | { type: 'grid-open'; table: string; filter: string | null; columns: ColInfo[]; columnTypes: Record<string, ColumnTypeInfo>; rows: Record<string, unknown>[] }
   | { type: 'modstruct-open'; table: string; columns: ColInfo[] }
   | { type: 'form-open'; fields: FormField[] }
