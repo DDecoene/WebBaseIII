@@ -154,6 +154,30 @@ describe('WEEK', () => {
   it('accepts a real leap day', () => expect(callStateless('WEEK', ['2024-02-29'])).toBe(9));
 });
 
+describe('DATEADD', () => {
+  it('adds days within the same month', () => expect(callStateless('DATEADD', ['2024-05-12', 1])).toBe('2024-05-13'));
+  it('rolls over a month boundary', () => expect(callStateless('DATEADD', ['2024-01-31', 1])).toBe('2024-02-01'));
+  it('rolls over a year boundary', () => expect(callStateless('DATEADD', ['2024-12-31', 1])).toBe('2025-01-01'));
+  it('lands on a leap day', () => expect(callStateless('DATEADD', ['2024-02-28', 1])).toBe('2024-02-29'));
+  it('skips Feb 29 in a non-leap year', () => expect(callStateless('DATEADD', ['2023-02-28', 1])).toBe('2023-03-01'));
+  it('accepts a negative offset', () => {
+    expect(callStateless('DATEADD', ['2024-03-01', -1])).toBe('2024-02-29');
+    expect(callStateless('DATEADD', ['2024-05-12', -20])).toBe('2024-04-22');
+  });
+  it('n = 0 returns the same date, normalised to ISO', () => {
+    expect(callStateless('DATEADD', ['2024-05-12', 0])).toBe('2024-05-12');
+    expect(callStateless('DATEADD', ['05/12/24', 0])).toBe('2024-05-12');
+  });
+  it('derives a work week from its Monday', () => {
+    expect(callStateless('DATEADD', ['2026-07-06', 4])).toBe('2026-07-10');
+  });
+  it('invalid or impossible dates return an empty string', () => {
+    expect(callStateless('DATEADD', ['not-a-date', 1])).toBe('');
+    expect(callStateless('DATEADD', ['2023-02-29', 1])).toBe('');
+    expect(callStateless('DATEADD', ['2024-13-01', 1])).toBe('');
+  });
+});
+
 describe('unknown function', () => {
   it('throws', () => expect(() => callStateless('FOOBAR', [])).toThrow('Unknown function: FOOBAR'));
 });

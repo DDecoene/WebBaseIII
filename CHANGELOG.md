@@ -19,6 +19,11 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
   week containing the year's first Thursday. Early-January dates correctly report the
   previous year's week 52/53, and late-December dates week 1 of the next year. Accepts
   ISO `YYYY-MM-DD` or `MM/DD/YY`; invalid input returns 0. (#44)
+- `DATEADD(date, n)` built-in — the ISO date `n` days later (`n` may be negative). Computed
+  in UTC so month, year and leap-day boundaries are exact (`2024-02-28` + 1 = `2024-02-29`,
+  `2023-02-28` + 1 = `2023-03-01`). Accepts ISO `YYYY-MM-DD` or `MM/DD/YY` and composes with
+  `CTOD()`; invalid or impossible input returns `''`. W3Script previously had no date
+  arithmetic at all. (#52)
 - `BROWSE` now validates each cell edit against its column's declared type before
   committing. An invalid edit keeps the cell in edit mode, outlines it in red and shows
   why (`HH:MM`, `multiple of 15`, `at most 2 decimal place(s)`, `not a real date`, …);

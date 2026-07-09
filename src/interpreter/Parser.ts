@@ -9,7 +9,7 @@ const BUILTIN_FUNCTIONS = new Set([
   // #4 (PR #17, @kas2804) — implemented in Builtins.ts; must be whitelisted here
   // too or the parser won't recognise the call.
   'ROUND','MOD','MAX','MIN','TIME','YEAR','MONTH','DAY',
-  'WEEK',
+  'WEEK','DATEADD',
 ]);
 
 // ── AST Node Types ──────────────────────────────────────────────────────────
