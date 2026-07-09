@@ -296,8 +296,7 @@ Dates/times: `DATE()`, `TIME()`, `DTOC`, `CTOD`, `YEAR`, `MONTH`, `DAY`, `WEEK`,
 **v1.0.0 — dBASE III parity: complete ✅.** All sub-projects below shipped, plus the
 closing parity commands: `?`/`??` print (#2), `SUM`/`AVERAGE` (#3), the extra
 built-ins (#4), `SORT ON … TO` (#8), and `COPY TO`/`APPEND FROM` CSV (#5).
-Beyond-parity work (e.g. live multiuser propagation, #11) lands on the `release/v1.1.0`
-line.
+Beyond-parity work lands on the milestone's own `release/vX.Y.Z` line.
 
 1. ~~Indexing & Search~~ — `INDEX ON`, `SET INDEX TO`, `SEEK`, `FIND`, `REINDEX`, `LIST INDEXES` ✅
 2. ~~Language Completeness~~ — `DO CASE/ENDCASE`, built-in functions (`EOF()`, `BOF()`, `FOUND()`, `RECNO()`, `RECCOUNT()`, `SUBSTR()`, `STR()`, `AT()`, `UPPER()`, `LOWER()`, `ROUND()`, `MOD()`, `MAX()`, `MIN()`, `TIME()`, `YEAR()`, `MONTH()`, `DAY()`, and more) ✅
@@ -315,7 +314,7 @@ line.
   so other sessions BROWSE-ing that table refresh automatically (#11) ✅
 - ~~JOIN to materialize a combined table~~ — `JOIN WITH <alias> TO <file> FOR <cond> [FIELDS <list>]`, snapshot table via SQLite join (#10) ✅
 
-### Beyond parity (v1.2.0 — in progress)
+### Beyond parity (v1.2.0)
 
 - ~~`TIME` column type~~ — `TIME`/`TIME(n)` columns storing `HH:MM`, with a minute-granularity
   qualifier validated on write; declared types tracked in `server/ColumnMetaStore.ts` (#43) ✅
