@@ -57,6 +57,39 @@ test.describe('Assistant sidebar', () => {
     await page.keyboard.press('Escape');
     await expect(page.locator('#terminal-view')).toBeVisible({ timeout: 5000 });
   });
+
+  // #45 — the grid opened from the Assistant validates edits per declared type.
+  test('grid opened via the Assistant Browse action validates cell edits', async ({ page }) => {
+    await boot(page);
+    for (const c of [
+      'USE DATABASE ASSISTDEMO',
+      'DROP TABLE asst_shifts',
+      'CREATE TABLE asst_shifts (STARTTIME TIME(15))',
+      'USE asst_shifts',
+      'APPEND RECORD',
+    ]) {
+      await page.locator('#terminal-input').fill(c);
+      await page.locator('#terminal-input').press('Enter');
+      await page.waitForTimeout(400);
+    }
+
+    await clickAction(page, 'Browse');
+    await expect(page.locator('#grid-view')).toBeVisible({ timeout: 5000 });
+
+    const td = page.locator('#grid-tbody td[data-ri="0"][data-ci="0"]');
+    await td.dblclick();
+    await td.locator('input.cell-ed').fill('08:07');
+    await page.keyboard.press('Enter');
+    await expect(td).toHaveClass(/cell-invalid/);
+    await expect(td.locator('.cell-error')).toContainText('multiple of 15');
+
+    await td.locator('input.cell-ed').fill('08:30');
+    await page.keyboard.press('Enter');
+    await expect(td).toContainText('08:30');
+
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#terminal-view')).toBeVisible({ timeout: 5000 });
+  });
 });
 
 test.describe('Assistant wizards — table', () => {

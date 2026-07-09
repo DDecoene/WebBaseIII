@@ -229,7 +229,7 @@ WebBase-III supports **unlimited work areas** — each independently holding a t
 
 > Column ops that can invalidate an index (DROP, RENAME, ALTER type) drop all of the table's indexes and warn you to rebuild with `INDEX ON`.
 
-**Column types**: `CHAR(n)` (aliases `CHARACTER`/`VARCHAR`/`STRING`/`MEMO`), `NUM` (`NUMERIC`/`FLOAT`/`DOUBLE`/`DECIMAL`), `INT`/`INTEGER`, `LOGICAL`/`BOOLEAN`, `DATE`, and `TIME`/`TIME(n)`. `TIME` stores `HH:MM` (24-hour); the optional `TIME(n)` qualifier (e.g. `TIME(15)`) requires minutes to be a multiple of `n`. `REPLACE ... WITH` rejects a malformed or off-granularity `TIME` value instead of silently coercing it.
+**Column types**: `CHAR(n)` (aliases `CHARACTER`/`VARCHAR`/`STRING`/`MEMO`), `NUM`/`NUM(p,s)` (`NUMERIC`/`FLOAT`/`DOUBLE`/`DECIMAL`), `INT`/`INTEGER`, `LOGICAL`/`BOOLEAN`, `DATE`, and `TIME`/`TIME(n)`. `TIME` stores `HH:MM` (24-hour); the optional `TIME(n)` qualifier (e.g. `TIME(15)`) requires minutes to be a multiple of `n`. `REPLACE ... WITH` rejects a malformed or off-granularity `TIME` value instead of silently coercing it, and `LIST STRUCTURE` prints the declared type (`NUM(8,2)`, `TIME(15)`) rather than SQLite's storage class.
 
 > **CSV format (`COPY TO` / `APPEND FROM`):** Unlike dBASE III's headerless,
 > positional `DELIMITED`/`SDF` formats, WebBase-III uses modern **header-based CSV**
@@ -379,6 +379,8 @@ Logical operators are accepted in both styles too: `NOT` / `.NOT.`, `AND` / `.AN
 | Delete | Delete current row |
 | F5 | Refresh from DB |
 | Esc | Exit grid, return to terminal |
+
+> **Cell validation.** An edit is checked against the column's declared type before it commits. An invalid value keeps the cell in edit mode, outlined in red, with the reason shown (`HH:MM`, `multiple of 15`, `at most 2 decimal place(s)`, `not a real date`); the error clears as soon as you fix it, and `Esc` abandons the edit. `DATE`, `TIME`/`TIME(n)`, `NUM(p,s)`, `INT` and `LOGICAL` are validated; `CHAR`/`MEMO` are not. The server re-checks every edit independently.
 
 ---
 
