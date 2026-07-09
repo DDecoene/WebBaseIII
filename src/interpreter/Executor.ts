@@ -1,10 +1,11 @@
-import { IDatabaseBridge, IIndexStore, IColumnMetaStore, OutputLine, FormField, WorkArea, ClientSideEffect } from '../shared/types';
+import { IDatabaseBridge, IIndexStore, IColumnMetaStore, ColumnTypeInfo, OutputLine, FormField, WorkArea, ClientSideEffect } from '../shared/types';
 import { ASTNode, Expr, ColDef, Parser } from './Parser';
 import { Lexer } from './Lexer';
 import { callStateless } from './Builtins';
 import { IndexCommands, IndexCommandsHost } from './IndexCommands';
 import { ReportCommands } from './ReportCommands';
 import { toCSV, parseCSV, MAX_EXPORT_ROWS, MAX_IMPORT_BYTES, MAX_IMPORT_SKIPS } from '../shared/csv';
+import { validateCellValue } from '../shared/cellValidation';
 
 export type { OutputLine, FormField } from '../shared/types';
 
@@ -42,21 +43,12 @@ function mapType(t: string): DbType {
   }
 }
 
-const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
-
-// Throws if `value` is not a well-formed HH:MM string satisfying `qualifier`
-// (a minute-granularity requirement, e.g. 15 for TIME(15)).
-function validateTimeValue(field: string, value: unknown, qualifier: number | null): void {
-  if (value === null || value === undefined) return;
-  const s = String(value);
-  const m = TIME_RE.exec(s);
-  if (!m) {
-    throw new Error(`${field}: invalid TIME value "${s}" — expected HH:MM (00-23:00-59)`);
-  }
-  const minutes = Number(m[2]);
-  if (qualifier && minutes % qualifier !== 0) {
-    throw new Error(`${field}: TIME value "${s}" violates TIME(${qualifier}) granularity — minutes must be a multiple of ${qualifier}`);
-  }
+/** Render a declared column type the way it was written: NUM(8,2), TIME(15), DATE. */
+function declaredTypeText(info: ColumnTypeInfo | undefined): string | null {
+  if (!info) return null;
+  if (info.qualifier === null) return info.baseType;
+  if (info.scale !== null && info.scale !== undefined) return `${info.baseType}(${info.qualifier},${info.scale})`;
+  return `${info.baseType}(${info.qualifier})`;
 }
 
 function makeArea(alias: string): WorkArea {
@@ -98,6 +90,11 @@ export class Executor implements IndexCommandsHost {
 
   get area(): WorkArea {
     return this.areas.get(this.activeAlias)!;
+  }
+
+  /** Database key for column metadata — same-named tables in different DBs must not collide. */
+  private get metaDb(): string {
+    return this.area.db ?? '';
   }
 
   /** Backwards-compat shim — Session.ts and legacy tests still read executor.state */
@@ -385,15 +382,14 @@ export class Executor implements IndexCommandsHost {
   private async doListStruct(): Promise<ExecResult> {
     this.requireTable();
     const cols = await this.db.getStructure(this.area.table!);
-    const meta = this.columnMetaStore?.listColumnTypes(this.area.table!) ?? {};
+    const meta = this.columnMetaStore?.listColumnTypes(this.metaDb, this.area.table!) ?? {};
     const out: OutputLine[] = [
       { text: `Structure of table: ${this.area.table}`, cls: 'hdr' },
       { text: `${'#'.padEnd(4)}  ${'Field'.padEnd(20)}  ${'Type'.padEnd(10)}  ${'Null'.padEnd(5)}  ${'PK'}`, cls: 'hdr' },
       { text: `${'─'.repeat(55)}`, cls: 'sep' },
     ];
     cols.forEach(c => {
-      const info = meta[c.name];
-      const typeText = info ? (info.qualifier ? `${info.baseType}(${info.qualifier})` : info.baseType) : c.type;
+      const typeText = declaredTypeText(meta[c.name]) ?? c.type;
       out.push({ text: `${String(c.cid + 1).padEnd(4)}  ${c.name.padEnd(20)}  ${typeText.padEnd(10)}  ${c.notnull ? 'NO' : 'YES'.padEnd(5)}  ${c.pk ? 'PK' : ''}` });
     });
     return { output: out };
@@ -432,10 +428,15 @@ export class Executor implements IndexCommandsHost {
     this.requireTable();
     await this.refreshRecCount();
     const pairs = fields.map(f => ({ field: f.field, value: this.evalExpr(f.value) }));
+    // TIME is the only declared type REPLACE enforces (#43). The grid validates
+    // every declared type (#45) because it has no other guard; widening REPLACE
+    // would change the semantics of existing programs.
     for (const p of pairs) {
-      const info = this.columnMetaStore?.getColumnType(this.area.table!, p.field);
+      if (p.value === null || p.value === undefined) continue;
+      const info = this.columnMetaStore?.getColumnType(this.metaDb, this.area.table!, p.field);
       if (info?.baseType === 'TIME') {
-        validateTimeValue(p.field, p.value, info.qualifier);
+        const err = validateCellValue(p.field, String(p.value), info);
+        if (err) throw new Error(err);
       }
     }
     const setClauses = pairs.map(p => `${q(p.field)} = ?`).join(', ');
@@ -774,10 +775,14 @@ export class Executor implements IndexCommandsHost {
     }
     const sql = `CREATE TABLE IF NOT EXISTS ${q(name)} (${colsSql})`;
     await this.db.exec(sql);
+    // Record the *declared* type of every column. SQLite only stores an affinity
+    // (TEXT/REAL/INTEGER), which can't tell TIME from DATE from CHAR, LOGICAL from
+    // INT, or recover a NUM(p,s) precision — the grid needs the declared type to
+    // validate edits.
     for (const c of cols) {
-      if (c.colType.toUpperCase() === 'TIME') {
-        this.columnMetaStore?.setColumnType(name, c.name, 'TIME', c.size ?? null);
-      }
+      this.columnMetaStore?.setColumnType(
+        this.metaDb, name, c.name, c.colType.toUpperCase(), c.size ?? null, c.scale ?? null,
+      );
     }
     this.area.table = name;
     this.area.filter = null;
@@ -885,7 +890,7 @@ export class Executor implements IndexCommandsHost {
   private async doDropTable(name: string): Promise<ExecResult> {
     await this.db.exec(`DROP TABLE IF EXISTS ${q(name)}`);
     this.indexStore?.dropTable(name);
-    this.columnMetaStore?.dropTable(name);
+    this.columnMetaStore?.dropTable(this.metaDb, name);
     if (this.area.table === name) {
       this.area.table = null;
       this.area.activeIndex = null;
@@ -911,6 +916,8 @@ export class Executor implements IndexCommandsHost {
     if (node.op === 'ADD') {
       if (has(node.col)) return { output: [{ text: `ALTER TABLE: column already exists: ${node.col}`, cls: 'error' }] };
       await this.db.exec(`ALTER TABLE ${q(name)} ADD COLUMN ${q(node.col)} ${mapType(node.colType)}`);
+      // ALTER TABLE drops any (n)/(p,s) qualifier — the parser skips it.
+      this.columnMetaStore?.setColumnType(this.metaDb, name, node.col, node.colType.toUpperCase(), null, null);
       await this.refreshIfActive(name);
       return { output: [{ text: `Added column ${node.col} to ${name}.`, cls: 'ok' }] };
     }
@@ -919,7 +926,7 @@ export class Executor implements IndexCommandsHost {
       if (cols.length <= 1) return { output: [{ text: 'ALTER TABLE: cannot drop the only column', cls: 'error' }] };
       const dropped = await this.dropAllIndexes(name);
       await this.db.exec(`ALTER TABLE ${q(name)} DROP COLUMN ${q(node.col)}`);
-      this.columnMetaStore?.dropColumn(name, node.col);
+      this.columnMetaStore?.dropColumn(this.metaDb, name, node.col);
       await this.refreshIfActive(name);
       return { output: [
         { text: `Dropped column ${node.col} from ${name}.`, cls: 'ok' },
@@ -932,7 +939,7 @@ export class Executor implements IndexCommandsHost {
       if (has(node.newName)) return { output: [{ text: `ALTER TABLE: column already exists: ${node.newName}`, cls: 'error' }] };
       const dropped = await this.dropAllIndexes(name);
       await this.db.exec(`ALTER TABLE ${q(name)} RENAME COLUMN ${q(node.col)} TO ${q(node.newName)}`);
-      this.columnMetaStore?.renameColumn(name, node.col, node.newName);
+      this.columnMetaStore?.renameColumn(this.metaDb, name, node.col, node.newName);
       await this.refreshIfActive(name);
       return { output: [
         { text: `Renamed ${node.col} to ${node.newName} in ${name}.`, cls: 'ok' },
@@ -961,11 +968,7 @@ export class Executor implements IndexCommandsHost {
       await this.db.exec(`CREATE TABLE ${q(name)} (${colDefs})`);
       await this.db.exec(`INSERT INTO ${q(name)} SELECT ${colList} FROM ${q(tmp)}`);
       await this.db.exec(`DROP TABLE ${q(tmp)}`);
-      if (node.colType.toUpperCase() === 'TIME') {
-        this.columnMetaStore?.setColumnType(name, node.col, 'TIME', null);
-      } else {
-        this.columnMetaStore?.dropColumn(name, node.col);
-      }
+      this.columnMetaStore?.setColumnType(this.metaDb, name, node.col, node.colType.toUpperCase(), null, null);
       await this.refreshIfActive(name);
       return { output: [
         { text: `Changed type of ${node.col} to ${node.colType} in ${name}.`, cls: 'ok' },

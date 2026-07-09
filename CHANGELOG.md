@@ -19,6 +19,25 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
   week containing the year's first Thursday. Early-January dates correctly report the
   previous year's week 52/53, and late-December dates week 1 of the next year. Accepts
   ISO `YYYY-MM-DD` or `MM/DD/YY`; invalid input returns 0. (#44)
+- `BROWSE` now validates each cell edit against its column's declared type before
+  committing. An invalid edit keeps the cell in edit mode, outlines it in red and shows
+  why (`HH:MM`, `multiple of 15`, `at most 2 decimal place(s)`, `not a real date`, …);
+  the error clears as soon as the value becomes valid. `DATE`, `TIME`/`TIME(n)`,
+  `NUM(p,s)`, `INT` and `LOGICAL` are checked; `CHAR`/`MEMO` stay unconstrained. The rules
+  live in `src/shared/cellValidation.ts` and run on both the client (instant feedback) and
+  the server (`grid-edit` is now validated authoritatively — previously it wrote straight
+  to SQLite with no check at all). (#45)
+
+### Fixed
+- `CREATE TABLE t (price NUM(8,2))` silently created a **phantom column named `2`** of
+  type `)`: the parser read the precision, then treated the scale as the next column
+  definition. The shipped `PRODUCTS`, `DEALS` and `SALES` demo tables all carried this
+  stray column. `NUM(p,s)` now parses correctly. Tables created before this fix keep the
+  stray column until recreated. (#45)
+- Column type metadata is now scoped per database. Two databases holding same-named
+  tables previously shared (and overwrote) one another's declared column types, so a
+  `TIME(15)` column in one database could be validated against another database's
+  `CHAR(20)` declaration of the same name. (#45)
 
 ---
 

@@ -1,10 +1,12 @@
 import type { WsClient } from '../ws/WsClient';
-import type { ColInfo } from '../shared/types';
+import type { ColInfo, ColumnTypeInfo } from '../shared/types';
+import { validateCellValue } from '../shared/cellValidation';
 
 export interface GridOptions {
   table: string;
   filter: string | null;
   columns: ColInfo[];
+  columnTypes: Record<string, ColumnTypeInfo>;
   rows: Record<string, unknown>[];
   ws: WsClient;
   onExit: () => void;
@@ -22,6 +24,7 @@ export class Grid {
 
   private rows: Row[] = [];
   private cols: string[] = [];
+  private columnTypes: Record<string, ColumnTypeInfo> = {};
   private selRow = 0;
   private selCol = 1;
   private editingCell: { r: number; c: number } | null = null;
@@ -42,6 +45,7 @@ export class Grid {
     this.onStatus = opts.onStatusChange;
 
     this.rows = opts.rows as Row[];
+    this.columnTypes = opts.columnTypes ?? {};
     this.cols = this.rows.length > 0
       ? Object.keys(this.rows[0]).filter(c => c !== '_rowid')
       : opts.columns.map(c => c.name);
@@ -61,6 +65,7 @@ export class Grid {
     this.ws.on('grid-open', (msg) => {
       const m = msg as any;
       this.rows = m.rows as Row[];
+      this.columnTypes = m.columnTypes ?? this.columnTypes;
       this.cols = this.rows.length > 0
         ? Object.keys(this.rows[0]).filter((c: string) => c !== '_rowid')
         : m.columns.map((c: ColInfo) => c.name);
@@ -174,10 +179,15 @@ export class Grid {
     inp.focus(); inp.select();
     this.editingCell = { r: ri, c: ci };
 
+    // Clear a stale error as soon as the value becomes valid again.
+    inp.addEventListener('input', () => {
+      if (!validateCellValue(colName, inp.value, this.columnTypes[colName])) this.clearCellError(td);
+    });
+
     inp.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === 'Tab') {
         e.preventDefault(); e.stopPropagation();
-        this.commitEdit(inp.value);
+        if (!this.commitEdit(inp.value)) return;   // invalid — stay in edit mode
         if (e.key === 'Tab') this.selectCell(ri, ci + 2);
       } else if (e.key === 'Escape') {
         e.preventDefault(); e.stopPropagation();
@@ -186,15 +196,46 @@ export class Grid {
     });
   }
 
-  private commitEdit(newValue: string) {
-    if (!this.editingCell) return;
+  /** @returns false when the value was rejected and the cell stays in edit mode. */
+  private commitEdit(newValue: string): boolean {
+    if (!this.editingCell) return false;
     const { r, c } = this.editingCell;
+    const colName = this.cols[c];
+
+    const error = validateCellValue(colName, newValue, this.columnTypes[colName]);
+    if (error) {
+      const td = this.tbody.querySelector<HTMLTableCellElement>(`td[data-ri="${r}"][data-ci="${c}"]`);
+      if (td) this.showCellError(td, error);
+      this.onStatus(error);
+      return false;
+    }
+
     const row = this.rows[r];
-    this.ws.send({ type: 'grid-edit', rowid: row._rowid as number, col: this.cols[c], value: newValue });
-    row[this.cols[c]] = newValue;
+    this.ws.send({ type: 'grid-edit', rowid: row._rowid as number, col: colName, value: newValue });
+    row[colName] = newValue;
     this.editingCell = null;
     this.renderBody();
     this.refreshSelection();
+    return true;
+  }
+
+  private showCellError(td: HTMLTableCellElement, message: string) {
+    td.classList.add('cell-invalid');
+    td.title = message;
+    let tip = td.querySelector<HTMLElement>('.cell-error');
+    if (!tip) {
+      tip = document.createElement('div');
+      tip.className = 'cell-error';
+      td.appendChild(tip);
+    }
+    tip.textContent = message;
+    td.querySelector<HTMLInputElement>('.cell-ed')?.focus();
+  }
+
+  private clearCellError(td: HTMLTableCellElement) {
+    td.classList.remove('cell-invalid');
+    td.removeAttribute('title');
+    td.querySelector('.cell-error')?.remove();
   }
 
   private cancelEdit() {

@@ -67,7 +67,7 @@ export class Terminal {
 
     ws.on('grid-open', (msg) => {
       const m = msg as any;
-      this.openGrid(m.table, m.filter, m.columns, m.rows);
+      this.openGrid(m.table, m.filter, m.columns, m.columnTypes, m.rows);
     });
 
     ws.on('data-changed', (msg) => {
@@ -227,7 +227,7 @@ export class Terminal {
 
   // ── Views ──────────────────────────────────────────────────────────────
 
-  private openGrid(table: string, filter: string | null, columns: any[], rows: any[]) {
+  private openGrid(table: string, filter: string | null, columns: any[], columnTypes: any, rows: any[]) {
     this.termView.classList.add('hidden');
     this.gridView.classList.remove('hidden');
 
@@ -235,6 +235,7 @@ export class Terminal {
       table,
       filter,
       columns,
+      columnTypes: columnTypes ?? {},
       rows,
       ws: this.ws,
       onExit: () => this.closeGrid(),

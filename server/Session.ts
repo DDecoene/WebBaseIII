@@ -7,6 +7,7 @@ import { programStore } from './ProgramStore.js';
 import { reportStore } from './ReportStore.js';
 import { indexStore } from './IndexStore.js';
 import { columnMetaStore } from './ColumnMetaStore.js';
+import { validateCellValue } from '../src/shared/cellValidation.js';
 import type { ClientMessage, ServerMessage, ColInfo } from '../src/shared/types.js';
 
 export class Session {
@@ -67,6 +68,15 @@ export class Session {
           const { rowid, col, value } = msg;
           const table = this.executor.area.table;
           if (table) {
+            // Authoritative check — the grid validates client-side for fast
+            // feedback, but a message can reach here without passing through it.
+            const db = this.executor.area.db ?? '';
+            const err = validateCellValue(col, value, columnMetaStore.getColumnType(db, table, col));
+            if (err) {
+              this.send({ type: 'output', lines: [{ text: `** ${err}`, cls: 'error' }] });
+              await this.sendGridData();
+              break;
+            }
             await this.bridge.exec(
               `UPDATE ${q(table)} SET ${q(col)} = ? WHERE rowid = ?`,
               [value, rowid]
@@ -346,8 +356,9 @@ export class Session {
       return;
     }
     const columns = await this.bridge.getStructure(area.table);
+    const columnTypes = columnMetaStore.listColumnTypes(area.db ?? '', area.table);
     const rows = await this.executor.getOrderedRowsWithIds(2000);
-    this.send({ type: 'grid-open', table: area.table, filter: area.filter, columns, rows });
+    this.send({ type: 'grid-open', table: area.table, filter: area.filter, columns, columnTypes, rows });
   }
 
   private sendStatus(): void {

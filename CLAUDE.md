@@ -51,7 +51,7 @@ server/
   ServerDatabaseBridge.ts  IDatabaseBridge impl wrapping better-sqlite3
   ProgramStore.ts       .prg program storage in data/system.sqlite3
   IndexStore.ts         Index metadata + active index in data/system.sqlite3
-  ColumnMetaStore.ts    Declared column types (TIME, TIME(n)) in data/system.sqlite3 — SQLite affinity can't distinguish TIME from CHAR/DATE
+  ColumnMetaStore.ts    Declared column types per (db, table, column) in data/system.sqlite3 — SQLite affinity can't distinguish TIME/DATE/CHAR, LOGICAL/INT, or recover NUM(p,s)
   ReportStore.ts        Report definition storage in data/system.sqlite3 (reports table)
   ReportRunner.ts       ASCII and HTML report rendering, group breaks, subtotals, grand totals
   DemoSeeder.ts         Seeds demos/*.prg into the program store and demos/reports/*.json into the report store at startup (demos win)
@@ -68,7 +68,7 @@ src/
     Terminal.ts         REPL UI — command history, multi-line block accumulation
 
   ui/
-    Grid.ts             BROWSE spreadsheet — inline cell editing, keyboard nav
+    Grid.ts             BROWSE spreadsheet — inline cell editing with per-column type validation, keyboard nav
     FormLayout.ts       @ SAY GET form engine — character-cell coordinates
     ProgramEditor.ts    .prg source editor UI
     ReportPreview.ts    iframe-based HTML report preview panel (Esc to close, Ctrl+P to print)
@@ -81,7 +81,8 @@ src/
     WsClient.ts         Browser WebSocket client — sends commands, receives messages
 
   shared/
-    types.ts            Shared TS types (IDatabaseBridge, IIndexStore, WS message shapes)
+    types.ts            Shared TS types (IDatabaseBridge, IIndexStore, IColumnMetaStore, WS message shapes)
+    cellValidation.ts   Declared-type cell validation, shared by Grid.ts (inline UX) and Session (authoritative)
 
   main.ts               Boot: connect WS → wire terminal/grid/form/editor
 
@@ -111,6 +112,9 @@ tests/
   ProgramStore.test.ts
   AlterTable.test.ts    ALTER TABLE + MODIFY STRUCTURE integration tests
   TimeType.test.ts      TIME / TIME(n) columns — creation, structure, write validation
+  ColumnMeta.test.ts    NUM(p,s) parsing, declared types in LIST STRUCTURE, grid-open columnTypes, server-side grid-edit validation
+  ColumnMetaStore.test.ts  Per-(db,table,column) type metadata + legacy-schema migration
+  CellValidation.test.ts   Shared per-type cell validation rules
   Print.test.ts         `?` / `??` print command
   Aggregate.test.ts     `SUM` / `AVERAGE`
   Builtins.test.ts / BuiltinsParse.test.ts   built-in functions (direct + through the parser)
@@ -181,7 +185,24 @@ WebBase-III supports **unlimited work areas** (no DOS 10-area limit). Cross-area
 | `DATE` | | `TEXT` |
 | `TIME` / `TIME(n)` | | `TEXT` |
 
-`TIME` stores `HH:MM` (24-hour). The optional `TIME(n)` qualifier (only via `CREATE TABLE` — not yet carried through `ALTER TABLE`) requires minutes to be a multiple of `n`, e.g. `TIME(15)` only accepts `:00`/`:15`/`:30`/`:45`. `APPEND RECORD` leaves new fields `NULL` (unvalidated); `REPLACE ... WITH` rejects a malformed or off-granularity `TIME` value with `** Error: ...` and does not write it. `LIST STRUCTURE` prints the declared type (`TIME`, `TIME(15)`) rather than the raw SQLite storage class.
+`TIME` stores `HH:MM` (24-hour). The optional `TIME(n)` qualifier (only via `CREATE TABLE` — not carried through `ALTER TABLE`) requires minutes to be a multiple of `n`, e.g. `TIME(15)` only accepts `:00`/`:15`/`:30`/`:45`. `APPEND RECORD` leaves new fields `NULL` (unvalidated); `REPLACE ... WITH` rejects a malformed or off-granularity `TIME` value with `** Error: ...` and does not write it. `LIST STRUCTURE` prints the declared type (`TIME`, `NUM(8,2)`, `TIME(15)`) rather than the raw SQLite storage class.
+
+Declared types are recorded per `(database, table, column)` in `server/ColumnMetaStore.ts`, because SQLite only keeps a storage affinity: `TIME`/`DATE`/`CHAR` are all `TEXT`, `LOGICAL`/`INT` are both `INTEGER`, and a `NUM(p,s)` qualifier is lost entirely.
+
+#### Cell validation (`BROWSE`)
+
+`src/shared/cellValidation.ts` holds the rules and runs on **both** sides: `Grid.ts` checks before commit (an invalid edit keeps the cell in edit mode, outlined red, with the reason shown; the error clears as the value becomes valid), and `Session`'s `grid-edit` handler re-checks authoritatively before writing — a WS message can reach the server without passing through the grid.
+
+| Type | Accepted |
+|---|---|
+| `DATE` | `YYYY-MM-DD`, a real calendar date (rejects `2023-02-29`) |
+| `TIME` / `TIME(n)` | `HH:MM`; minutes a multiple of `n` when set |
+| `NUM(p,s)` | numeric; ≤ `s` decimals, ≤ `p - s` integer digits |
+| `INT` | a whole number |
+| `LOGICAL` | `.T.`/`.F.`/`.TRUE.`/`.FALSE.`/`T`/`F`/`TRUE`/`FALSE`/`1`/`0` |
+| `CHAR` / `MEMO` | anything (length is not enforced) |
+
+An empty value is always allowed (clears the cell). Columns with no recorded declared type are unconstrained. `REPLACE` enforces only `TIME` — widening it would change the semantics of existing programs.
 
 ### Indexing & search
 | Command | What it does |
@@ -293,7 +314,7 @@ line.
 - ~~`TIME` column type~~ — `TIME`/`TIME(n)` columns storing `HH:MM`, with a minute-granularity
   qualifier validated on write; declared types tracked in `server/ColumnMetaStore.ts` (#43) ✅
 - ~~`WEEK()` built-in~~ — ISO-8601 week number (#44) ✅
-- BROWSE per-cell validation — grid rejects invalid edits per column type (#45)
+- ~~BROWSE per-cell validation~~ — grid rejects invalid edits per column type, validated on both client and server via `src/shared/cellValidation.ts` (#45) ✅
 - `demos/overtime.prg` — overtime tracker showcasing all three of the above (#46)
 
 ## Boolean literals
@@ -303,11 +324,11 @@ Both styles accepted: `TRUE`/`FALSE` and `.T.`/`.TRUE.`/`.F.`/`.FALSE.` (dBASE I
 ## Testing
 
 ```bash
-npm test                # Vitest unit + integration (281 tests)
+npm test                # Vitest unit + integration (316 tests)
 npx playwright test     # E2E browser tests — requires dev server on :5173/:3000
 ```
 
-Playwright suites (75 tests): `tests/integration.spec.ts` (20 tests — full REPL scenario), `tests/assistant.spec.ts` (21 tests — sidebar, wizards, report designer, MODIFY STRUCTURE round-trip, `TIME(15)` column + REPLACE validation, program run, CSV/SORT/SUM-AVERAGE/REINDEX/PACK actions, demo launchers), `tests/inventory.spec.ts` (8 tests — INVENTORY.prg menu + valuation/low-stock report/sort/CSV/JOIN), `tests/crm.spec.ts` (6 tests — CRM demo menu, pipeline summary, sort, report, CSV, JOIN), `tests/parity-commands.spec.ts` (5 tests — `?`/`??`, built-in functions, `WEEK()`, `SUM`/`AVERAGE`, `SORT ON … TO`), `tests/multiarea.spec.ts` (4 tests — multi-work-area, relations, alias.field), `tests/demos.spec.ts` (4 tests — demo program + report seeding), `tests/copycsv.spec.ts` (2 tests — COPY TO download + APPEND FROM upload), `tests/splash.spec.ts` (2 tests — version banner + demo discoverability), `tests/join.spec.ts` (1 test — JOIN materialization), `tests/propagation.spec.ts` (1 test — live multiuser refresh), `tests/program-side-effects.spec.ts` (1 test — CSV/report side-effects fire from inside a program block).
+Playwright suites (79 tests): `tests/assistant.spec.ts` (22 tests — sidebar, wizards, report designer, MODIFY STRUCTURE round-trip, `TIME(15)` column + REPLACE validation, Browse-action grid validation, program run, CSV/SORT/SUM-AVERAGE/REINDEX/PACK actions, demo launchers), `tests/integration.spec.ts` (20 tests — full REPL scenario), `tests/inventory.spec.ts` (8 tests — INVENTORY.prg menu + valuation/low-stock report/sort/CSV/JOIN), `tests/crm.spec.ts` (6 tests — CRM demo menu, pipeline summary, sort, report, CSV, JOIN), `tests/parity-commands.spec.ts` (5 tests — `?`/`??`, built-in functions, `WEEK()`, `SUM`/`AVERAGE`, `SORT ON … TO`), `tests/multiarea.spec.ts` (4 tests — multi-work-area, relations, alias.field), `tests/demos.spec.ts` (4 tests — demo program + report seeding), `tests/grid-validation.spec.ts` (3 tests — BROWSE per-cell validation: TIME(15), NUM(p,s)/DATE, Esc abandons), `tests/copycsv.spec.ts` (2 tests — COPY TO download + APPEND FROM upload), `tests/splash.spec.ts` (2 tests — version banner + demo discoverability), `tests/join.spec.ts` (1 test — JOIN materialization), `tests/propagation.spec.ts` (1 test — live multiuser refresh), `tests/program-side-effects.spec.ts` (1 test — CSV/report side-effects fire from inside a program block).
 
 ## Definition of done
 

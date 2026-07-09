@@ -76,7 +76,7 @@ export type ASTNode =
   | { type: 'FIND';        value: string }
   | { type: 'UNKNOWN';     raw: string };
 
-export interface ColDef { name: string; colType: string; size?: number; }
+export interface ColDef { name: string; colType: string; size?: number; scale?: number; }
 
 export type Expr =
   | { k: 'lit';  v: string | number | boolean }
@@ -476,12 +476,19 @@ export class Parser {
         const cname = this.ident();
         const ctype = this.ident();
         let size: number | undefined;
+        let scale: number | undefined;
         if (this.peek().type === 'LPAREN') {
           this.adv();
           size = this.tryNum() ?? undefined;
+          // NUM(p,s) — the second argument is the scale. Without consuming it the
+          // comma ends the column and the scale is parsed as the next column name.
+          if (this.peek().type === 'COMMA') {
+            this.adv();
+            scale = this.tryNum() ?? undefined;
+          }
           if (this.peek().type === 'RPAREN') this.adv();
         }
-        cols.push({ name: cname, colType: ctype, size });
+        cols.push({ name: cname, colType: ctype, size, scale });
         if (this.peek().type === 'COMMA') this.adv();
       }
       if (this.peek().type === 'RPAREN') this.adv();
@@ -506,12 +513,13 @@ export class Parser {
     throw new Error('Expected ADD, DROP, RENAME, or ALTER after ALTER TABLE <name>');
   }
 
-  // Consume an optional "(n)" length suffix on a type (e.g. CHAR(20)); the
-  // length is ignored — SQLite types are not length-bound (matches CREATE TABLE).
+  // Consume an optional "(n)" or "(p,s)" suffix on a type (e.g. CHAR(20), NUM(8,2));
+  // the values are ignored — ALTER TABLE does not carry the qualifier through.
   private skipTypeSize(): void {
     if (this.peek().type === 'LPAREN') {
       this.adv();
       this.tryNum();
+      if (this.peek().type === 'COMMA') { this.adv(); this.tryNum(); }
       if (this.peek().type === 'RPAREN') this.adv();
     }
   }

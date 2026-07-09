@@ -50,21 +50,20 @@ export interface IIndexStore {
   dropTable(tableName: string): void;
 }
 
-// Metadata for column types SQLite's own affinity can't distinguish (e.g. TIME
-// vs CHAR — both store as TEXT). qualifier carries a type-specific parameter,
-// e.g. the minute-granularity in TIME(15).
-export interface ColumnTypeInfo {
-  baseType: string;
-  qualifier: number | null;
-}
+// Metadata for the column types SQLite's own affinity can't distinguish (TIME vs
+// DATE vs CHAR are all TEXT; LOGICAL vs INT are both INTEGER; NUM(p,s) loses its
+// precision/scale). qualifier carries CHAR(n) length / TIME(n) granularity /
+// NUM(p,s) precision; scale carries the NUM(p,s) scale.
+export type ColumnTypeInfo = import('./cellValidation').ColumnMeta;
 
+// Scoped by database: two databases can hold same-named tables with different types.
 export interface IColumnMetaStore {
-  setColumnType(tableName: string, colName: string, baseType: string, qualifier: number | null): void;
-  getColumnType(tableName: string, colName: string): ColumnTypeInfo | null;
-  listColumnTypes(tableName: string): Record<string, ColumnTypeInfo>;
-  renameColumn(tableName: string, oldName: string, newName: string): void;
-  dropColumn(tableName: string, colName: string): void;
-  dropTable(tableName: string): void;
+  setColumnType(dbName: string, tableName: string, colName: string, baseType: string, qualifier: number | null, scale: number | null): void;
+  getColumnType(dbName: string, tableName: string, colName: string): ColumnTypeInfo | null;
+  listColumnTypes(dbName: string, tableName: string): Record<string, ColumnTypeInfo>;
+  renameColumn(dbName: string, tableName: string, oldName: string, newName: string): void;
+  dropColumn(dbName: string, tableName: string, colName: string): void;
+  dropTable(dbName: string, tableName: string): void;
 }
 
 export interface ReportColumn {
@@ -145,7 +144,7 @@ export type ServerMessage =
   | { type: 'output'; lines: OutputLine[] }
   | { type: 'status'; db: string | null; table: string | null; record: number; total: number }
   | { type: 'input-request'; prompt: string }
-  | { type: 'grid-open'; table: string; filter: string | null; columns: ColInfo[]; rows: Record<string, unknown>[] }
+  | { type: 'grid-open'; table: string; filter: string | null; columns: ColInfo[]; columnTypes: Record<string, ColumnTypeInfo>; rows: Record<string, unknown>[] }
   | { type: 'modstruct-open'; table: string; columns: ColInfo[] }
   | { type: 'form-open'; fields: FormField[] }
   | { type: 'program-open'; name: string; content: string }
