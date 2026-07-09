@@ -1,4 +1,4 @@
-import { IDatabaseBridge, IIndexStore, OutputLine, FormField, WorkArea, ClientSideEffect } from '../shared/types';
+import { IDatabaseBridge, IIndexStore, IColumnMetaStore, OutputLine, FormField, WorkArea, ClientSideEffect } from '../shared/types';
 import { ASTNode, Expr, ColDef, Parser } from './Parser';
 import { Lexer } from './Lexer';
 import { callStateless } from './Builtins';
@@ -35,10 +35,27 @@ type DbType = 'TEXT' | 'REAL' | 'INTEGER' | 'BLOB';
 
 function mapType(t: string): DbType {
   switch (t.toUpperCase()) {
-    case 'CHAR': case 'CHARACTER': case 'VARCHAR': case 'STRING': case 'MEMO': case 'DATE': return 'TEXT';
+    case 'CHAR': case 'CHARACTER': case 'VARCHAR': case 'STRING': case 'MEMO': case 'DATE': case 'TIME': return 'TEXT';
     case 'NUM': case 'NUMERIC': case 'FLOAT': case 'DOUBLE': case 'DECIMAL': return 'REAL';
     case 'INT': case 'INTEGER': case 'LOGICAL': case 'BOOLEAN': return 'INTEGER';
     default: return 'TEXT';
+  }
+}
+
+const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+// Throws if `value` is not a well-formed HH:MM string satisfying `qualifier`
+// (a minute-granularity requirement, e.g. 15 for TIME(15)).
+function validateTimeValue(field: string, value: unknown, qualifier: number | null): void {
+  if (value === null || value === undefined) return;
+  const s = String(value);
+  const m = TIME_RE.exec(s);
+  if (!m) {
+    throw new Error(`${field}: invalid TIME value "${s}" — expected HH:MM (00-23:00-59)`);
+  }
+  const minutes = Number(m[2]);
+  if (qualifier && minutes % qualifier !== 0) {
+    throw new Error(`${field}: TIME value "${s}" violates TIME(${qualifier}) granularity — minutes must be a multiple of ${qualifier}`);
   }
 }
 
@@ -69,6 +86,7 @@ export class Executor implements IndexCommandsHost {
   constructor(
     public db: IDatabaseBridge,
     public indexStore: IIndexStore | null = null,
+    public columnMetaStore: IColumnMetaStore | null = null,
   ) {
     this.areas = new Map([['1', makeArea('1')]]);
     this.activeAlias = '1';
@@ -367,13 +385,16 @@ export class Executor implements IndexCommandsHost {
   private async doListStruct(): Promise<ExecResult> {
     this.requireTable();
     const cols = await this.db.getStructure(this.area.table!);
+    const meta = this.columnMetaStore?.listColumnTypes(this.area.table!) ?? {};
     const out: OutputLine[] = [
       { text: `Structure of table: ${this.area.table}`, cls: 'hdr' },
       { text: `${'#'.padEnd(4)}  ${'Field'.padEnd(20)}  ${'Type'.padEnd(10)}  ${'Null'.padEnd(5)}  ${'PK'}`, cls: 'hdr' },
       { text: `${'─'.repeat(55)}`, cls: 'sep' },
     ];
     cols.forEach(c => {
-      out.push({ text: `${String(c.cid + 1).padEnd(4)}  ${c.name.padEnd(20)}  ${c.type.padEnd(10)}  ${c.notnull ? 'NO' : 'YES'.padEnd(5)}  ${c.pk ? 'PK' : ''}` });
+      const info = meta[c.name];
+      const typeText = info ? (info.qualifier ? `${info.baseType}(${info.qualifier})` : info.baseType) : c.type;
+      out.push({ text: `${String(c.cid + 1).padEnd(4)}  ${c.name.padEnd(20)}  ${typeText.padEnd(10)}  ${c.notnull ? 'NO' : 'YES'.padEnd(5)}  ${c.pk ? 'PK' : ''}` });
     });
     return { output: out };
   }
@@ -411,6 +432,12 @@ export class Executor implements IndexCommandsHost {
     this.requireTable();
     await this.refreshRecCount();
     const pairs = fields.map(f => ({ field: f.field, value: this.evalExpr(f.value) }));
+    for (const p of pairs) {
+      const info = this.columnMetaStore?.getColumnType(this.area.table!, p.field);
+      if (info?.baseType === 'TIME') {
+        validateTimeValue(p.field, p.value, info.qualifier);
+      }
+    }
     const setClauses = pairs.map(p => `${q(p.field)} = ?`).join(', ');
     const params = pairs.map(p => typeof p.value === 'boolean' ? (p.value ? 1 : 0) : p.value);
     if (scope === 'ALL') {
@@ -740,8 +767,18 @@ export class Executor implements IndexCommandsHost {
     const colsSql = cols.length
       ? cols.map(c => `${q(c.name)} ${mapType(c.colType)}`).join(', ')
       : '"id" INTEGER PRIMARY KEY AUTOINCREMENT';
+    for (const c of cols) {
+      if (c.colType.toUpperCase() === 'TIME' && c.size !== undefined && (!Number.isInteger(c.size) || c.size < 1 || c.size > 59)) {
+        throw new Error(`CREATE TABLE: invalid TIME granularity qualifier TIME(${c.size}) — must be an integer between 1 and 59`);
+      }
+    }
     const sql = `CREATE TABLE IF NOT EXISTS ${q(name)} (${colsSql})`;
     await this.db.exec(sql);
+    for (const c of cols) {
+      if (c.colType.toUpperCase() === 'TIME') {
+        this.columnMetaStore?.setColumnType(name, c.name, 'TIME', c.size ?? null);
+      }
+    }
     this.area.table = name;
     this.area.filter = null;
     this.area.rowPtr = 1;
@@ -848,6 +885,7 @@ export class Executor implements IndexCommandsHost {
   private async doDropTable(name: string): Promise<ExecResult> {
     await this.db.exec(`DROP TABLE IF EXISTS ${q(name)}`);
     this.indexStore?.dropTable(name);
+    this.columnMetaStore?.dropTable(name);
     if (this.area.table === name) {
       this.area.table = null;
       this.area.activeIndex = null;
@@ -881,6 +919,7 @@ export class Executor implements IndexCommandsHost {
       if (cols.length <= 1) return { output: [{ text: 'ALTER TABLE: cannot drop the only column', cls: 'error' }] };
       const dropped = await this.dropAllIndexes(name);
       await this.db.exec(`ALTER TABLE ${q(name)} DROP COLUMN ${q(node.col)}`);
+      this.columnMetaStore?.dropColumn(name, node.col);
       await this.refreshIfActive(name);
       return { output: [
         { text: `Dropped column ${node.col} from ${name}.`, cls: 'ok' },
@@ -893,6 +932,7 @@ export class Executor implements IndexCommandsHost {
       if (has(node.newName)) return { output: [{ text: `ALTER TABLE: column already exists: ${node.newName}`, cls: 'error' }] };
       const dropped = await this.dropAllIndexes(name);
       await this.db.exec(`ALTER TABLE ${q(name)} RENAME COLUMN ${q(node.col)} TO ${q(node.newName)}`);
+      this.columnMetaStore?.renameColumn(name, node.col, node.newName);
       await this.refreshIfActive(name);
       return { output: [
         { text: `Renamed ${node.col} to ${node.newName} in ${name}.`, cls: 'ok' },
@@ -921,6 +961,11 @@ export class Executor implements IndexCommandsHost {
       await this.db.exec(`CREATE TABLE ${q(name)} (${colDefs})`);
       await this.db.exec(`INSERT INTO ${q(name)} SELECT ${colList} FROM ${q(tmp)}`);
       await this.db.exec(`DROP TABLE ${q(tmp)}`);
+      if (node.colType.toUpperCase() === 'TIME') {
+        this.columnMetaStore?.setColumnType(name, node.col, 'TIME', null);
+      } else {
+        this.columnMetaStore?.dropColumn(name, node.col);
+      }
       await this.refreshIfActive(name);
       return { output: [
         { text: `Changed type of ${node.col} to ${node.colType} in ${name}.`, cls: 'ok' },

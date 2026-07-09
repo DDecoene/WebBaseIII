@@ -6,6 +6,7 @@ import { ServerDatabaseBridge } from './ServerDatabaseBridge.js';
 import { programStore } from './ProgramStore.js';
 import { reportStore } from './ReportStore.js';
 import { indexStore } from './IndexStore.js';
+import { columnMetaStore } from './ColumnMetaStore.js';
 import type { ClientMessage, ServerMessage, ColInfo } from '../src/shared/types.js';
 
 export class Session {
@@ -23,7 +24,7 @@ export class Session {
     private notifyChange?: (db: string, table: string) => void,
   ) {
     this.bridge = new ServerDatabaseBridge();
-    this.executor = new Executor(this.bridge, indexStore);
+    this.executor = new Executor(this.bridge, indexStore, columnMetaStore);
     this.bridge.onMutate = () => { this.dirty = true; };
     // Fire-and-forget client side-effects (CSV download, report preview, CSV
     // upload picker) are emitted immediately so they work at any nesting depth,

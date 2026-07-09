@@ -85,6 +85,55 @@ test.describe('Assistant wizards — table', () => {
     await expect(page.locator('#terminal-output')).toContainText('. CREATE TABLE wiz_products (NAME CHAR(30))');
     await expect(page.locator('#status-table')).toContainText('WIZ_PRODUCTS', { timeout: 5000 });
   });
+
+  test('New table wizard supports TIME(n) and REPLACE validates it end-to-end', async ({ page }) => {
+    await boot(page);
+    await page.locator('#terminal-input').fill('USE DATABASE ASSISTDEMO');
+    await page.locator('#terminal-input').press('Enter');
+    await page.waitForTimeout(400);
+    await page.locator('#terminal-input').fill('DROP TABLE wiz_shifts');
+    await page.locator('#terminal-input').press('Enter');
+    await page.waitForTimeout(400);
+
+    await clickAction(page, 'New table…');
+    await expect(page.locator('#wizard-view')).toBeVisible({ timeout: 5000 });
+
+    await page.locator('#wz-table-name').fill('wiz_shifts');
+    await page.locator('.wz-col-name').first().fill('STARTTIME');
+    await page.locator('.wz-col-type').first().selectOption('TIME');
+    await page.locator('.wz-col-len').first().fill('15');
+
+    await expect(page.locator('.wz-preview')).toContainText('CREATE TABLE wiz_shifts (STARTTIME TIME(15))');
+    await page.locator('#wizard-view button', { hasText: 'Create table' }).click();
+    await expect(page.locator('#terminal-view')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('#terminal-output')).toContainText('. CREATE TABLE wiz_shifts (STARTTIME TIME(15))');
+
+    await page.locator('#terminal-input').fill('LIST STRUCTURE');
+    await page.locator('#terminal-input').press('Enter');
+    await page.waitForTimeout(400);
+    await expect(page.locator('#terminal-output')).toContainText('TIME(15)');
+
+    await page.locator('#terminal-input').fill('APPEND RECORD');
+    await page.locator('#terminal-input').press('Enter');
+    await page.waitForTimeout(400);
+
+    // Off-granularity value is rejected — no silent coercion.
+    await page.locator('#terminal-input').fill('REPLACE STARTTIME WITH "08:07"');
+    await page.locator('#terminal-input').press('Enter');
+    await page.waitForTimeout(400);
+    await expect(page.locator('#terminal-output')).toContainText('** Error');
+
+    // Valid quarter-hour value commits.
+    await page.locator('#terminal-input').fill('REPLACE STARTTIME WITH "08:15"');
+    await page.locator('#terminal-input').press('Enter');
+    await page.waitForTimeout(400);
+    await expect(page.locator('#terminal-output')).toContainText('Replaced');
+
+    await page.locator('#terminal-input').fill('LIST');
+    await page.locator('#terminal-input').press('Enter');
+    await page.waitForTimeout(400);
+    await expect(page.locator('#terminal-output')).toContainText('08:15');
+  });
 });
 
 test.describe('Assistant wizards — filter / index / search', () => {

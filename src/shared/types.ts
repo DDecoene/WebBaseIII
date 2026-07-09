@@ -50,6 +50,23 @@ export interface IIndexStore {
   dropTable(tableName: string): void;
 }
 
+// Metadata for column types SQLite's own affinity can't distinguish (e.g. TIME
+// vs CHAR — both store as TEXT). qualifier carries a type-specific parameter,
+// e.g. the minute-granularity in TIME(15).
+export interface ColumnTypeInfo {
+  baseType: string;
+  qualifier: number | null;
+}
+
+export interface IColumnMetaStore {
+  setColumnType(tableName: string, colName: string, baseType: string, qualifier: number | null): void;
+  getColumnType(tableName: string, colName: string): ColumnTypeInfo | null;
+  listColumnTypes(tableName: string): Record<string, ColumnTypeInfo>;
+  renameColumn(tableName: string, oldName: string, newName: string): void;
+  dropColumn(tableName: string, colName: string): void;
+  dropTable(tableName: string): void;
+}
+
 export interface ReportColumn {
   field: string;
   heading: string;

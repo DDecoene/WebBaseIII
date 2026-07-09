@@ -1,8 +1,9 @@
 import { WizardShell } from './WizardShell';
 
 const NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
-const TYPES = ['CHAR', 'NUM', 'INT', 'DATE', 'LOGICAL', 'MEMO'] as const;
+const TYPES = ['CHAR', 'NUM', 'INT', 'DATE', 'TIME', 'LOGICAL', 'MEMO'] as const;
 const NEEDS_LEN = new Set(['CHAR', 'NUM']);
+const OPTIONAL_LEN = new Set(['TIME']);
 
 interface ColRow { name: HTMLInputElement; type: HTMLSelectElement; len: HTMLInputElement; }
 
@@ -30,6 +31,15 @@ export function openTableWizard(run: (cmd: string) => void, onClose: () => void)
         const len = parseInt(r.len.value, 10);
         if (!len || len < 1) return { cmd: null, err: `Length required for ${n} (${t})` };
         cols.push(`${n} ${t}(${len})`);
+      } else if (OPTIONAL_LEN.has(t)) {
+        const raw = r.len.value.trim();
+        if (raw) {
+          const len = parseInt(raw, 10);
+          if (!len || len < 1) return { cmd: null, err: `Invalid granularity for ${n} (${t})` };
+          cols.push(`${n} ${t}(${len})`);
+        } else {
+          cols.push(`${n} ${t}`);
+        }
       } else {
         cols.push(`${n} ${t}`);
       }
@@ -65,7 +75,7 @@ export function openTableWizard(run: (cmd: string) => void, onClose: () => void)
 
   shell = new WizardShell(
     'New table',
-    'Define columns; blank rows are ignored. CHAR and NUM need a length.',
+    'Define columns; blank rows are ignored. CHAR and NUM need a length; TIME takes an optional minute-granularity (e.g. 15).',
     { okLabel: 'Create table', onOk: () => {
         const { cmd } = buildCommand();
         if (cmd) { run(cmd); shell.close(); }

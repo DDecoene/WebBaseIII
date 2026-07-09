@@ -2,7 +2,7 @@ import { WizardShell } from './WizardShell';
 import type { ColInfo } from '../../shared/types';
 
 const NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
-const TYPES = ['CHAR', 'NUM', 'INT', 'DATE', 'LOGICAL', 'MEMO'] as const;
+const TYPES = ['CHAR', 'NUM', 'INT', 'DATE', 'TIME', 'LOGICAL', 'MEMO'] as const;
 
 // Map an existing SQLite storage type back to a W3Script type for the picker.
 function w3type(sqlType: string): string {
