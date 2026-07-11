@@ -102,6 +102,22 @@ resolves field names inside expressions.
 
 `READ` writes field-bound values on submit. Escape writes nothing.
 
+**Fields shadow memory variables.** If the active table has a column with the
+GET's name, the field wins — even when a memory variable of that name already
+exists. The alternative, letting an earlier `STORE` change what a `GET` means,
+would make the binding depend on execution history. Field-over-memvar
+precedence is also what dBASE III did; the community's universal `m_` prefix
+convention exists because of it, and every `GET` in the demos already follows
+that convention (audited against the golden schemas — no demo GET name collides
+with a column). README documents the rule as a behavior change for programs
+that `GET` a variable whose name matches a column of the table in use.
+
+At `READ`, each field-bound `GET` resolves its record once — the alias captured
+at declaration, its current record via the `fetchCurrentRow` path — and keeps
+the SQLite `rowid`. `form-submit` writes by that rowid, exactly as `grid-edit`
+already does, so pointer motion between `READ` and submit cannot retarget the
+write.
+
 ## Resolution
 
 A `table` lookup resolves server-side to:
@@ -110,7 +126,7 @@ A `table` lookup resolves server-side to:
 SELECT DISTINCT <column>[, <display>] FROM <table> ORDER BY 1
 ```
 
-capped at 1000 rows. A `list` lookup needs no resolution.
+with a 1000-distinct-value ceiling. A `list` lookup needs no resolution.
 
 Resolution is performed by a new `server/LookupResolver.ts`, which takes the
 database bridge and a `Lookup` and returns `{value,label}[]`. It is the only
@@ -118,10 +134,15 @@ place that reads lookup source tables.
 
 ### Degradation
 
-If the source table or column is missing, or the query returns zero rows, the
-field degrades to free text and the command emits a `warn` line. It must never
-make a form unopenable or a column unwritable — a user who drops the lookup
-source table must still be able to edit records.
+If the source table or column is missing, the query returns zero rows, or the
+source exceeds the 1000-value ceiling, the field degrades to free text and the
+command emits a `warn` line. It must never make a form unopenable or a column
+unwritable — a user who drops the lookup source table must still be able to
+edit records.
+
+The ceiling degrades, never truncates. A clipped option list would be worse
+than none: the dropdown would hide legal values while membership validation
+rejected them.
 
 Membership validation is skipped for a lookup that cannot be resolved, for the
 same reason. An unresolvable lookup is a warning, not a lock.
@@ -144,8 +165,14 @@ type="text"` otherwise.
 `Session`'s `form-submit` handler (`server/Session.ts:49`) currently calls
 `executor.setVar(k, v)` for every field. It must branch on `target`: variables
 still `setVar`; fields are validated (declared type *and* lookup membership) and
-then written to the current record. A validation failure keeps the form open with
-the offending field outlined, matching the grid's behavior.
+written to their captured rowids. Validation is all-or-nothing — every value is
+checked before any is written, so a mid-form failure cannot leave half a record
+behind. Targets come from the field list the Session retained at `READ`, never
+from the client's message, so a forged `form-submit` cannot redirect a write to
+an arbitrary column — the same reasoning that makes `grid-edit` re-check
+server-side. A rejection is reported with a new `form-error` server message
+naming the offending fields and reasons; the client keeps the form open and
+outlines them, matching the grid's behavior.
 
 A field-bound `GET` with no current record (`RECNO() == 0`) is an error:
 `** Error: GET <field>: no current record`.
@@ -157,6 +184,10 @@ resolved `options`. `Grid.ts` opens a `<select>` rather than a text input for a
 lookup column. The dropdown *is* the validation on the happy path; the server
 still re-checks.
 
+Outside edit mode the cell shows the stored value, matching `LIST` and report
+output; only the edit dropdown shows `display` labels. Labels in static cells
+would make the grid disagree with every other surface that prints the column.
+
 A `<select>` inside the grid's `overflow: hidden` cell is exactly the clipping
 trap from #46. Its Playwright case asserts `toBeInViewport()`, and the change is
 inspected in a screenshot before it is believed.
@@ -167,6 +198,12 @@ inspected in a screenshot before it is believed.
 against the resolved option values, keeping the existing two-sided pattern: the
 grid checks before commit, `Session`'s `grid-edit` handler re-checks
 authoritatively.
+
+Membership is an exact, case-sensitive string comparison against the stored
+value. The server re-resolves a `table` lookup at write time rather than
+reusing a list resolved at `grid-open` or `READ`, so a value that became legal
+after the client's list was built is accepted, and one that vanished is
+rejected.
 
 `REPLACE` gains the same check. This is additive, not a widening of the existing
 "`REPLACE` enforces only `TIME`" rule: membership is enforced only on columns
@@ -180,10 +217,16 @@ existing `.prg` changes behavior.
 `ColumnMetaStore` gains `lookup_kind`, `lookup_table`, `lookup_col`,
 `lookup_display`, and `lookup_values` (JSON array for the literal form).
 
-The store already carries a drop-and-recreate dev migration
-(`server/ColumnMetaStore.ts:38`), justified because its rows only cache what
-`CREATE TABLE` re-records. The same applies here: extend that migration's column
-check rather than back-filling.
+The store's existing drop-and-recreate migration (`server/ColumnMetaStore.ts:38`)
+must **not** be extended to cover the new columns. It was justified as
+pre-release schema churn; v1.2.0 has since shipped, and a v1.2.0 store passes
+the existing check (it has `db_name` and `scale`) — widening the check to also
+require a lookup column would drop `column_types` on every released user's
+first v1.3.0 start, silently erasing their declared types: `TIME(15)` and
+`NUM(p,s)` validation would stop until each table was re-created. The new
+columns arrive additively — `ALTER TABLE column_types ADD COLUMN …` for each
+one missing — preserving existing rows. Fresh installs get the full schema from
+the constructor's `CREATE TABLE IF NOT EXISTS`.
 
 The store is keyed by `(db_name, table_name, col_name)`. Per `CLAUDE.md`'s test
 discipline — "when state is keyed by name, write the test that uses two" — the
@@ -197,7 +240,8 @@ holds one row per `(SCHEDID, DOW)`, so a description there would repeat five
 times per schedule.
 
 `EMPLOYEES.SCHEDID` declares `LOOKUP SCHEDULES.SCHEDID DISPLAY DESCR`. The
-Add-Employee form becomes field-bound.
+Add-Employee flow becomes field-bound for `NAME` and `SCHEDID`; the id stays a
+memory variable (see Blank-record cleanup).
 
 ### Blank-record cleanup
 
@@ -206,30 +250,49 @@ A field-bound `GET` needs a record to bind to, so `APPEND RECORD` must precede
 duplicate, and appends only if new. Inverted, a blank row exists before the
 duplicate is discovered.
 
-The program cleans up explicitly. `RECNO()` after `APPEND RECORD` gives it the
-handle:
+The program owns the cleanup; no staged-insert machinery is added, because a
+record that materializes only on submit would invent a transaction concept
+W3Script does not have and would force `RECNO()`/`RECCOUNT()` to lie inside the
+form.
+
+The obvious single-form shape — capture `RECNO()` after `APPEND RECORD`, `GO`
+back and `DELETE` on a duplicate — does not survive this codebase's pointer
+semantics. `RECNO()` is a position in active-index order, and writing the key
+field moves the new record within `BYEMP`, so the captured position goes stale;
+and once two records share a key, `SEEK` cannot tell the new one from the old.
+`overtime.prg` therefore keeps its check-first order and splits the entry into
+two forms, appending only once the id is known to be new:
 
 ```
-APPEND RECORD
-STORE RECNO() TO m_new
-@ 4, 5 SAY "Employee ID: " GET EMPID
-@ 6, 5 SAY "Schedule   : " GET SCHEDID
+@ 4, 5 SAY "Employee ID (4): " GET m_emp
 READ
-SEEK TRIM(EMPID)
-IF FOUND() .AND. RECNO() <> m_new
-  GO m_new
-  DELETE
-  @ 8, 5 SAY "Employee already exists"
+SET INDEX TO BYEMP
+SEEK TRIM(m_emp)
+IF FOUND()
+  @ 8, 5 SAY "Employee already exists: " + TRIM(m_emp)
+ELSE
+  SET INDEX TO
+  APPEND RECORD
+  REPLACE EMPID WITH TRIM(m_emp)
+  @ 5, 5 SAY "Name    : " GET NAME
+  @ 6, 5 SAY "Schedule: " GET SCHEDID
+  READ
+  SET INDEX TO BYEMP
 ENDIF
 ```
 
-Escape leaves the blank row untouched; the program is responsible for it. This is
-accepted rather than solved — a staged insert that materializes only on submit
-would invent a transaction concept W3Script does not have, and would force
-`RECNO()`/`RECCOUNT()` to lie inside the form.
+The id stays a memory-variable `GET` — it is a search term until the record
+exists. The create runs in natural order (`SET INDEX TO`) so writing the key
+cannot move the new record out from under the form. `NAME` and `SCHEDID` are
+field-bound, and `SCHEDID`'s picker comes from the column's lookup. Escaping
+the second form leaves a record holding only its id; the program accepts that,
+as chosen.
 
-`crm.prg`'s deal stage becomes a literal `LOOKUP ("lead","demo","won","lost")`,
-so both lookup kinds are exercised by a real demo.
+`crm.prg`'s deal stage becomes a literal
+`LOOKUP ("Lead","Qualified","Proposal","Won","Lost")` — the exact strings the
+demo already seeds and compares (`SUM VALUE FOR STAGE == "Won"`), since
+membership is case-sensitive. Both lookup kinds are thereby exercised by a
+real demo.
 
 `tests/DemoSchemas.test.ts:28` pins the demo column lists; `SCHEDULES` is added
 and `EMPLOYEES` is unchanged (the qualifier is metadata, not a column).
@@ -248,10 +311,14 @@ Per `CLAUDE.md` test discipline:
 - Membership validation asserts the **exact** option list with `toEqual`, never
   `toContain` — `toContain` cannot prove a phantom option is absent.
 - `ColumnMetaStore`'s new columns get a two-database test.
-- Every new WS-visible shape (`FormField.target`, `columnTypes[].options`) gets a
-  test that drives the message and asserts the database or UI effect.
+- Every new WS-visible shape (`FormField.target`, `columnTypes[].options`, the
+  `form-error` message) gets a test that drives the message and asserts the
+  database or UI effect — including a forged `form-submit` naming a column the
+  form never offered.
 - Playwright, in a real browser: the form picker, the grid picker (asserting
   `toBeInViewport()`), a rejected off-list `REPLACE`, and the Assistant wizard.
+- `tests/overtime.spec.ts` is changed, not only extended — the Add-Employee flow
+  it drives becomes two forms with a field-bound select.
 - `npm test` and `npx playwright test` are run **serially**, never concurrently —
   both mutate `data/`.
 
