@@ -98,6 +98,20 @@ as you fix it, and `Esc` abandons the edit. Here a `TIME(15)` column rejects `08
 
 ---
 
+### `LOOKUP` columns — pick a value instead of typing it
+
+A column declared `LOOKUP <table>.<column> DISPLAY <column>` edits through a dropdown in
+both BROWSE and forms — showing the friendlier label, storing the code. Here `SCHEDID`
+is constrained to `SCHEDULES.SCHEDID`, displaying `DESCR`.
+
+![BROWSE editing a LOOKUP column via dropdown](docs/screenshots/screenshot-lookup-browse.png)
+
+A field-bound `@ SAY GET` (one whose name matches a table column) renders the same picker:
+
+![A form field bound to a LOOKUP column](docs/screenshots/screenshot-lookup-form.png)
+
+---
+
 ### Aggregate commands & dBASE III parity
 
 `SUM`, `AVERAGE`, `? ROUND(…)`, `? MAX(…)`, and `SORT ON … TO` — numeric aggregates and sorted copies, honouring the active filter.

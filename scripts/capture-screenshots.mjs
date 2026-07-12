@@ -295,5 +295,54 @@ console.log('14. NEW: BROWSE per-cell validation rejecting a TIME(15) edit');
   await page.close();
 }
 
+// ── 15. screenshot-lookup-browse.png (NEW in v1.3.0) ──────────────────────
+console.log('15. NEW: BROWSE editing a LOOKUP column via dropdown');
+{
+  const page = await newPage();
+  await boot(page);
+  await cmd(page, 'USE DATABASE screenshotdb', 800);
+  await cmd(page, 'DROP TABLE schedules', 400);
+  await cmd(page, 'DROP TABLE staff', 400);
+  await cmd(page, 'CREATE TABLE schedules (SCHEDID CHAR(4), DESCR CHAR(30))', 700);
+  await cmd(page, 'USE schedules', 500);
+  await cmd(page, 'APPEND RECORD', 400);
+  await cmd(page, 'REPLACE SCHEDID WITH "S001", DESCR WITH "Standard 40h (08:00-16:30)"', 600);
+  await cmd(page, 'APPEND RECORD', 400);
+  await cmd(page, 'REPLACE SCHEDID WITH "S002", DESCR WITH "Short 31.25h (09:00-16:00)"', 600);
+  await cmd(page, 'CREATE TABLE staff (NAME CHAR(30), SCHEDID CHAR(4) LOOKUP SCHEDULES.SCHEDID DISPLAY DESCR)', 700);
+  await cmd(page, 'USE staff', 500);
+  await cmd(page, 'APPEND RECORD', 500);
+  await cmd(page, 'REPLACE NAME WITH "Ada Lovelace", SCHEDID WITH "S001"', 500);
+  await cmd(page, 'BROWSE', 1200);
+  await page.waitForSelector('#grid-view:not(.hidden)', { timeout: 8000 });
+
+  const td = page.locator('#grid-tbody td[data-ri="0"][data-ci="1"]');
+  await td.dblclick();
+  await page.waitForSelector('#grid-tbody select.cell-ed', { timeout: 5000 });
+  await page.waitForTimeout(300);
+  await snap(page, 'screenshot-lookup-browse.png');
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+  await page.close();
+}
+
+// ── 16. screenshot-lookup-form.png (NEW in v1.3.0) ────────────────────────
+console.log('16. NEW: field-bound GET rendering a LOOKUP picker in a form');
+{
+  const page = await newPage();
+  await boot(page);
+  await cmd(page, 'USE DATABASE screenshotdb', 800);
+  await cmd(page, 'USE staff', 500);
+  await cmd(page, '@ 2, 5 SAY "Name    : " GET NAME', 300);
+  await cmd(page, '@ 3, 5 SAY "Schedule: " GET SCHEDID', 300);
+  await cmd(page, 'READ', 900);
+  await page.waitForSelector('#form-view', { state: 'visible', timeout: 6000 });
+  await page.waitForSelector('#form-view select.f-get', { timeout: 5000 });
+  await page.waitForTimeout(400);
+  await snap(page, 'screenshot-lookup-form.png');
+  await page.keyboard.press('Escape');
+  await page.close();
+}
+
 await browser.close();
 console.log('\nDone. All screenshots written to docs/screenshots/');
