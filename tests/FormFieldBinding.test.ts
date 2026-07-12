@@ -77,6 +77,16 @@ describe('field-bound @ SAY GET', () => {
     expect(form.fields[0].value).toBe('');
   });
 
+  it('a variable GET prefills from the variable\'s current value, not blank', async () => {
+    const { session, sent, run } = await setup();
+    await run('APPEND RECORD');
+    await run('STORE "2026-07-06" TO M_WEEK');
+    await runBlock(session, sent, '@ 4, 5 SAY "Week: " GET M_WEEK\nREAD');
+    const form = sent.find(m => m.type === 'form-open') as any;
+    expect(form.fields[0].target.kind).toBe('var');
+    expect(form.fields[0].value).toBe('2026-07-06');
+  });
+
   it('is a variable GET when no table is in use', async () => {
     const sent: ServerMessage[] = [];
     const session = new Session((m) => sent.push(m));
