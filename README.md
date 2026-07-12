@@ -140,6 +140,8 @@ build indexes, search, reindex, pack the database, design and run reports, run p
 table structure. Every click generates a real W3Script command that echoes into the terminal —
 watch it to learn the language. Wizards (New table, Filter, Sort, Sum/Average, Modify structure,
 report designer, …) open in the main area and show a live preview of the command they will run.
+New table and Modify structure both offer an optional per-column "lookup" field — `LOOKUP`
+without typing raw syntax.
 
 ---
 

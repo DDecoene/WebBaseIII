@@ -44,6 +44,12 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
   description ("Standard 40h (08:00-16:30)") instead of typed from memory. `demos/crm.prg`'s
   `DEALS.STAGE` is constrained to a literal `LOOKUP` list matching its own seeded vocabulary
   exactly, exercising the other lookup kind in a real, working demo.
+- **Assistant wizard support** (#62). The New-table and Modify-structure wizards gain a
+  per-column "lookup (optional)" field accepting `TABLE.COLUMN [DISPLAY COLUMN]` or a quoted
+  list, so declaring a `LOOKUP` no longer requires dropping into raw W3Script syntax. This
+  closes out the v1.3.0 lookup-columns milestone (#58–#62): the language, storage, resolver,
+  BROWSE/REPLACE enforcement, field-bound forms, two demo apps, and the GUI wizards all now
+  agree on one constraint, declared once, on the column.
 
 ## [1.2.0] — 2026-07-09 — TIME columns, WEEK()/DATEADD(), BROWSE cell validation, Overtime demo
 
