@@ -6,10 +6,19 @@
  * Returns an error message, or null when the value is acceptable.
  */
 
+/** A column's legal-values constraint — a WebBase-III extension, no dBASE III ancestor. */
+export type Lookup =
+  | { kind: 'list'; values: string[] }
+  | { kind: 'table'; table: string; column: string; display?: string };
+
+export interface LookupOption { value: string; label: string }
+
 export interface ColumnMeta {
   baseType: string;
   qualifier: number | null;  // CHAR(n) length, TIME(n) minute granularity, NUM(p,s) precision
   scale: number | null;      // NUM(p,s) scale
+  lookup?: Lookup | null;    // declared constraint (may be unresolvable)
+  options?: LookupOption[];  // resolved values — absent when the lookup degraded
 }
 
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
@@ -30,7 +39,17 @@ export function validateCellValue(
   if (!meta) return null;                       // untracked column — no constraint
   const v = value.trim();
   if (v === '') return null;                    // clearing a cell is always allowed
+  const typeErr = declaredTypeError(colName, v, meta);
+  if (typeErr) return typeErr;
+  // Membership runs only when the lookup resolved; an unresolvable lookup
+  // degrades to free text rather than locking the column.
+  if (meta.options && meta.options.length && !meta.options.some(o => o.value === v)) {
+    return `${colName}: "${v}" is not one of the allowed values`;
+  }
+  return null;
+}
 
+function declaredTypeError(colName: string, v: string, meta: ColumnMeta): string | null {
   switch (meta.baseType.toUpperCase()) {
     case 'TIME': {
       const m = TIME_RE.exec(v);

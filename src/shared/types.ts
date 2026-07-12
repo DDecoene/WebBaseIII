@@ -56,6 +56,7 @@ export interface IIndexStore {
 // precision/scale). qualifier carries CHAR(n) length / TIME(n) granularity /
 // NUM(p,s) precision; scale carries the NUM(p,s) scale.
 export type ColumnTypeInfo = import('./cellValidation').ColumnMeta;
+export type { Lookup, LookupOption } from './cellValidation';
 
 // Scoped by database: two databases can hold same-named tables with different types.
 export interface IColumnMetaStore {
