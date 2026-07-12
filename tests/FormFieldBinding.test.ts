@@ -105,3 +105,94 @@ describe('field-bound @ SAY GET', () => {
     expect(out.flatMap(o => o.lines).map((l: any) => l.text).join('\n')).toMatch(/lookup for BADCOL/i);
   });
 });
+
+describe('form-submit with field targets', () => {
+  it('writes submitted field values to the record and resumes', async () => {
+    const { session, sent, run } = await setup();
+    await run('APPEND RECORD');
+    await runBlock(session, sent, '@ 4, 5 SAY "Name: " GET NAME\n@ 5, 5 SAY "Sched: " GET SCHEDID\nREAD');
+    expect(sent.find(m => m.type === 'form-open')).toBeDefined();
+
+    sent.length = 0;
+    await session.handleMessage({ type: 'form-submit', values: { NAME: 'Grace', SCHEDID: 'S002' } });
+    expect(sent.find(m => m.type === 'view-terminal')).toBeDefined();
+    const listing = await run('LIST');
+    expect(listing).toContain('Grace');
+    expect(listing).toContain('S002');
+  });
+
+  it('rejects the whole submit when one field is off-list: form-error, nothing written', async () => {
+    const { session, sent, run } = await setup();
+    await run('APPEND RECORD');
+    await runBlock(session, sent, '@ 4, 5 SAY "Name: " GET NAME\n@ 5, 5 SAY "Sched: " GET SCHEDID\nREAD');
+
+    sent.length = 0;
+    await session.handleMessage({ type: 'form-submit', values: { NAME: 'Grace', SCHEDID: 'BOGUS' } });
+    const err = sent.find(m => m.type === 'form-error') as any;
+    expect(err).toBeDefined();
+    expect(err.errors).toEqual([
+      { varName: 'SCHEDID', message: 'SCHEDID: "BOGUS" is not one of the allowed values' },
+    ]);
+    expect(sent.find(m => m.type === 'view-terminal')).toBeUndefined();
+    // All-or-nothing: NAME was valid but must NOT have been written.
+    expect(await run('LIST')).not.toContain('Grace');
+  });
+
+  it('a corrected resubmit after form-error succeeds (state was retained)', async () => {
+    const { session, sent, run } = await setup();
+    await run('APPEND RECORD');
+    await runBlock(session, sent, '@ 4, 5 SAY "Sched: " GET SCHEDID\nREAD');
+
+    await session.handleMessage({ type: 'form-submit', values: { SCHEDID: 'BOGUS' } });
+    sent.length = 0;
+    await session.handleMessage({ type: 'form-submit', values: { SCHEDID: 'S001' } });
+    expect(sent.find(m => m.type === 'form-error')).toBeUndefined();
+    expect(await run('LIST')).toContain('S001');
+  });
+
+  it('a forged form-submit naming a column the form never offered cannot write it', async () => {
+    const { session, sent, run } = await setup();
+    await run('APPEND RECORD');
+    // The form only offers the variable M_X — EMPID is NOT a field of this form.
+    await runBlock(session, sent, '@ 4, 5 SAY "X: " GET M_X\nREAD');
+
+    await session.handleMessage({ type: 'form-submit', values: { M_X: 'ok', EMPID: 'HAX' } });
+    // EMPID lands in a memory variable at worst — never in the table.
+    expect(await run('LIST')).not.toContain('HAX');
+  });
+
+  it('field type validation applies too (DATE column gets a real date)', async () => {
+    const { session, sent, run } = await setup();
+    await run('ALTER TABLE EMPLOYEES ADD HIRED DATE');
+    await run('APPEND RECORD');
+    await runBlock(session, sent, '@ 4, 5 SAY "Hired: " GET HIRED\nREAD');
+
+    sent.length = 0;
+    await session.handleMessage({ type: 'form-submit', values: { HIRED: '2026-02-30' } });
+    const err = sent.find(m => m.type === 'form-error') as any;
+    expect(err.errors[0].message).toMatch(/not a real date/);
+  });
+
+  it('Escape (grid-exit) writes nothing and clears the retained fields', async () => {
+    const { session, sent, run } = await setup();
+    await run('APPEND RECORD');
+    await runBlock(session, sent, '@ 4, 5 SAY "Name: " GET NAME\nREAD');
+
+    await session.handleMessage({ type: 'grid-exit' });
+    expect(await run('LIST')).not.toContain('Grace');
+    // A form-submit arriving after the cancel must not write the field either.
+    await session.handleMessage({ type: 'form-submit', values: { NAME: 'Grace' } });
+    expect(await run('LIST')).not.toContain('Grace');
+  });
+
+  it('bare INPUT still stores its value (the #50 regression stays fixed)', async () => {
+    const sent: ServerMessage[] = [];
+    const session = new Session((m) => sent.push(m));
+    await session.handleMessage({ type: 'command', text: 'INPUT "Name? " TO who' });
+    await session.handleMessage({ type: 'form-submit', values: { WHO: 'Ada' } });
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: '? who' });
+    const out = sent.find(m => m.type === 'output') as any;
+    expect(out.lines.map((l: any) => l.text).join('\n')).toContain('Ada');
+  });
+});

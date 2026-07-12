@@ -161,6 +161,7 @@ export type ServerMessage =
   | { type: 'clear' }
   | { type: 'report-preview'; html: string }
   | { type: 'error'; message: string }
+  | { type: 'form-error'; errors: { varName: string; message: string }[] }
   | { type: 'catalog'; catalog: Catalog }
   | { type: 'data-changed'; db: string; table: string }
   | { type: 'csv-download'; filename: string; content: string }
