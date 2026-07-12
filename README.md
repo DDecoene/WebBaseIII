@@ -266,13 +266,20 @@ value that just became legal, or just stopped being legal, is judged correctly �
 stale cached list). A lookup that can't be resolved (source table dropped, empty, or over
 1000 distinct values) degrades to free entry with a warning instead of locking the column.
 
+Forms pick it up too: `@ r,c SAY "…" GET <name>` binds to the active table's column when
+one matches — a field takes precedence over a memory variable of the same name, which is
+why programs use an `m_` prefix for scratch variables. A field-bound `GET` needs a current
+record (`APPEND RECORD` first) and prefills from it; if the column has a lookup, the form
+renders the same picker BROWSE does. `READ` validates every field-bound value before
+writing any of them — a rejection keeps the form open with the bad field outlined instead
+of silently dropping the others.
+
 > **Deviation from dBASE III:** `LOOKUP` has no dBASE III ancestor — dBASE III+ only offered
 > `PICTURE "@M a,b,c"`, a literal value list cycled with the spacebar, with no table-driven
 > form and no display label. This is a WebBase-III extension, in the same spirit as
-> unlimited work areas and `alias.field` dot notation.
->
-> Forms (`@ SAY GET`) don't offer a `LOOKUP` picker yet — only BROWSE and `REPLACE` enforce
-> it today.
+> unlimited work areas and `alias.field` dot notation. Field-bound `GET` *is* authentic
+> dBASE III behavior — WebBase-III's own memory-variable-only forms were the deviation,
+> now corrected.
 
 > **CSV format (`COPY TO` / `APPEND FROM`):** Unlike dBASE III's headerless,
 > positional `DELIMITED`/`SDF` formats, WebBase-III uses modern **header-based CSV**
@@ -348,7 +355,7 @@ stale cached list). A lookup that can't be resolved (source table dropped, empty
 | `? <expr>[, <expr>...]` | Evaluate expression(s) and print the result (numbers right-justified; bare `?` prints a blank line; `??` also accepted) |
 | `STORE <val> TO <var>` | Assign a variable |
 | `INPUT "prompt" TO <var>` | Collect keyboard input |
-| `@ r,c SAY "text" GET <var>` | Define a form field |
+| `@ r,c SAY "text" GET <var>` | Define a form field; a name matching a column of the active table binds that column (lookup columns render a picker) |
 | `READ` | Display the form and wait for submit |
 
 ### Control flow
