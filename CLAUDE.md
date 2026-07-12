@@ -197,7 +197,7 @@ WebBase-III supports **unlimited work areas** (no DOS 10-area limit). Cross-area
 
 Declared types are recorded per `(database, table, column)` in `server/ColumnMetaStore.ts`, because SQLite only keeps a storage affinity: `TIME`/`DATE`/`CHAR` are all `TEXT`, `LOGICAL`/`INT` are both `INTEGER`, and a `NUM(p,s)` qualifier is lost entirely.
 
-#### `LOOKUP` column qualifier (BROWSE/REPLACE done; forms in progress — v1.3.0)
+#### `LOOKUP` column qualifier (v1.3.0)
 
 Any column may add a `LOOKUP` clause after its type, constraining it to a set of legal
 values — a WebBase-III extension with no dBASE III ancestor (dBASE III+ only had
@@ -220,9 +220,18 @@ matching `LIST`/report output — only the edit-mode dropdown shows `DISPLAY` la
 `REPLACE` and `grid-edit` both enforce membership, re-resolving fresh at write time (not
 trusting a client-held list) so a value that just became legal or just stopped being legal
 is judged correctly; an unresolvable lookup degrades to free entry with a warning rather
-than locking the column. **Forms (`@ SAY GET`) do not honor `LOOKUP` yet** — that lands in
-a follow-up PR (#59, field-bound `GET`) before this section is promoted to the README
-command reference.
+than locking the column.
+
+`@ r,c SAY "…" GET <name>` binds to the active table's column when one matches — dBASE III's
+actual behavior, and why the field takes precedence over a memory variable of the same name
+(the `m_` prefix convention exists for this reason). A field-bound `GET` requires a current
+record (`APPEND RECORD` first — `** Error: GET <field>: no current record` otherwise),
+prefills from the record, and renders a picker when the column has a resolvable lookup.
+`READ`'s submit is all-or-nothing across every field-bound `GET` in the form: every value is
+validated (declared type + lookup membership) before any is written, and a rejection sends a
+`form-error` message that keeps the form open with the offending fields outlined — Escape
+still writes nothing. Writes target the rowid captured at `GET` time (`fetchCurrentRow`),
+mirroring `grid-edit`, so pointer motion between `GET` and submit can't retarget the write.
 
 #### Cell validation (`BROWSE`)
 

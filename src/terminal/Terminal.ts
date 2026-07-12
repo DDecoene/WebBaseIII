@@ -117,8 +117,13 @@ export class Terminal {
       this.openForm(m.fields);
     });
 
+    ws.on('form-error', (msg) => {
+      this.form?.showErrors((msg as any).errors);
+    });
+
     ws.on('view-terminal', () => {
-      this.showTerminal();
+      if (this.form) this.closeForm();
+      else this.showTerminal();
     });
 
     ws.on('program-open', (msg) => {
@@ -260,8 +265,9 @@ export class Terminal {
       (values) => {
         const obj: Record<string, string> = {};
         values.forEach((v, k) => { obj[k] = v; });
+        // The form stays open until the server answers: view-terminal closes
+        // it, form-error keeps it up with the offending fields outlined.
         this.ws.send({ type: 'form-submit', values: obj });
-        this.closeForm();
       },
       () => {
         this.ws.send({ type: 'grid-exit' });
@@ -269,7 +275,7 @@ export class Terminal {
         this.printLine('READ cancelled', 'warn');
       }
     );
-    this.form.render(fields, new Map());
+    this.form.render(fields);
   }
 
   private closeForm() {

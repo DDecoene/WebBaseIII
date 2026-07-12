@@ -27,8 +27,17 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
   warning rather than locking the column. BROWSE renders a lookup column as a dropdown —
   `DISPLAY` labels shown while editing, the stored code shown once committed, matching
   `LIST`/report output.
-  **Forms (`@ SAY GET`) do not honor `LOOKUP` yet** — that ships in #59, which is when the
-  full feature is documented in the README command reference.
+- **Field-bound `@ SAY GET`** (#59). `@ r,c SAY "…" GET <name>` now binds directly to the
+  active table's column when one matches — dBASE III's actual behavior — instead of only
+  ever collecting into a memory variable. Fields take precedence over a memory variable of
+  the same name (why the `m_` prefix convention exists). A field-bound `GET` needs a current
+  record and prefills from it; a lookup column renders the same picker BROWSE does. `READ`'s
+  submit validates every field-bound value (declared type + lookup membership) before
+  writing any of them — a rejection sends a new `form-error` message that keeps the form
+  open with the bad fields outlined, rather than silently discarding the valid ones.
+  Writes target the row captured at `GET` time, mirroring how `grid-edit` already writes by
+  rowid. This is the PR that promotes `LOOKUP` to the README command reference in full —
+  both BROWSE and forms now declare, enforce, and render it end to end.
 
 ## [1.2.0] — 2026-07-09 — TIME columns, WEEK()/DATEADD(), BROWSE cell validation, Overtime demo
 

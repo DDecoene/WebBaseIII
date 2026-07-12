@@ -287,6 +287,8 @@ select.cell-ed { min-width: 110px; }
   padding: 1px 5px; outline: none; min-width: 120px;
 }
 .f-get:focus { border-color: #0088ff; background: #001c35; }
+select.f-get { min-width: 140px; }
+.f-get.f-invalid { border-color: #cc0000; background: #2a0000; }
 
 /* ── Program Editor ─────────────────────────────────────────────────────── */
 #editor-view {
