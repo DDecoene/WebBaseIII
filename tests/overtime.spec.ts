@@ -79,7 +79,7 @@ test.describe('Overtime demo', () => {
     await seedProgram(page);
     // Clean slate: the OVERTIME database persists server-side across suites.
     await cmd(page, 'USE DATABASE OVERTIME');
-    for (const t of ['EMPLOYEES', 'SCHEDULEDAYS', 'TIMESHEET', 'WEEKSUMMARY', 'LEAVETAKEN']) {
+    for (const t of ['EMPLOYEES', 'SCHEDULES', 'SCHEDULEDAYS', 'TIMESHEET', 'WEEKSUMMARY', 'LEAVETAKEN']) {
       await cmd(page, `DROP TABLE ${t}`, 150);
     }
     await cmd(page, `DO ${PRG_NAME}`, 2000);
@@ -97,6 +97,35 @@ test.describe('Overtime demo', () => {
     await expect(page.locator('#terminal-output')).toContainText('Ada Lovelace');
     await expect(page.locator('#terminal-output')).toContainText('Grace Hopper');
     await expect(page.locator('#terminal-output')).toContainText('S002');
+    await ack(page);
+  });
+
+  test('Add Employee: the schedule is picked from a lookup dropdown, not typed', async ({ page }) => {
+    await menuChoice(page, '1');                 // Add Employee → form 1 (id)
+    await expect(page.locator('#form-view')).toContainText('ADD EMPLOYEE', { timeout: 6000 });
+    const idInput = page.locator('#form-view input.f-get').last();
+    await idInput.fill('E003');
+    await idInput.press('Enter');
+
+    // Form 2: NAME is a text field, SCHEDID is a <select> fed by SCHEDULES.
+    const sched = page.locator('#form-view select.f-get');
+    await expect(sched).toBeVisible({ timeout: 6000 });
+    await expect(sched).toBeInViewport();
+    // DISPLAY label + code are both shown in the option text.
+    await expect(sched.locator('option', { hasText: 'Standard 40h' })).toHaveCount(1);
+
+    const name = page.locator('#form-view input.f-get').first();
+    await name.fill('Alan Turing');
+    await sched.selectOption('S001');
+    await sched.press('Enter');                  // last control → submit
+
+    await expect(page.locator('#form-view')).toContainText('Employee added: E003', { timeout: 6000 });
+    await ack(page);
+
+    // Verify through the table tour that the record landed with the code.
+    await menuChoice(page, '9');
+    await expect(page.locator('#terminal-output')).toContainText('Alan Turing');
+    await expect(page.locator('#terminal-output')).toContainText('S001');
     await ack(page);
   });
 
