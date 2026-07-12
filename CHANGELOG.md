@@ -19,10 +19,16 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
   `src/interpreter/LookupResolver.ts` (degrades to free entry — never truncates — when the
   source is missing, empty, or exceeds 1000 distinct values). This is a WebBase-III
   extension with no dBASE III ancestor.
-  **This PR is grammar + storage only** — nothing enforces or renders a `LOOKUP` yet.
-  Membership enforcement in `BROWSE`/`REPLACE` and the form/grid picker UI ship in
-  follow-up PRs (#59, #60) before the feature is documented in the README command
-  reference.
+- `LOOKUP` enforcement + BROWSE dropdown (#60). `REPLACE` and the BROWSE grid's `grid-edit`
+  now reject a value outside a column's declared `LOOKUP`, re-resolving the constraint fresh
+  against the live database on every write (so a value that only just became legal, or that
+  just stopped being legal, is judged correctly — never a stale cached list). An unresolvable
+  lookup (source table dropped, empty, or over 1000 values) degrades to free entry with a
+  warning rather than locking the column. BROWSE renders a lookup column as a dropdown —
+  `DISPLAY` labels shown while editing, the stored code shown once committed, matching
+  `LIST`/report output.
+  **Forms (`@ SAY GET`) do not honor `LOOKUP` yet** — that ships in #59, which is when the
+  full feature is documented in the README command reference.
 
 ## [1.2.0] — 2026-07-09 — TIME columns, WEEK()/DATEADD(), BROWSE cell validation, Overtime demo
 
