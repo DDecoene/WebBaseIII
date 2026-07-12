@@ -192,3 +192,59 @@ describe('REPLACE enforces lookup membership', () => {
     expect(await run('REPLACE C WITH "B"')).toContain('Replaced');
   });
 });
+
+describe('grid messages with lookups', () => {
+  it('grid-open ships resolved options for a lookup column — exact list', async () => {
+    const { session, sent, run } = await setup();
+    await run('CREATE TABLE DEALS (STAGE CHAR(12) LOOKUP ("Lead","Won","Lost"))');
+    await run('USE DEALS');
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: 'BROWSE' });
+    const grid = sent.find(m => m.type === 'grid-open') as any;
+    expect(grid.columnTypes.STAGE.options).toEqual([
+      { value: 'Lead', label: 'Lead' },
+      { value: 'Won', label: 'Won' },
+      { value: 'Lost', label: 'Lost' },
+    ]);
+  });
+
+  it('grid-open degrades an unresolvable lookup: no options, a warning line', async () => {
+    const { session, sent, run } = await setup();
+    await run('CREATE TABLE E (SCHEDID CHAR(4) LOOKUP GHOST.SCHEDID)');
+    await run('USE E');
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: 'BROWSE' });
+    const grid = sent.find(m => m.type === 'grid-open') as any;
+    expect(grid.columnTypes.SCHEDID.options).toBeUndefined();
+    const out = sent.filter(m => m.type === 'output') as any[];
+    expect(out.flatMap(o => o.lines).map((l: any) => l.text).join('\n')).toMatch(/lookup for SCHEDID/i);
+  });
+
+  it('grid-edit rejects an off-list value server-side (forged message path)', async () => {
+    const { session, sent, run } = await setup();
+    await run('CREATE TABLE DEALS (STAGE CHAR(12) LOOKUP ("Lead","Won"))');
+    await run('USE DEALS');
+    await run('APPEND RECORD');
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: 'BROWSE' });
+    const grid = sent.find(m => m.type === 'grid-open') as any;
+
+    sent.length = 0;
+    await session.handleMessage({ type: 'grid-edit', rowid: grid.rows[0]._rowid, col: 'STAGE', value: 'Hacked' });
+    const out = sent.find(m => m.type === 'output') as any;
+    expect(out.lines.map((l: any) => l.text).join('\n')).toMatch(/not one of the allowed values/);
+    expect(await run('LIST')).not.toContain('Hacked');
+  });
+
+  it('grid-edit accepts an on-list value', async () => {
+    const { session, sent, run } = await setup();
+    await run('CREATE TABLE DEALS (STAGE CHAR(12) LOOKUP ("Lead","Won"))');
+    await run('USE DEALS');
+    await run('APPEND RECORD');
+    sent.length = 0;
+    await session.handleMessage({ type: 'command', text: 'BROWSE' });
+    const grid = sent.find(m => m.type === 'grid-open') as any;
+    await session.handleMessage({ type: 'grid-edit', rowid: grid.rows[0]._rowid, col: 'STAGE', value: 'Won' });
+    expect(await run('LIST')).toContain('Won');
+  });
+});
