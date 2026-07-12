@@ -6,6 +6,7 @@ import { IndexCommands, IndexCommandsHost } from './IndexCommands';
 import { ReportCommands } from './ReportCommands';
 import { toCSV, parseCSV, MAX_EXPORT_ROWS, MAX_IMPORT_BYTES, MAX_IMPORT_SKIPS } from '../shared/csv';
 import { validateCellValue } from '../shared/cellValidation';
+import { resolveLookup } from './LookupResolver';
 
 export type { OutputLine, FormField } from '../shared/types';
 
@@ -428,15 +429,27 @@ export class Executor implements IndexCommandsHost {
     this.requireTable();
     await this.refreshRecCount();
     const pairs = fields.map(f => ({ field: f.field, value: this.evalExpr(f.value) }));
-    // TIME is the only declared type REPLACE enforces (#43). The grid validates
-    // every declared type (#45) because it has no other guard; widening REPLACE
-    // would change the semantics of existing programs.
+    // Declared-type enforcement on REPLACE is deliberately narrow: TIME since
+    // #43, plus lookup membership (#58) — membership is additive, because no
+    // pre-#58 column declares a lookup, so no existing program changes behavior.
+    // The grid still validates every declared type (#45).
     for (const p of pairs) {
       if (p.value === null || p.value === undefined) continue;
       const info = this.columnMetaStore?.getColumnType(this.metaDb, this.area.table!, p.field);
-      if (info?.baseType === 'TIME') {
+      if (!info) continue;
+      if (info.baseType === 'TIME') {
         const err = validateCellValue(p.field, String(p.value), info);
         if (err) throw new Error(err);
+      }
+      if (info.lookup) {
+        // Re-resolve at write time: a value that became legal after any cached
+        // list was built is accepted; a vanished one is rejected. Unresolvable
+        // (null) skips membership — degradation, not a lock.
+        const options = await resolveLookup(this.db, info.lookup);
+        if (options) {
+          const err = validateCellValue(p.field, String(p.value), { ...info, options });
+          if (err) throw new Error(err);
+        }
       }
     }
     const setClauses = pairs.map(p => `${q(p.field)} = ?`).join(', ');

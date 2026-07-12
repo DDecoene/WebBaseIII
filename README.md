@@ -244,6 +244,36 @@ WebBase-III supports **unlimited work areas** — each independently holding a t
 
 **Column types**: `CHAR(n)` (aliases `CHARACTER`/`VARCHAR`/`STRING`/`MEMO`), `NUM`/`NUM(p,s)` (`NUMERIC`/`FLOAT`/`DOUBLE`/`DECIMAL`), `INT`/`INTEGER`, `LOGICAL`/`BOOLEAN`, `DATE`, and `TIME`/`TIME(n)`. `TIME` stores `HH:MM` (24-hour); the optional `TIME(n)` qualifier (e.g. `TIME(15)`) requires minutes to be a multiple of `n`. `REPLACE ... WITH` rejects a malformed or off-granularity `TIME` value instead of silently coercing it, and `LIST STRUCTURE` prints the declared type (`NUM(8,2)`, `TIME(15)`) rather than SQLite's storage class.
 
+### `LOOKUP` columns — constrain a column to legal values
+
+Any column may add a `LOOKUP` clause after its type, declaring the values it's allowed to hold:
+
+```
+CREATE TABLE EMPLOYEES (EMPID CHAR(4), NAME CHAR(30),
+                        SCHEDID CHAR(4) LOOKUP SCHEDULES.SCHEDID DISPLAY DESCR)
+CREATE TABLE DEALS (STAGE CHAR(12) LOOKUP ("Lead","Qualified","Proposal","Won","Lost"))
+```
+
+Two forms: `LOOKUP <table>.<column> [DISPLAY <column>]` looks up live values from another
+table (optionally showing a friendlier label while storing the code), or
+`LOOKUP ("a","b",...)` is a fixed list. `CREATE TABLE`/`ALTER TABLE ADD`/`ALTER TABLE ALTER`
+all accept it.
+
+BROWSE renders a lookup column as a dropdown — `DISPLAY` labels while editing, the stored
+code once committed, matching `LIST`/report output. `REPLACE` and BROWSE edits both reject
+a value outside the list, re-checked fresh against the live database on every write (a
+value that just became legal, or just stopped being legal, is judged correctly — never a
+stale cached list). A lookup that can't be resolved (source table dropped, empty, or over
+1000 distinct values) degrades to free entry with a warning instead of locking the column.
+
+> **Deviation from dBASE III:** `LOOKUP` has no dBASE III ancestor — dBASE III+ only offered
+> `PICTURE "@M a,b,c"`, a literal value list cycled with the spacebar, with no table-driven
+> form and no display label. This is a WebBase-III extension, in the same spirit as
+> unlimited work areas and `alias.field` dot notation.
+>
+> Forms (`@ SAY GET`) don't offer a `LOOKUP` picker yet — only BROWSE and `REPLACE` enforce
+> it today.
+
 > **CSV format (`COPY TO` / `APPEND FROM`):** Unlike dBASE III's headerless,
 > positional `DELIMITED`/`SDF` formats, WebBase-III uses modern **header-based CSV**
 > (RFC-4180, mapped by column name). Export downloads through the browser and

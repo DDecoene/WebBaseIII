@@ -172,6 +172,42 @@ export class Grid {
     const colName = this.cols[ci];
     const cur = String(this.rows[ri][colName] ?? '');
     td.classList.add('editing'); td.classList.remove('active-cell');
+
+    const meta = this.columnTypes[colName];
+    if (meta?.options?.length) {
+      // Lookup column: the dropdown IS the validation on the happy path
+      // (the server still re-checks). Static cells keep showing the stored
+      // value — only this editor shows display labels.
+      const sel = document.createElement('select');
+      sel.className = 'cell-ed';
+      const blank = document.createElement('option');
+      blank.value = ''; blank.textContent = '';
+      sel.appendChild(blank);
+      for (const o of meta.options) {
+        const op = document.createElement('option');
+        op.value = o.value;
+        op.textContent = o.label === o.value ? o.value : `${o.label} (${o.value})`;
+        sel.appendChild(op);
+      }
+      sel.value = cur;
+      td.textContent = '';
+      td.appendChild(sel);
+      sel.focus();
+      this.editingCell = { r: ri, c: ci };
+
+      sel.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === 'Tab') {
+          e.preventDefault(); e.stopPropagation();
+          if (!this.commitEdit(sel.value)) return;
+          if (e.key === 'Tab') this.selectCell(ri, ci + 2);
+        } else if (e.key === 'Escape') {
+          e.preventDefault(); e.stopPropagation();
+          this.cancelEdit();
+        }
+      });
+      return;
+    }
+
     const inp = document.createElement('input');
     inp.className = 'cell-ed'; inp.value = cur;
     td.textContent = '';

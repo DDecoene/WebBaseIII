@@ -8,7 +8,8 @@ import { reportStore } from './ReportStore.js';
 import { indexStore } from './IndexStore.js';
 import { columnMetaStore } from './ColumnMetaStore.js';
 import { validateCellValue } from '../src/shared/cellValidation.js';
-import type { ClientMessage, ServerMessage, ColInfo } from '../src/shared/types.js';
+import { resolveLookup } from '../src/interpreter/LookupResolver.js';
+import type { ClientMessage, ServerMessage, ColInfo, OutputLine } from '../src/shared/types.js';
 
 export class Session {
   private bridge: ServerDatabaseBridge;
@@ -78,7 +79,14 @@ export class Session {
             // Authoritative check — the grid validates client-side for fast
             // feedback, but a message can reach here without passing through it.
             const db = this.executor.area.db ?? '';
-            const err = validateCellValue(col, value, columnMetaStore.getColumnType(db, table, col));
+            let meta = columnMetaStore.getColumnType(db, table, col);
+            if (meta?.lookup) {
+              // Fresh re-resolve at write time — the option list the client got
+              // at grid-open may be stale, and a forged message never saw one.
+              const options = await resolveLookup(this.bridge, meta.lookup);
+              meta = { ...meta, options: options ?? undefined };
+            }
+            const err = validateCellValue(col, value, meta);
             if (err) {
               this.send({ type: 'output', lines: [{ text: `** ${err}`, cls: 'error' }] });
               await this.sendGridData();
@@ -364,6 +372,17 @@ export class Session {
     }
     const columns = await this.bridge.getStructure(area.table);
     const columnTypes = columnMetaStore.listColumnTypes(area.db ?? '', area.table);
+    // Re-resolved on every BROWSE open, not cached: a table-kind lookup's source
+    // rows can change between opens, and grid-edit re-resolves again anyway —
+    // this just keeps the dropdown's initial contents from going stale.
+    const warns: OutputLine[] = [];
+    for (const [col, meta] of Object.entries(columnTypes)) {
+      if (!meta.lookup) continue;
+      const options = await resolveLookup(this.bridge, meta.lookup);
+      if (options) meta.options = options;
+      else warns.push({ text: `** Warning: lookup for ${col} could not be resolved — free entry`, cls: 'warn' });
+    }
+    if (warns.length) this.send({ type: 'output', lines: warns });
     const rows = await this.executor.getOrderedRowsWithIds(2000);
     this.send({ type: 'grid-open', table: area.table, filter: area.filter, columns, columnTypes, rows });
   }

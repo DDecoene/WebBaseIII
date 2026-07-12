@@ -197,7 +197,7 @@ WebBase-III supports **unlimited work areas** (no DOS 10-area limit). Cross-area
 
 Declared types are recorded per `(database, table, column)` in `server/ColumnMetaStore.ts`, because SQLite only keeps a storage affinity: `TIME`/`DATE`/`CHAR` are all `TEXT`, `LOGICAL`/`INT` are both `INTEGER`, and a `NUM(p,s)` qualifier is lost entirely.
 
-#### `LOOKUP` column qualifier (in progress — v1.3.0)
+#### `LOOKUP` column qualifier (BROWSE/REPLACE done; forms in progress — v1.3.0)
 
 Any column may add a `LOOKUP` clause after its type, constraining it to a set of legal
 values — a WebBase-III extension with no dBASE III ancestor (dBASE III+ only had
@@ -212,9 +212,17 @@ STAGE   CHAR(12) LOOKUP ("Lead","Won","Lost")             -- literal list
 same additive-migration discipline as the type columns above). `src/interpreter/LookupResolver.ts`
 turns a stored `LOOKUP` into concrete `{value,label}` options against the live database,
 degrading to `null` (never truncating) when the source is missing, empty, or exceeds 1000
-distinct values. **Not yet enforced or rendered anywhere** — BROWSE/`REPLACE` membership
-checking and the form/grid picker UI land in follow-up PRs before this section is promoted
-to the README command reference.
+distinct values.
+
+BROWSE renders a lookup column as a dropdown (`Grid.ts`'s `startEdit`) fed by the options
+`Session.sendGridData` resolves at `grid-open`; the stored value shows once committed,
+matching `LIST`/report output — only the edit-mode dropdown shows `DISPLAY` labels.
+`REPLACE` and `grid-edit` both enforce membership, re-resolving fresh at write time (not
+trusting a client-held list) so a value that just became legal or just stopped being legal
+is judged correctly; an unresolvable lookup degrades to free entry with a warning rather
+than locking the column. **Forms (`@ SAY GET`) do not honor `LOOKUP` yet** — that lands in
+a follow-up PR (#59, field-bound `GET`) before this section is promoted to the README
+command reference.
 
 #### Cell validation (`BROWSE`)
 
@@ -229,7 +237,7 @@ to the README command reference.
 | `LOGICAL` | `.T.`/`.F.`/`.TRUE.`/`.FALSE.`/`T`/`F`/`TRUE`/`FALSE`/`1`/`0` |
 | `CHAR` / `MEMO` | anything (length is not enforced) |
 
-An empty value is always allowed (clears the cell). Columns with no recorded declared type are unconstrained. `REPLACE` enforces only `TIME` — widening it would change the semantics of existing programs.
+An empty value is always allowed (clears the cell). Columns with no recorded declared type are unconstrained. `REPLACE` enforces `TIME` and, since v1.3.0, lookup membership on any column that declares one (additive — no pre-v1.3.0 column declares a `LOOKUP`, so no existing program's behavior changes); widening validation beyond that would change the semantics of existing programs.
 
 ### Indexing & search
 | Command | What it does |
