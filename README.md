@@ -2,7 +2,7 @@
 
 **dBASE III is back. In your browser. `USE customers` like it's 1984.**
 
-![WebBase-III demo — USE, LIST, SEEK, BROWSE](docs/screenshots/demo.gif)
+![WebBase-III demo — USE, LIST, SEEK, BROWSE, and a LOOKUP column dropdown](docs/screenshots/demo.gif)
 
 Remember the dot prompt? Before SQL won, before ORMs, before anyone said "full-stack" — there was dBASE III. You typed `USE customers`, then `LIST`, and your data was just *there*. WebBase-III brings that whole world back: the terminal, the language, `BROWSE`, `@ SAY GET` forms, `.prg` programs, indexes, reports — rebuilt from scratch as a modern web app with its own interpreter in TypeScript, backed by Node.js, WebSockets, and SQLite.
 
