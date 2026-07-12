@@ -63,6 +63,9 @@ src/
     Executor.ts         Async AST runner; manages state (db/table/filter/vars/rowPtr/activeIndex). Emits fire-and-forget client side-effects (CSV download, report preview, CSV upload picker) via onSideEffect so they work inside program blocks
     IndexCommands.ts    Index command handlers (extracted from Executor)
     ReportCommands.ts   Report command handlers delegating to ReportRunner
+    LookupResolver.ts   Resolves a column's LOOKUP constraint (literal list, or live table+column+DISPLAY)
+                        to concrete {value,label} options against IDatabaseBridge; degrades to null
+                        (never truncates) on a missing source, empty result, or >1000 distinct values
 
   terminal/
     Terminal.ts         REPL UI — command history, multi-line block accumulation
@@ -193,6 +196,25 @@ WebBase-III supports **unlimited work areas** (no DOS 10-area limit). Cross-area
 `TIME` stores `HH:MM` (24-hour). The optional `TIME(n)` qualifier (only via `CREATE TABLE` — not carried through `ALTER TABLE`) requires minutes to be a multiple of `n`, e.g. `TIME(15)` only accepts `:00`/`:15`/`:30`/`:45`. `APPEND RECORD` leaves new fields `NULL` (unvalidated); `REPLACE ... WITH` rejects a malformed or off-granularity `TIME` value with `** Error: ...` and does not write it. `LIST STRUCTURE` prints the declared type (`TIME`, `NUM(8,2)`, `TIME(15)`) rather than the raw SQLite storage class.
 
 Declared types are recorded per `(database, table, column)` in `server/ColumnMetaStore.ts`, because SQLite only keeps a storage affinity: `TIME`/`DATE`/`CHAR` are all `TEXT`, `LOGICAL`/`INT` are both `INTEGER`, and a `NUM(p,s)` qualifier is lost entirely.
+
+#### `LOOKUP` column qualifier (in progress — v1.3.0)
+
+Any column may add a `LOOKUP` clause after its type, constraining it to a set of legal
+values — a WebBase-III extension with no dBASE III ancestor (dBASE III+ only had
+`PICTURE "@M a,b,c"`, a literal spacebar-cycled list with no table-driven form):
+
+```
+SCHEDID CHAR(4) LOOKUP SCHEDULES.SCHEDID DISPLAY DESCR   -- live table lookup
+STAGE   CHAR(12) LOOKUP ("Lead","Won","Lost")             -- literal list
+```
+
+`CREATE TABLE`/`ALTER TABLE ADD`/`ALTER TABLE ALTER` parse and store it (`ColumnMetaStore`,
+same additive-migration discipline as the type columns above). `src/interpreter/LookupResolver.ts`
+turns a stored `LOOKUP` into concrete `{value,label}` options against the live database,
+degrading to `null` (never truncating) when the source is missing, empty, or exceeds 1000
+distinct values. **Not yet enforced or rendered anywhere** — BROWSE/`REPLACE` membership
+checking and the form/grid picker UI land in follow-up PRs before this section is promoted
+to the README command reference.
 
 #### Cell validation (`BROWSE`)
 

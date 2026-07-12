@@ -7,6 +7,23 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
 
 ---
 
+## [Unreleased] — v1.3.0 in progress
+
+### Added
+- `LOOKUP` column qualifier — language grammar and storage layer (#58). Any column can
+  declare a constraint on its legal values: `LOOKUP <table>.<column> [DISPLAY <column>]`
+  for a live table-driven lookup, or `LOOKUP ("a","b",...)` for a literal list. Parsed by
+  `CREATE TABLE`/`ALTER TABLE ADD`/`ALTER TABLE ALTER`, persisted per-column in
+  `ColumnMetaStore` via an additive migration (existing declared types are never touched
+  or dropped), and resolvable to concrete `{value,label}` options via the new
+  `src/interpreter/LookupResolver.ts` (degrades to free entry — never truncates — when the
+  source is missing, empty, or exceeds 1000 distinct values). This is a WebBase-III
+  extension with no dBASE III ancestor.
+  **This PR is grammar + storage only** — nothing enforces or renders a `LOOKUP` yet.
+  Membership enforcement in `BROWSE`/`REPLACE` and the form/grid picker UI ship in
+  follow-up PRs (#59, #60) before the feature is documented in the README command
+  reference.
+
 ## [1.2.0] — 2026-07-09 — TIME columns, WEEK()/DATEADD(), BROWSE cell validation, Overtime demo
 
 ### Added
