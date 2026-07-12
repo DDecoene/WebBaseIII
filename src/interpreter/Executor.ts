@@ -588,7 +588,10 @@ export class Executor implements IndexCommandsHost {
         return { output: out };
       }
     }
-    this.pendingForm.push({ row, col, label: text, varName, target: { kind: 'var' }, value: '' });
+    this.pendingForm.push({
+      row, col, label: text, varName, target: { kind: 'var' },
+      value: String(this.vars.get(varName) ?? ''),
+    });
     return { output: out };
   }
 
