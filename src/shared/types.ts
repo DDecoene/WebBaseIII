@@ -60,7 +60,7 @@ export type { Lookup, LookupOption } from './cellValidation';
 
 // Scoped by database: two databases can hold same-named tables with different types.
 export interface IColumnMetaStore {
-  setColumnType(dbName: string, tableName: string, colName: string, baseType: string, qualifier: number | null, scale: number | null): void;
+  setColumnType(dbName: string, tableName: string, colName: string, baseType: string, qualifier: number | null, scale: number | null, lookup?: import('./cellValidation').Lookup | null): void;
   getColumnType(dbName: string, tableName: string, colName: string): ColumnTypeInfo | null;
   listColumnTypes(dbName: string, tableName: string): Record<string, ColumnTypeInfo>;
   renameColumn(dbName: string, tableName: string, oldName: string, newName: string): void;
