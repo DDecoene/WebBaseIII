@@ -38,6 +38,12 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
   Writes target the row captured at `GET` time, mirroring how `grid-edit` already writes by
   rowid. This is the PR that promotes `LOOKUP` to the README command reference in full —
   both BROWSE and forms now declare, enforce, and render it end to end.
+- **Demos adopt `LOOKUP`** (#61). `demos/overtime.prg` gains a `SCHEDULES` catalog table
+  (`SCHEDID`, `DESCR`) as the lookup source for `EMPLOYEES.SCHEDID` — Add Employee is now a
+  check-first, two-form flow where the schedule is picked from a dropdown showing the
+  description ("Standard 40h (08:00-16:30)") instead of typed from memory. `demos/crm.prg`'s
+  `DEALS.STAGE` is constrained to a literal `LOOKUP` list matching its own seeded vocabulary
+  exactly, exercising the other lookup kind in a real, working demo.
 
 ## [1.2.0] — 2026-07-09 — TIME columns, WEEK()/DATEADD(), BROWSE cell validation, Overtime demo
 
