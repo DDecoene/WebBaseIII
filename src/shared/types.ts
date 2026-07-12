@@ -13,7 +13,16 @@ export interface FormField {
   row: number;
   col: number;
   label: string;
+  /** The submit key. For a field-bound GET this is the column name. */
   varName: string;
+  /** What form-submit writes. Absent (legacy INPUT/@SAY paths) means 'var'. */
+  target?:
+    | { kind: 'var' }
+    | { kind: 'field'; column: string; table: string; db: string; rowid: number };
+  /** Prefill. Field GETs carry the record's value; var GETs stay '' (unchanged UX). */
+  value?: string;
+  /** Resolved lookup options — render a <select>. Absent = free text. */
+  options?: import('./cellValidation').LookupOption[];
 }
 
 export interface OutputLine {

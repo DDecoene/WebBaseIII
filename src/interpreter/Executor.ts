@@ -557,8 +557,39 @@ export class Executor implements IndexCommandsHost {
     const row = Number(this.evalExpr(rowE));
     const col = Number(this.evalExpr(colE));
     const text = String(this.evalExpr(textE));
-    this.pendingForm.push({ row, col, label: text, varName });
-    return { output: [] };
+    const out: OutputLine[] = [];
+
+    // Field binding: a GET whose name matches a column of the active table edits
+    // the current record (dBASE III behavior — fields shadow memory variables;
+    // this is why the m_ prefix convention exists). Capturing the rowid here means
+    // form-submit writes by rowid, like grid-edit — pointer motion between here
+    // and submit cannot retarget the write.
+    if (this.area.table) {
+      const cols = await this.db.getStructure(this.area.table);
+      const match = cols.find(c => c.name.toUpperCase() === varName.toUpperCase());
+      if (match) {
+        const cur = await this.fetchCurrentRow();
+        if (!cur) throw new Error(`GET ${match.name}: no current record`);
+        const field: FormField = {
+          row, col, label: text, varName: match.name,
+          target: {
+            kind: 'field', column: match.name, table: this.area.table,
+            db: this.area.db ?? '', rowid: Number(cur._rowid),
+          },
+          value: String(cur[match.name] ?? ''),
+        };
+        const info = this.columnMetaStore?.getColumnType(this.metaDb, this.area.table, match.name);
+        if (info?.lookup) {
+          const options = await resolveLookup(this.db, info.lookup);
+          if (options) field.options = options;
+          else out.push({ text: `** Warning: lookup for ${match.name} could not be resolved — free entry`, cls: 'warn' });
+        }
+        this.pendingForm.push(field);
+        return { output: out };
+      }
+    }
+    this.pendingForm.push({ row, col, label: text, varName, target: { kind: 'var' }, value: '' });
+    return { output: out };
   }
 
   private doRead(): ExecResult {

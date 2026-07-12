@@ -170,11 +170,11 @@ describe('Session', () => {
     const prog = [
       'STORE 0 TO i',
       'DO WHILE i < 2',
-      '  STORE "" TO val',
-      '  @ 1,1 SAY "Value:" GET val',
+      '  STORE "" TO m_val',
+      '  @ 1,1 SAY "Value:" GET m_val',
       '  READ',
       '  APPEND RECORD',
-      '  REPLACE val WITH val',
+      '  REPLACE val WITH m_val',
       '  STORE i + 1 TO i',
       'ENDDO',
       'LIST',
@@ -186,15 +186,15 @@ describe('Session', () => {
     // First iteration should pause at READ and send form-open
     expect(sent.find(m => m.type === 'form-open')).toBeDefined();
 
-    // Submit first value (Lexer uppercases variable names → 'VAL')
+    // Submit first value (Lexer uppercases variable names → 'M_VAL')
     sent.length = 0;
-    await session.handleMessage({ type: 'form-submit', values: { VAL: 'alpha' } });
+    await session.handleMessage({ type: 'form-submit', values: { M_VAL: 'alpha' } });
     // Should pause again for second iteration
     expect(sent.find(m => m.type === 'form-open')).toBeDefined();
 
     // Submit second value
     sent.length = 0;
-    await session.handleMessage({ type: 'form-submit', values: { VAL: 'beta' } });
+    await session.handleMessage({ type: 'form-submit', values: { M_VAL: 'beta' } });
     // Loop done — LIST output (across all output messages) should contain both values
     const allText = sent
       .filter(m => m.type === 'output')
@@ -215,8 +215,8 @@ describe('Session', () => {
     await session.handleMessage({
       type: 'save-program', name: 'test_abort_prog',
       content: [
-        'STORE "" TO val',
-        '@ 1,1 SAY "Value:" GET val',
+        'STORE "" TO m_val',
+        '@ 1,1 SAY "Value:" GET m_val',
         'READ',
         'APPEND RECORD',
         'REPLACE val WITH "resumed"',
@@ -239,7 +239,7 @@ describe('Session', () => {
 
     // A stale form-submit must NOT resume the abandoned program.
     sent.length = 0;
-    await session.handleMessage({ type: 'form-submit', values: { VAL: 'resumed' } });
+    await session.handleMessage({ type: 'form-submit', values: { M_VAL: 'resumed' } });
 
     // No record should have been appended — the program was abandoned.
     sent.length = 0;
@@ -386,13 +386,13 @@ describe('Session', () => {
       'STORE "1" TO choice',
       'DO CASE',
       '  CASE choice == "1"',
-      '    STORE "" TO val',
-      '    @ 1,1 SAY "Value:" GET val',
+      '    STORE "" TO m_val',
+      '    @ 1,1 SAY "Value:" GET m_val',
       '    READ',
       '    APPEND RECORD',
-      '    REPLACE val WITH val',
+      '    REPLACE val WITH m_val',
       '  OTHERWISE',
-      '    STORE "unreached" TO val',
+      '    STORE "unreached" TO m_val',
       'ENDCASE',
       'LIST',
     ].join('\n');
@@ -403,7 +403,7 @@ describe('Session', () => {
 
     // Submit the form — the APPEND + REPLACE after READ must still run
     sent.length = 0;
-    await session.handleMessage({ type: 'form-submit', values: { VAL: 'gamma' } });
+    await session.handleMessage({ type: 'form-submit', values: { M_VAL: 'gamma' } });
     const allText = sent
       .filter(m => m.type === 'output')
       .flatMap((m: any) => m.lines.map((l: any) => l.text))
