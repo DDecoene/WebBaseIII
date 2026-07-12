@@ -781,7 +781,7 @@ export class Executor implements IndexCommandsHost {
     // validate edits.
     for (const c of cols) {
       this.columnMetaStore?.setColumnType(
-        this.metaDb, name, c.name, c.colType.toUpperCase(), c.size ?? null, c.scale ?? null,
+        this.metaDb, name, c.name, c.colType.toUpperCase(), c.size ?? null, c.scale ?? null, c.lookup ?? null,
       );
     }
     this.area.table = name;
@@ -917,7 +917,7 @@ export class Executor implements IndexCommandsHost {
       if (has(node.col)) return { output: [{ text: `ALTER TABLE: column already exists: ${node.col}`, cls: 'error' }] };
       await this.db.exec(`ALTER TABLE ${q(name)} ADD COLUMN ${q(node.col)} ${mapType(node.colType)}`);
       // ALTER TABLE drops any (n)/(p,s) qualifier — the parser skips it.
-      this.columnMetaStore?.setColumnType(this.metaDb, name, node.col, node.colType.toUpperCase(), null, null);
+      this.columnMetaStore?.setColumnType(this.metaDb, name, node.col, node.colType.toUpperCase(), null, null, node.lookup);
       await this.refreshIfActive(name);
       return { output: [{ text: `Added column ${node.col} to ${name}.`, cls: 'ok' }] };
     }
@@ -968,7 +968,7 @@ export class Executor implements IndexCommandsHost {
       await this.db.exec(`CREATE TABLE ${q(name)} (${colDefs})`);
       await this.db.exec(`INSERT INTO ${q(name)} SELECT ${colList} FROM ${q(tmp)}`);
       await this.db.exec(`DROP TABLE ${q(tmp)}`);
-      this.columnMetaStore?.setColumnType(this.metaDb, name, node.col, node.colType.toUpperCase(), null, null);
+      this.columnMetaStore?.setColumnType(this.metaDb, name, node.col, node.colType.toUpperCase(), null, null, node.lookup);
       await this.refreshIfActive(name);
       return { output: [
         { text: `Changed type of ${node.col} to ${node.colType} in ${name}.`, cls: 'ok' },
