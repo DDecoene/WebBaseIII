@@ -51,6 +51,17 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
   BROWSE/REPLACE enforcement, field-bound forms, two demo apps, and the GUI wizards all now
   agree on one constraint, declared once, on the column.
 
+### Fixed
+- A memory-variable `@ SAY GET` no longer shows blank when the variable already holds a
+  value. Field-binding (#59) rewrote the non-field fallback path to hardcode an empty
+  prefill instead of reading the variable's current value, silently breaking every demo
+  form that pre-fills a default via `STORE`: `overtime.prg`'s Week Monday date (Open/Prep
+  Week, Recalculate Week) and leave date (Register Leave Taken), `INVENTORY.prg`'s stock/
+  reorder/price/quantity defaults (Add Product, Stock In, Stock Out), and `crm.prg`'s deal
+  value default (Add Deal). Found by exercising the running app, not by the test suite —
+  every existing test for this path used a variable with no prior value, where an empty
+  prefill happens to be correct either way.
+
 ## [1.2.0] — 2026-07-09 — TIME columns, WEEK()/DATEADD(), BROWSE cell validation, Overtime demo
 
 ### Added
