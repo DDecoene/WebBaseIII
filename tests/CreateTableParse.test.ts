@@ -86,3 +86,69 @@ describe('CREATE TABLE still accepts every valid form', () => {
       .toEqual(['PRODID', 'CATID', 'NAME', 'STOCK', 'REORDER', 'PRICE', 'ACTIVE']);
   });
 });
+
+describe('LOOKUP column qualifier', () => {
+  it('parses a table lookup with DISPLAY', () => {
+    expect(cols('CREATE TABLE e (SCHEDID CHAR(4) LOOKUP SCHEDULES.SCHEDID DISPLAY DESCR)')).toEqual([
+      { name: 'SCHEDID', colType: 'CHAR', size: 4,
+        lookup: { kind: 'table', table: 'SCHEDULES', column: 'SCHEDID', display: 'DESCR' } },
+    ]);
+  });
+
+  it('parses a table lookup without DISPLAY', () => {
+    expect(cols('CREATE TABLE e (SCHEDID CHAR(4) LOOKUP SCHEDULES.SCHEDID)')).toEqual([
+      { name: 'SCHEDID', colType: 'CHAR', size: 4,
+        lookup: { kind: 'table', table: 'SCHEDULES', column: 'SCHEDID' } },
+    ]);
+  });
+
+  it('parses a literal list, preserving case', () => {
+    expect(cols('CREATE TABLE d (STAGE CHAR(12) LOOKUP ("Lead","Won","Lost"))')).toEqual([
+      { name: 'STAGE', colType: 'CHAR', size: 12,
+        lookup: { kind: 'list', values: ['Lead', 'Won', 'Lost'] } },
+    ]);
+  });
+
+  it('a LOOKUP column can be followed by more columns', () => {
+    expect(cols('CREATE TABLE d (STAGE CHAR(12) LOOKUP ("A","B"), VALUE NUM(8,2))').map((c: any) => c.name))
+      .toEqual(['STAGE', 'VALUE']);
+  });
+
+  it('rejects an empty LOOKUP list', () => {
+    expect(() => parse('CREATE TABLE d (STAGE CHAR(12) LOOKUP ())')).toThrow(/LOOKUP/i);
+  });
+
+  it('rejects unquoted values in a LOOKUP list', () => {
+    expect(() => parse('CREATE TABLE d (STAGE CHAR(12) LOOKUP (Lead,Won))')).toThrow(/LOOKUP/i);
+  });
+
+  it('rejects LOOKUP with no source at all', () => {
+    expect(() => parse('CREATE TABLE d (STAGE CHAR(12) LOOKUP)')).toThrow(/LOOKUP/i);
+  });
+
+  it('rejects a table lookup missing the .column part', () => {
+    expect(() => parse('CREATE TABLE d (STAGE CHAR(12) LOOKUP SCHEDULES)')).toThrow(/LOOKUP/i);
+  });
+
+  it('carries LOOKUP through ALTER TABLE ADD', () => {
+    const ast = parse('ALTER TABLE t ADD STAGE CHAR(12) LOOKUP ("A","B")')[0] as any;
+    expect(ast.lookup).toEqual({ kind: 'list', values: ['A', 'B'] });
+  });
+
+  it('carries LOOKUP through ALTER TABLE ALTER', () => {
+    const ast = parse('ALTER TABLE t ALTER STAGE CHAR LOOKUP S.C DISPLAY D')[0] as any;
+    expect(ast.lookup).toEqual({ kind: 'table', table: 'S', column: 'C', display: 'D' });
+  });
+
+  it('ALTER TABLE ADD without LOOKUP sets lookup to null, not undefined', () => {
+    const ast = parse('ALTER TABLE t ADD PLAINCOL CHAR')[0] as any;
+    expect(ast.lookup).toBeNull();
+    expect('lookup' in ast).toBe(true);
+  });
+
+  it('ALTER TABLE ALTER without LOOKUP sets lookup to null, not undefined', () => {
+    const ast = parse('ALTER TABLE t ALTER PLAINCOL CHAR')[0] as any;
+    expect(ast.lookup).toBeNull();
+    expect('lookup' in ast).toBe(true);
+  });
+});

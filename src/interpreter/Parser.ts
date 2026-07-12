@@ -1,4 +1,5 @@
 import { Token, TType } from './Lexer';
+import type { Lookup } from '../shared/cellValidation';
 
 // ── Built-in Functions ─────────────────────────────────────────────────────
 
@@ -59,8 +60,11 @@ export type ASTNode =
   | { type: 'CREATE_TABLE'; name: string; cols: ColDef[] }
   | { type: 'DROP_TABLE';  name: string }
   | { type: 'MODIFY_STRUCTURE' }
-  | { type: 'ALTER_TABLE'; name: string; op: 'ADD'; col: string; colType: string }
-  | { type: 'ALTER_TABLE'; name: string; op: 'ALTER'; col: string; colType: string }
+  // lookup is always present here (null when no LOOKUP clause was written) so
+  // Executor can pass it straight to setColumnType without an existence check —
+  // unlike ColDef.lookup below, which CREATE TABLE omits entirely when absent.
+  | { type: 'ALTER_TABLE'; name: string; op: 'ADD'; col: string; colType: string; lookup: Lookup | null }
+  | { type: 'ALTER_TABLE'; name: string; op: 'ALTER'; col: string; colType: string; lookup: Lookup | null }
   | { type: 'ALTER_TABLE'; name: string; op: 'DROP'; col: string }
   | { type: 'ALTER_TABLE'; name: string; op: 'RENAME'; col: string; newName: string }
   | { type: 'DO_PRG';      name: string }
@@ -76,7 +80,7 @@ export type ASTNode =
   | { type: 'FIND';        value: string }
   | { type: 'UNKNOWN';     raw: string };
 
-export interface ColDef { name: string; colType: string; size?: number; scale?: number; }
+export interface ColDef { name: string; colType: string; size?: number; scale?: number; lookup?: Lookup; }
 
 export type Expr =
   | { k: 'lit';  v: string | number | boolean }
@@ -488,7 +492,11 @@ export class Parser {
           }
           this.expectRParen(`type qualifier for column '${cname}'`);
         }
-        cols.push({ name: cname, colType: ctype, size, scale });
+        let lookup: Lookup | undefined;
+        if (this.peekKw('LOOKUP')) lookup = this.parseLookupClause(cname);
+        cols.push(lookup !== undefined
+          ? { name: cname, colType: ctype, size, scale, lookup }
+          : { name: cname, colType: ctype, size, scale });
         if (this.peek().type === 'COMMA') this.adv();
         else break;                       // no comma → the list must end here
       }
@@ -531,6 +539,50 @@ export class Parser {
     this.adv();
   }
 
+  // LOOKUP <table>.<column> [DISPLAY <column>]  |  LOOKUP ("a","b",...)
+  // A WebBase-III extension (documented deviation — dBASE III had no lookup).
+  private parseLookupClause(colName: string): Lookup {
+    this.adv(); // LOOKUP
+    if (this.peek().type === 'LPAREN') {
+      this.adv();
+      const values: string[] = [];
+      while (!this.end() && this.peek().type !== 'RPAREN') {
+        if (this.peek().type !== 'STR') {
+          this.createErr(`expected a quoted string in the LOOKUP list for column '${colName}'`);
+        }
+        values.push(this.adv().val);
+        if (this.peek().type === 'COMMA') this.adv();
+        else break;
+      }
+      this.expectRParen(`LOOKUP list for column '${colName}'`);
+      if (!values.length) this.createErr(`the LOOKUP list for column '${colName}' is empty`);
+      return { kind: 'list', values };
+    }
+    const t = this.peek();
+    if (t.type !== 'ID' && t.type !== 'KW') {
+      this.createErr(`expected <table>.<column> or a ("…") list after LOOKUP for column '${colName}'`);
+    }
+    const table = this.adv().val;
+    if (this.peek().type !== 'DOT') {
+      this.createErr(`expected <table>.<column> after LOOKUP for column '${colName}'`);
+    }
+    this.adv(); // DOT
+    const cTok = this.peek();
+    if (cTok.type !== 'ID' && cTok.type !== 'KW') {
+      this.createErr(`expected a column after '${table}.' in the LOOKUP for column '${colName}'`);
+    }
+    const column = this.adv().val;
+    if (this.peekKw('DISPLAY')) {
+      this.adv();
+      const dTok = this.peek();
+      if (dTok.type !== 'ID' && dTok.type !== 'KW') {
+        this.createErr(`expected a display column after DISPLAY in the LOOKUP for column '${colName}'`);
+      }
+      return { kind: 'table', table, column, display: this.adv().val };
+    }
+    return { kind: 'table', table, column };
+  }
+
   private parseDrop(): ASTNode {
     this.adv();
     this.skipKw('TABLE');
@@ -541,8 +593,8 @@ export class Parser {
     this.adv();                       // ALTER
     this.skipKw('TABLE');
     const name = this.ident();
-    if (this.peekKw('ADD'))    { this.adv(); this.skipKw('COLUMN'); const col = this.ident(); const colType = this.ident(); this.skipTypeSize(); return { type: 'ALTER_TABLE', name, op: 'ADD', col, colType }; }
-    if (this.peekKw('ALTER'))  { this.adv(); this.skipKw('COLUMN'); const col = this.ident(); const colType = this.ident(); this.skipTypeSize(); return { type: 'ALTER_TABLE', name, op: 'ALTER', col, colType }; }
+    if (this.peekKw('ADD'))    { this.adv(); this.skipKw('COLUMN'); const col = this.ident(); const colType = this.ident(); this.skipTypeSize(); const lookup = this.peekKw('LOOKUP') ? this.parseLookupClause(col) : null; return { type: 'ALTER_TABLE', name, op: 'ADD', col, colType, lookup }; }
+    if (this.peekKw('ALTER'))  { this.adv(); this.skipKw('COLUMN'); const col = this.ident(); const colType = this.ident(); this.skipTypeSize(); const lookup = this.peekKw('LOOKUP') ? this.parseLookupClause(col) : null; return { type: 'ALTER_TABLE', name, op: 'ALTER', col, colType, lookup }; }
     if (this.peekKw('DROP'))   { this.adv(); this.skipKw('COLUMN'); const col = this.ident(); return { type: 'ALTER_TABLE', name, op: 'DROP', col }; }
     if (this.peekKw('RENAME')) { this.adv(); this.skipKw('COLUMN'); const col = this.ident(); this.skipKw('TO'); const newName = this.ident(); return { type: 'ALTER_TABLE', name, op: 'RENAME', col, newName }; }
     throw new Error('Expected ADD, DROP, RENAME, or ALTER after ALTER TABLE <name>');

@@ -41,7 +41,7 @@ describe('Parser: MODIFY STRUCTURE / ALTER TABLE', () => {
 
   it('parses ALTER TABLE ADD', () => {
     expect(parse('ALTER TABLE customers ADD phone CHAR(20)')[0]).toEqual({
-      type: 'ALTER_TABLE', name: 'CUSTOMERS', op: 'ADD', col: 'PHONE', colType: 'CHAR',
+      type: 'ALTER_TABLE', name: 'CUSTOMERS', op: 'ADD', col: 'PHONE', colType: 'CHAR', lookup: null,
     });
   });
 
@@ -59,7 +59,7 @@ describe('Parser: MODIFY STRUCTURE / ALTER TABLE', () => {
 
   it('parses ALTER TABLE ALTER (type change)', () => {
     expect(parse('ALTER TABLE customers ALTER age INT')[0]).toEqual({
-      type: 'ALTER_TABLE', name: 'CUSTOMERS', op: 'ALTER', col: 'AGE', colType: 'INT',
+      type: 'ALTER_TABLE', name: 'CUSTOMERS', op: 'ALTER', col: 'AGE', colType: 'INT', lookup: null,
     });
   });
 });
