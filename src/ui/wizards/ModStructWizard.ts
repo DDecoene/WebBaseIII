@@ -1,4 +1,5 @@
 import { WizardShell } from './WizardShell';
+import { lookupClause } from './TableWizard';
 import type { ColInfo } from '../../shared/types';
 
 const NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -17,6 +18,7 @@ interface Row {
   origType: string;        // W3Script type at load time
   name: HTMLInputElement;
   type: HTMLSelectElement;
+  lookup: HTMLInputElement;
   drop: HTMLInputElement;  // checkbox: mark for deletion
 }
 
@@ -47,15 +49,20 @@ export function openModStructWizard(
       if (seen.has(newName.toUpperCase())) return { cmds: [], err: `Duplicate column: ${newName}` };
       seen.add(newName.toUpperCase());
       const newType = r.type.value;
+      const lk = lookupClause(r.lookup.value, newName);
+      if (lk.err) return { cmds: [], err: lk.err };
       if (!r.origName) {                              // brand new column
-        cmds.push(`ALTER TABLE ${table} ADD ${newName} ${newType}`);
+        cmds.push(`ALTER TABLE ${table} ADD ${newName} ${newType}${lk.clause}`);
         continue;
       }
       if (newName.toUpperCase() !== r.origName.toUpperCase()) {
         cmds.push(`ALTER TABLE ${table} RENAME ${r.origName} TO ${newName}`);
       }
-      if (newType !== r.origType) {
-        cmds.push(`ALTER TABLE ${table} ALTER ${newName} ${newType}`);
+      // A retype OR a newly-typed lookup both go through ALTER … ALTER; the
+      // clause rides along either way. A blank lookup input never emits or
+      // removes anything (no lookup-removal path — YAGNI, noted in the PR).
+      if (newType !== r.origType || lk.clause) {
+        cmds.push(`ALTER TABLE ${table} ALTER ${newName} ${newType}${lk.clause}`);
       }
     }
     return { cmds, err: '' };
@@ -82,15 +89,20 @@ export function openModStructWizard(
       if (t === startType) o.selected = true;
       type.appendChild(o);
     }
+    const lookup = document.createElement('input');
+    lookup.type = 'text'; lookup.className = 'wz-col-lookup';
+    lookup.placeholder = 'lookup (optional)';
+    lookup.title = 'Legal values: TABLE.COLUMN [DISPLAY COLUMN] — or a literal list: "Lead","Won"';
+    lookup.style.minWidth = '180px';
     const drop = document.createElement('input');
     drop.type = 'checkbox'; drop.title = 'drop this column';
     const dropLabel = document.createElement('label');
     dropLabel.append(drop, document.createTextNode(' drop'));
     if (!col) dropLabel.style.visibility = 'hidden';   // new rows can't be "dropped"
-    wrap.append(name, type, dropLabel);
+    wrap.append(name, type, lookup, dropLabel);
     colsWrap.appendChild(wrap);
-    rows.push({ origName: col?.name ?? '', origType: startType, name, type, drop });
-    for (const el of [name, type, drop]) el.addEventListener('input', update);
+    rows.push({ origName: col?.name ?? '', origType: startType, name, type, lookup, drop });
+    for (const el of [name, type, lookup, drop]) el.addEventListener('input', update);
     drop.addEventListener('change', update);
   };
 
