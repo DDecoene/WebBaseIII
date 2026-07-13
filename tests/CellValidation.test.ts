@@ -105,3 +105,47 @@ describe('validateCellValue', () => {
     });
   });
 });
+
+describe('lookup membership', () => {
+  const meta = {
+    baseType: 'CHAR', qualifier: 12 as number | null, scale: null as number | null,
+    lookup: { kind: 'list' as const, values: ['Lead', 'Won', 'Lost'] },
+    options: [
+      { value: 'Lead', label: 'Lead' },
+      { value: 'Won', label: 'Won' },
+      { value: 'Lost', label: 'Lost' },
+    ],
+  };
+
+  it('accepts a value that is in the resolved options', () => {
+    expect(validateCellValue('STAGE', 'Won', meta)).toBeNull();
+  });
+
+  it('rejects a value that is not in the resolved options', () => {
+    expect(validateCellValue('STAGE', 'Maybe', meta)).toMatch(/not one of the allowed values/);
+  });
+
+  it('is case-sensitive: "won" is not "Won"', () => {
+    expect(validateCellValue('STAGE', 'won', meta)).toMatch(/not one of the allowed values/);
+  });
+
+  it('still allows clearing the cell', () => {
+    expect(validateCellValue('STAGE', '', meta)).toBeNull();
+  });
+
+  it('skips membership when options are absent (unresolvable lookup degrades)', () => {
+    const degraded = { ...meta, options: undefined };
+    expect(validateCellValue('STAGE', 'Anything', degraded)).toBeNull();
+  });
+
+  it('runs the declared-type check before membership', () => {
+    const intMeta = {
+      baseType: 'INT', qualifier: null, scale: null,
+      lookup: { kind: 'list' as const, values: ['1', '2'] },
+      options: [{ value: '1', label: '1' }, { value: '2', label: '2' }],
+    };
+    expect(validateCellValue('N', 'abc', intMeta)).toMatch(/whole number/);
+    expect(validateCellValue('N', '3', intMeta)).toMatch(/not one of the allowed values/);
+    expect(validateCellValue('N', '2', intMeta)).toBeNull();
+  });
+});

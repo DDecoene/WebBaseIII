@@ -77,7 +77,31 @@ for (const key of ['ArrowDown', 'ArrowDown', 'ArrowRight']) {
   await page.waitForTimeout(150);
   await snap(450);
 }
-await snap(3200); // hold final frame
+await snap(1200);
+
+// ---- v1.3.0: LOOKUP columns — a column can pick from a list instead of typing ----
+await page.keyboard.press('Escape');
+await page.waitForTimeout(400);
+await snap(500);
+await typeAndRun('ALTER TABLE customers ADD SEGMENT CHAR(10) LOOKUP ("Startup","Enterprise")', 1600);
+await typeAndRun('BROWSE', 1200);
+for (const key of ['ArrowRight', 'ArrowRight', 'ArrowRight']) {
+  await page.keyboard.press(key);
+  await page.waitForTimeout(150);
+  await snap(350);
+}
+await page.keyboard.press('Enter');     // opens the SEGMENT dropdown
+await page.waitForTimeout(300);
+await snap(1400);
+await page.keyboard.press('ArrowDown'); // picks "Startup"
+await page.waitForTimeout(150);
+await snap(500);
+await page.keyboard.press('Enter');     // commits
+await page.waitForTimeout(300);
+await snap(1400);
+await page.keyboard.press('Escape');    // leave the grid
+await page.waitForTimeout(300);
+await snap(3000); // hold final frame
 
 writeFileSync(`${OUT}/frames.json`, JSON.stringify(frames, null, 2));
 await browser.close();

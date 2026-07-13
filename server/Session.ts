@@ -8,7 +8,8 @@ import { reportStore } from './ReportStore.js';
 import { indexStore } from './IndexStore.js';
 import { columnMetaStore } from './ColumnMetaStore.js';
 import { validateCellValue } from '../src/shared/cellValidation.js';
-import type { ClientMessage, ServerMessage, ColInfo } from '../src/shared/types.js';
+import { resolveLookup } from '../src/interpreter/LookupResolver.js';
+import type { ClientMessage, ServerMessage, ColInfo, OutputLine } from '../src/shared/types.js';
 
 export class Session {
   private bridge: ServerDatabaseBridge;
@@ -17,6 +18,11 @@ export class Session {
   // Whether pendingContinuation was captured while a program (DO <name>) was
   // running — its resumption must re-enter program scope (e.g. silent STORE).
   private pendingFromProgram = false;
+  // The field list of the form currently awaiting submit. form-submit resolves
+  // write targets from THIS, never from the client's message — a forged
+  // form-submit cannot redirect a write to an arbitrary column (same reasoning
+  // as grid-edit's authoritative re-check).
+  private pendingFormFields: import('../src/shared/types.js').FormField[] | null = null;
 
   private dirty = false;
 
@@ -47,12 +53,48 @@ export class Session {
           break;
 
         case 'form-submit': {
-          // Always store what the form collected. A bare `INPUT "…" TO var` at the
-          // REPL leaves no continuation (there is no following statement), and
-          // gating the assignment on one silently discarded the typed value. (#50)
-          for (const [k, v] of Object.entries(msg.values)) {
-            this.executor.setVar(k, v);
+          const fields = this.pendingFormFields ?? [];
+          type FieldTarget = Extract<NonNullable<import('../src/shared/types.js').FormField['target']>, { kind: 'field' }>;
+          const fieldByName = new Map<string, FieldTarget>();
+          for (const f of fields) {
+            if (f.target?.kind === 'field') fieldByName.set(f.varName, f.target);
           }
+          // Variables first — and always. A bare `INPUT "…" TO var` at the REPL
+          // leaves no continuation, and gating the assignment on one silently
+          // discarded the typed value (#50). Keys that are not field targets of
+          // THIS form are variables, whatever the client claims.
+          for (const [k, v] of Object.entries(msg.values)) {
+            if (!fieldByName.has(k)) this.executor.setVar(k, v);
+          }
+          // Field writes are all-or-nothing: validate every value (declared type
+          // + freshly-resolved lookup membership) before writing any.
+          const errors: { varName: string; message: string }[] = [];
+          const writes: { table: string; column: string; rowid: number; value: string }[] = [];
+          for (const [varName, t] of fieldByName) {
+            const value = msg.values[varName] ?? '';
+            let meta = columnMetaStore.getColumnType(t.db, t.table, t.column);
+            if (meta?.lookup) {
+              const options = await resolveLookup(this.bridge, meta.lookup);
+              meta = { ...meta, options: options ?? undefined };
+            }
+            const err = validateCellValue(t.column, value, meta);
+            if (err) errors.push({ varName, message: err });
+            else writes.push({ table: t.table, column: t.column, rowid: t.rowid, value });
+          }
+          if (errors.length) {
+            // Keep pendingFormFields AND pendingContinuation intact: the client
+            // keeps the form open and resubmits corrected values.
+            this.send({ type: 'form-error', errors });
+            break;
+          }
+          this.pendingFormFields = null;
+          for (const w of writes) {
+            await this.bridge.exec(
+              `UPDATE ${q(w.table)} SET ${q(w.column)} = ? WHERE rowid = ?`,
+              [w.value, w.rowid]
+            );
+          }
+          this.send({ type: 'view-terminal' });
           if (this.pendingContinuation !== null) {
             const cont = this.pendingContinuation;
             const fromProgram = this.pendingFromProgram;
@@ -65,7 +107,6 @@ export class Session {
               if (fromProgram) this.executor.exitProgram();
             }
           } else {
-            this.send({ type: 'view-terminal' });
             this.sendStatus();
           }
           break;
@@ -78,7 +119,14 @@ export class Session {
             // Authoritative check — the grid validates client-side for fast
             // feedback, but a message can reach here without passing through it.
             const db = this.executor.area.db ?? '';
-            const err = validateCellValue(col, value, columnMetaStore.getColumnType(db, table, col));
+            let meta = columnMetaStore.getColumnType(db, table, col);
+            if (meta?.lookup) {
+              // Fresh re-resolve at write time — the option list the client got
+              // at grid-open may be stale, and a forged message never saw one.
+              const options = await resolveLookup(this.bridge, meta.lookup);
+              meta = { ...meta, options: options ?? undefined };
+            }
+            const err = validateCellValue(col, value, meta);
             if (err) {
               this.send({ type: 'output', lines: [{ text: `** ${err}`, cls: 'error' }] });
               await this.sendGridData();
@@ -156,6 +204,7 @@ export class Session {
         }
 
         case 'grid-exit':
+          this.pendingFormFields = null;
           this.send({ type: 'view-terminal' });
           if (this.pendingContinuation) {
             const cont = this.pendingContinuation;
@@ -179,6 +228,7 @@ export class Session {
           if (this.pendingContinuation !== null) {
             const wasProgram = this.pendingFromProgram;
             this.pendingContinuation = null;
+            this.pendingFormFields = null;
             this.pendingFromProgram = false;
             this.executor.resetProgramDepth();
             if (wasProgram) {
@@ -301,6 +351,7 @@ export class Session {
     if (result.action === 'FORM_READY' && result.formFields) {
       this.pendingContinuation = result.continuation ?? null;
       this.pendingFromProgram = this.executor.isInProgram();
+      this.pendingFormFields = result.formFields;
       this.send({ type: 'form-open', fields: result.formFields });
       return true;
     }
@@ -364,6 +415,17 @@ export class Session {
     }
     const columns = await this.bridge.getStructure(area.table);
     const columnTypes = columnMetaStore.listColumnTypes(area.db ?? '', area.table);
+    // Re-resolved on every BROWSE open, not cached: a table-kind lookup's source
+    // rows can change between opens, and grid-edit re-resolves again anyway —
+    // this just keeps the dropdown's initial contents from going stale.
+    const warns: OutputLine[] = [];
+    for (const [col, meta] of Object.entries(columnTypes)) {
+      if (!meta.lookup) continue;
+      const options = await resolveLookup(this.bridge, meta.lookup);
+      if (options) meta.options = options;
+      else warns.push({ text: `** Warning: lookup for ${col} could not be resolved — free entry`, cls: 'warn' });
+    }
+    if (warns.length) this.send({ type: 'output', lines: warns });
     const rows = await this.executor.getOrderedRowsWithIds(2000);
     this.send({ type: 'grid-open', table: area.table, filter: area.filter, columns, columnTypes, rows });
   }

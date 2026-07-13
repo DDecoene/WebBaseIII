@@ -204,6 +204,47 @@ test.describe('Assistant wizards — table', () => {
     const numbered = lines.filter(l => /^\s*\d+\s+\w+/.test(l) && !/record/i.test(l));
     expect(numbered).toHaveLength(1);
   });
+
+  test('New table wizard emits a LOOKUP clause and BROWSE honours it', async ({ page }) => {
+    await boot(page);
+    await page.locator('#terminal-input').fill('USE DATABASE ASSISTDEMO');
+    await page.locator('#terminal-input').press('Enter');
+    await page.waitForTimeout(400);
+    await page.locator('#terminal-input').fill('DROP TABLE wiz_lookup');
+    await page.locator('#terminal-input').press('Enter');
+    await page.waitForTimeout(400);
+
+    await clickAction(page, 'New table…');
+    await expect(page.locator('#wizard-view')).toBeVisible({ timeout: 5000 });
+
+    await page.locator('#wz-table-name').fill('wiz_lookup');
+    await page.locator('.wz-col-name').first().fill('STAGE');
+    await page.locator('.wz-col-type').first().selectOption('CHAR');
+    await page.locator('.wz-col-len').first().fill('12');
+    await page.locator('.wz-col-lookup').first().fill('"Lead","Won"');
+
+    // live preview shows the exact clause
+    await expect(page.locator('.wz-preview'))
+      .toContainText('CREATE TABLE wiz_lookup (STAGE CHAR(12) LOOKUP ("Lead","Won"))');
+
+    await page.locator('#wizard-view button', { hasText: 'Create table' }).click();
+    await expect(page.locator('#terminal-output')).toContainText('Table created: WIZ_LOOKUP', { timeout: 5000 });
+
+    // The created table's grid editor is a dropdown with exactly the list.
+    await page.locator('#terminal-input').fill('APPEND RECORD');
+    await page.locator('#terminal-input').press('Enter');
+    await page.waitForTimeout(400);
+    await clickAction(page, 'Browse');
+    await expect(page.locator('#grid-view')).toBeVisible({ timeout: 5000 });
+    const td = page.locator('#grid-tbody td[data-ri="0"][data-ci="0"]');
+    await td.dblclick();
+    const sel = td.locator('select.cell-ed');
+    await expect(sel).toBeVisible();
+    await expect(sel).toBeInViewport();
+    await expect(sel.locator('option')).toHaveText(['', 'Lead', 'Won']);
+    await page.keyboard.press('Escape');   // leave edit
+    await page.keyboard.press('Escape');   // leave grid
+  });
 });
 
 test.describe('Assistant wizards — filter / index / search', () => {

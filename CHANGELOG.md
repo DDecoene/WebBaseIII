@@ -7,6 +7,61 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
 
 ---
 
+## [1.3.0] — 2026-07-13
+
+### Added
+- `LOOKUP` column qualifier — language grammar and storage layer (#58). Any column can
+  declare a constraint on its legal values: `LOOKUP <table>.<column> [DISPLAY <column>]`
+  for a live table-driven lookup, or `LOOKUP ("a","b",...)` for a literal list. Parsed by
+  `CREATE TABLE`/`ALTER TABLE ADD`/`ALTER TABLE ALTER`, persisted per-column in
+  `ColumnMetaStore` via an additive migration (existing declared types are never touched
+  or dropped), and resolvable to concrete `{value,label}` options via the new
+  `src/interpreter/LookupResolver.ts` (degrades to free entry — never truncates — when the
+  source is missing, empty, or exceeds 1000 distinct values). This is a WebBase-III
+  extension with no dBASE III ancestor.
+- `LOOKUP` enforcement + BROWSE dropdown (#60). `REPLACE` and the BROWSE grid's `grid-edit`
+  now reject a value outside a column's declared `LOOKUP`, re-resolving the constraint fresh
+  against the live database on every write (so a value that only just became legal, or that
+  just stopped being legal, is judged correctly — never a stale cached list). An unresolvable
+  lookup (source table dropped, empty, or over 1000 values) degrades to free entry with a
+  warning rather than locking the column. BROWSE renders a lookup column as a dropdown —
+  `DISPLAY` labels shown while editing, the stored code shown once committed, matching
+  `LIST`/report output.
+- **Field-bound `@ SAY GET`** (#59). `@ r,c SAY "…" GET <name>` now binds directly to the
+  active table's column when one matches — dBASE III's actual behavior — instead of only
+  ever collecting into a memory variable. Fields take precedence over a memory variable of
+  the same name (why the `m_` prefix convention exists). A field-bound `GET` needs a current
+  record and prefills from it; a lookup column renders the same picker BROWSE does. `READ`'s
+  submit validates every field-bound value (declared type + lookup membership) before
+  writing any of them — a rejection sends a new `form-error` message that keeps the form
+  open with the bad fields outlined, rather than silently discarding the valid ones.
+  Writes target the row captured at `GET` time, mirroring how `grid-edit` already writes by
+  rowid. This is the PR that promotes `LOOKUP` to the README command reference in full —
+  both BROWSE and forms now declare, enforce, and render it end to end.
+- **Demos adopt `LOOKUP`** (#61). `demos/overtime.prg` gains a `SCHEDULES` catalog table
+  (`SCHEDID`, `DESCR`) as the lookup source for `EMPLOYEES.SCHEDID` — Add Employee is now a
+  check-first, two-form flow where the schedule is picked from a dropdown showing the
+  description ("Standard 40h (08:00-16:30)") instead of typed from memory. `demos/crm.prg`'s
+  `DEALS.STAGE` is constrained to a literal `LOOKUP` list matching its own seeded vocabulary
+  exactly, exercising the other lookup kind in a real, working demo.
+- **Assistant wizard support** (#62). The New-table and Modify-structure wizards gain a
+  per-column "lookup (optional)" field accepting `TABLE.COLUMN [DISPLAY COLUMN]` or a quoted
+  list, so declaring a `LOOKUP` no longer requires dropping into raw W3Script syntax. This
+  closes out the v1.3.0 lookup-columns milestone (#58–#62): the language, storage, resolver,
+  BROWSE/REPLACE enforcement, field-bound forms, two demo apps, and the GUI wizards all now
+  agree on one constraint, declared once, on the column.
+
+### Fixed
+- A memory-variable `@ SAY GET` no longer shows blank when the variable already holds a
+  value. Field-binding (#59) rewrote the non-field fallback path to hardcode an empty
+  prefill instead of reading the variable's current value, silently breaking every demo
+  form that pre-fills a default via `STORE`: `overtime.prg`'s Week Monday date (Open/Prep
+  Week, Recalculate Week) and leave date (Register Leave Taken), `INVENTORY.prg`'s stock/
+  reorder/price/quantity defaults (Add Product, Stock In, Stock Out), and `crm.prg`'s deal
+  value default (Add Deal). Found by exercising the running app, not by the test suite —
+  every existing test for this path used a variable with no prior value, where an empty
+  prefill happens to be correct either way.
+
 ## [1.2.0] — 2026-07-09 — TIME columns, WEEK()/DATEADD(), BROWSE cell validation, Overtime demo
 
 ### Added

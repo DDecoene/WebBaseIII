@@ -2,7 +2,7 @@
 
 **dBASE III is back. In your browser. `USE customers` like it's 1984.**
 
-![WebBase-III demo — USE, LIST, SEEK, BROWSE](docs/screenshots/demo.gif)
+![WebBase-III demo — USE, LIST, SEEK, BROWSE, and a LOOKUP column dropdown](docs/screenshots/demo.gif)
 
 Remember the dot prompt? Before SQL won, before ORMs, before anyone said "full-stack" — there was dBASE III. You typed `USE customers`, then `LIST`, and your data was just *there*. WebBase-III brings that whole world back: the terminal, the language, `BROWSE`, `@ SAY GET` forms, `.prg` programs, indexes, reports — rebuilt from scratch as a modern web app with its own interpreter in TypeScript, backed by Node.js, WebSockets, and SQLite.
 
@@ -98,6 +98,20 @@ as you fix it, and `Esc` abandons the edit. Here a `TIME(15)` column rejects `08
 
 ---
 
+### `LOOKUP` columns — pick a value instead of typing it
+
+A column declared `LOOKUP <table>.<column> DISPLAY <column>` edits through a dropdown in
+both BROWSE and forms — showing the friendlier label, storing the code. Here `SCHEDID`
+is constrained to `SCHEDULES.SCHEDID`, displaying `DESCR`.
+
+![BROWSE editing a LOOKUP column via dropdown](docs/screenshots/screenshot-lookup-browse.png)
+
+A field-bound `@ SAY GET` (one whose name matches a table column) renders the same picker:
+
+![A form field bound to a LOOKUP column](docs/screenshots/screenshot-lookup-form.png)
+
+---
+
 ### Aggregate commands & dBASE III parity
 
 `SUM`, `AVERAGE`, `? ROUND(…)`, `? MAX(…)`, and `SORT ON … TO` — numeric aggregates and sorted copies, honouring the active filter.
@@ -140,6 +154,8 @@ build indexes, search, reindex, pack the database, design and run reports, run p
 table structure. Every click generates a real W3Script command that echoes into the terminal —
 watch it to learn the language. Wizards (New table, Filter, Sort, Sum/Average, Modify structure,
 report designer, …) open in the main area and show a live preview of the command they will run.
+New table and Modify structure both offer an optional per-column "lookup" field — `LOOKUP`
+without typing raw syntax.
 
 ---
 
@@ -244,6 +260,43 @@ WebBase-III supports **unlimited work areas** — each independently holding a t
 
 **Column types**: `CHAR(n)` (aliases `CHARACTER`/`VARCHAR`/`STRING`/`MEMO`), `NUM`/`NUM(p,s)` (`NUMERIC`/`FLOAT`/`DOUBLE`/`DECIMAL`), `INT`/`INTEGER`, `LOGICAL`/`BOOLEAN`, `DATE`, and `TIME`/`TIME(n)`. `TIME` stores `HH:MM` (24-hour); the optional `TIME(n)` qualifier (e.g. `TIME(15)`) requires minutes to be a multiple of `n`. `REPLACE ... WITH` rejects a malformed or off-granularity `TIME` value instead of silently coercing it, and `LIST STRUCTURE` prints the declared type (`NUM(8,2)`, `TIME(15)`) rather than SQLite's storage class.
 
+### `LOOKUP` columns — constrain a column to legal values
+
+Any column may add a `LOOKUP` clause after its type, declaring the values it's allowed to hold:
+
+```
+CREATE TABLE EMPLOYEES (EMPID CHAR(4), NAME CHAR(30),
+                        SCHEDID CHAR(4) LOOKUP SCHEDULES.SCHEDID DISPLAY DESCR)
+CREATE TABLE DEALS (STAGE CHAR(12) LOOKUP ("Lead","Qualified","Proposal","Won","Lost"))
+```
+
+Two forms: `LOOKUP <table>.<column> [DISPLAY <column>]` looks up live values from another
+table (optionally showing a friendlier label while storing the code), or
+`LOOKUP ("a","b",...)` is a fixed list. `CREATE TABLE`/`ALTER TABLE ADD`/`ALTER TABLE ALTER`
+all accept it.
+
+BROWSE renders a lookup column as a dropdown — `DISPLAY` labels while editing, the stored
+code once committed, matching `LIST`/report output. `REPLACE` and BROWSE edits both reject
+a value outside the list, re-checked fresh against the live database on every write (a
+value that just became legal, or just stopped being legal, is judged correctly — never a
+stale cached list). A lookup that can't be resolved (source table dropped, empty, or over
+1000 distinct values) degrades to free entry with a warning instead of locking the column.
+
+Forms pick it up too: `@ r,c SAY "…" GET <name>` binds to the active table's column when
+one matches — a field takes precedence over a memory variable of the same name, which is
+why programs use an `m_` prefix for scratch variables. A field-bound `GET` needs a current
+record (`APPEND RECORD` first) and prefills from it; if the column has a lookup, the form
+renders the same picker BROWSE does. `READ` validates every field-bound value before
+writing any of them — a rejection keeps the form open with the bad field outlined instead
+of silently dropping the others.
+
+> **Deviation from dBASE III:** `LOOKUP` has no dBASE III ancestor — dBASE III+ only offered
+> `PICTURE "@M a,b,c"`, a literal value list cycled with the spacebar, with no table-driven
+> form and no display label. This is a WebBase-III extension, in the same spirit as
+> unlimited work areas and `alias.field` dot notation. Field-bound `GET` *is* authentic
+> dBASE III behavior — WebBase-III's own memory-variable-only forms were the deviation,
+> now corrected.
+
 > **CSV format (`COPY TO` / `APPEND FROM`):** Unlike dBASE III's headerless,
 > positional `DELIMITED`/`SDF` formats, WebBase-III uses modern **header-based CSV**
 > (RFC-4180, mapped by column name). Export downloads through the browser and
@@ -318,7 +371,7 @@ WebBase-III supports **unlimited work areas** — each independently holding a t
 | `? <expr>[, <expr>...]` | Evaluate expression(s) and print the result (numbers right-justified; bare `?` prints a blank line; `??` also accepted) |
 | `STORE <val> TO <var>` | Assign a variable |
 | `INPUT "prompt" TO <var>` | Collect keyboard input |
-| `@ r,c SAY "text" GET <var>` | Define a form field |
+| `@ r,c SAY "text" GET <var>` | Define a form field; a name matching a column of the active table binds that column (lookup columns render a picker) |
 | `READ` | Display the form and wait for submit |
 
 ### Control flow

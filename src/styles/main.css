@@ -247,12 +247,14 @@ html, body {
   background: #001428; border: 2px solid #0066cc;
   color: #ffffff; font-family: var(--font); font-size: 13px; outline: none;
 }
+select.cell-ed { min-width: 110px; }
 
 /* A rejected edit (#45): the cell stays in edit mode and explains why.
    Cells clip their content (`overflow: hidden` above, for ellipsis), which would
    swallow the message entirely — the user would see only a red border. */
 #grid-table td.cell-invalid { overflow: visible; }
-#grid-table td.cell-invalid input.cell-ed { border-color: #cc0000; background: #2a0000; }
+#grid-table td.cell-invalid input.cell-ed,
+#grid-table td.cell-invalid select.cell-ed { border-color: #cc0000; background: #2a0000; }
 #grid-table td.cell-invalid .cell-error {
   position: absolute; left: 0; top: 100%; z-index: 20;
   max-width: 320px; padding: 3px 8px;
@@ -285,6 +287,8 @@ html, body {
   padding: 1px 5px; outline: none; min-width: 120px;
 }
 .f-get:focus { border-color: #0088ff; background: #001c35; }
+select.f-get { min-width: 140px; }
+.f-get.f-invalid { border-color: #cc0000; background: #2a0000; }
 
 /* ── Program Editor ─────────────────────────────────────────────────────── */
 #editor-view {

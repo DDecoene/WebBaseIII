@@ -6,6 +6,7 @@ import { IndexCommands, IndexCommandsHost } from './IndexCommands';
 import { ReportCommands } from './ReportCommands';
 import { toCSV, parseCSV, MAX_EXPORT_ROWS, MAX_IMPORT_BYTES, MAX_IMPORT_SKIPS } from '../shared/csv';
 import { validateCellValue } from '../shared/cellValidation';
+import { resolveLookup } from './LookupResolver';
 
 export type { OutputLine, FormField } from '../shared/types';
 
@@ -428,15 +429,27 @@ export class Executor implements IndexCommandsHost {
     this.requireTable();
     await this.refreshRecCount();
     const pairs = fields.map(f => ({ field: f.field, value: this.evalExpr(f.value) }));
-    // TIME is the only declared type REPLACE enforces (#43). The grid validates
-    // every declared type (#45) because it has no other guard; widening REPLACE
-    // would change the semantics of existing programs.
+    // Declared-type enforcement on REPLACE is deliberately narrow: TIME since
+    // #43, plus lookup membership (#58) — membership is additive, because no
+    // pre-#58 column declares a lookup, so no existing program changes behavior.
+    // The grid still validates every declared type (#45).
     for (const p of pairs) {
       if (p.value === null || p.value === undefined) continue;
       const info = this.columnMetaStore?.getColumnType(this.metaDb, this.area.table!, p.field);
-      if (info?.baseType === 'TIME') {
+      if (!info) continue;
+      if (info.baseType === 'TIME') {
         const err = validateCellValue(p.field, String(p.value), info);
         if (err) throw new Error(err);
+      }
+      if (info.lookup) {
+        // Re-resolve at write time: a value that became legal after any cached
+        // list was built is accepted; a vanished one is rejected. Unresolvable
+        // (null) skips membership — degradation, not a lock.
+        const options = await resolveLookup(this.db, info.lookup);
+        if (options) {
+          const err = validateCellValue(p.field, String(p.value), { ...info, options });
+          if (err) throw new Error(err);
+        }
       }
     }
     const setClauses = pairs.map(p => `${q(p.field)} = ?`).join(', ');
@@ -544,8 +557,42 @@ export class Executor implements IndexCommandsHost {
     const row = Number(this.evalExpr(rowE));
     const col = Number(this.evalExpr(colE));
     const text = String(this.evalExpr(textE));
-    this.pendingForm.push({ row, col, label: text, varName });
-    return { output: [] };
+    const out: OutputLine[] = [];
+
+    // Field binding: a GET whose name matches a column of the active table edits
+    // the current record (dBASE III behavior — fields shadow memory variables;
+    // this is why the m_ prefix convention exists). Capturing the rowid here means
+    // form-submit writes by rowid, like grid-edit — pointer motion between here
+    // and submit cannot retarget the write.
+    if (this.area.table) {
+      const cols = await this.db.getStructure(this.area.table);
+      const match = cols.find(c => c.name.toUpperCase() === varName.toUpperCase());
+      if (match) {
+        const cur = await this.fetchCurrentRow();
+        if (!cur) throw new Error(`GET ${match.name}: no current record`);
+        const field: FormField = {
+          row, col, label: text, varName: match.name,
+          target: {
+            kind: 'field', column: match.name, table: this.area.table,
+            db: this.area.db ?? '', rowid: Number(cur._rowid),
+          },
+          value: String(cur[match.name] ?? ''),
+        };
+        const info = this.columnMetaStore?.getColumnType(this.metaDb, this.area.table, match.name);
+        if (info?.lookup) {
+          const options = await resolveLookup(this.db, info.lookup);
+          if (options) field.options = options;
+          else out.push({ text: `** Warning: lookup for ${match.name} could not be resolved — free entry`, cls: 'warn' });
+        }
+        this.pendingForm.push(field);
+        return { output: out };
+      }
+    }
+    this.pendingForm.push({
+      row, col, label: text, varName, target: { kind: 'var' },
+      value: String(this.vars.get(varName) ?? ''),
+    });
+    return { output: out };
   }
 
   private doRead(): ExecResult {
@@ -781,7 +828,7 @@ export class Executor implements IndexCommandsHost {
     // validate edits.
     for (const c of cols) {
       this.columnMetaStore?.setColumnType(
-        this.metaDb, name, c.name, c.colType.toUpperCase(), c.size ?? null, c.scale ?? null,
+        this.metaDb, name, c.name, c.colType.toUpperCase(), c.size ?? null, c.scale ?? null, c.lookup ?? null,
       );
     }
     this.area.table = name;
@@ -917,7 +964,7 @@ export class Executor implements IndexCommandsHost {
       if (has(node.col)) return { output: [{ text: `ALTER TABLE: column already exists: ${node.col}`, cls: 'error' }] };
       await this.db.exec(`ALTER TABLE ${q(name)} ADD COLUMN ${q(node.col)} ${mapType(node.colType)}`);
       // ALTER TABLE drops any (n)/(p,s) qualifier — the parser skips it.
-      this.columnMetaStore?.setColumnType(this.metaDb, name, node.col, node.colType.toUpperCase(), null, null);
+      this.columnMetaStore?.setColumnType(this.metaDb, name, node.col, node.colType.toUpperCase(), null, null, node.lookup);
       await this.refreshIfActive(name);
       return { output: [{ text: `Added column ${node.col} to ${name}.`, cls: 'ok' }] };
     }
@@ -968,7 +1015,7 @@ export class Executor implements IndexCommandsHost {
       await this.db.exec(`CREATE TABLE ${q(name)} (${colDefs})`);
       await this.db.exec(`INSERT INTO ${q(name)} SELECT ${colList} FROM ${q(tmp)}`);
       await this.db.exec(`DROP TABLE ${q(tmp)}`);
-      this.columnMetaStore?.setColumnType(this.metaDb, name, node.col, node.colType.toUpperCase(), null, null);
+      this.columnMetaStore?.setColumnType(this.metaDb, name, node.col, node.colType.toUpperCase(), null, null, node.lookup);
       await this.refreshIfActive(name);
       return { output: [
         { text: `Changed type of ${node.col} to ${node.colType} in ${name}.`, cls: 'ok' },

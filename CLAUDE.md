@@ -63,6 +63,9 @@ src/
     Executor.ts         Async AST runner; manages state (db/table/filter/vars/rowPtr/activeIndex). Emits fire-and-forget client side-effects (CSV download, report preview, CSV upload picker) via onSideEffect so they work inside program blocks
     IndexCommands.ts    Index command handlers (extracted from Executor)
     ReportCommands.ts   Report command handlers delegating to ReportRunner
+    LookupResolver.ts   Resolves a column's LOOKUP constraint (literal list, or live table+column+DISPLAY)
+                        to concrete {value,label} options against IDatabaseBridge; degrades to null
+                        (never truncates) on a missing source, empty result, or >1000 distinct values
 
   terminal/
     Terminal.ts         REPL UI — command history, multi-line block accumulation
@@ -194,6 +197,42 @@ WebBase-III supports **unlimited work areas** (no DOS 10-area limit). Cross-area
 
 Declared types are recorded per `(database, table, column)` in `server/ColumnMetaStore.ts`, because SQLite only keeps a storage affinity: `TIME`/`DATE`/`CHAR` are all `TEXT`, `LOGICAL`/`INT` are both `INTEGER`, and a `NUM(p,s)` qualifier is lost entirely.
 
+#### `LOOKUP` column qualifier (v1.3.0)
+
+Any column may add a `LOOKUP` clause after its type, constraining it to a set of legal
+values — a WebBase-III extension with no dBASE III ancestor (dBASE III+ only had
+`PICTURE "@M a,b,c"`, a literal spacebar-cycled list with no table-driven form):
+
+```
+SCHEDID CHAR(4) LOOKUP SCHEDULES.SCHEDID DISPLAY DESCR   -- live table lookup
+STAGE   CHAR(12) LOOKUP ("Lead","Won","Lost")             -- literal list
+```
+
+`CREATE TABLE`/`ALTER TABLE ADD`/`ALTER TABLE ALTER` parse and store it (`ColumnMetaStore`,
+same additive-migration discipline as the type columns above). `src/interpreter/LookupResolver.ts`
+turns a stored `LOOKUP` into concrete `{value,label}` options against the live database,
+degrading to `null` (never truncating) when the source is missing, empty, or exceeds 1000
+distinct values.
+
+BROWSE renders a lookup column as a dropdown (`Grid.ts`'s `startEdit`) fed by the options
+`Session.sendGridData` resolves at `grid-open`; the stored value shows once committed,
+matching `LIST`/report output — only the edit-mode dropdown shows `DISPLAY` labels.
+`REPLACE` and `grid-edit` both enforce membership, re-resolving fresh at write time (not
+trusting a client-held list) so a value that just became legal or just stopped being legal
+is judged correctly; an unresolvable lookup degrades to free entry with a warning rather
+than locking the column.
+
+`@ r,c SAY "…" GET <name>` binds to the active table's column when one matches — dBASE III's
+actual behavior, and why the field takes precedence over a memory variable of the same name
+(the `m_` prefix convention exists for this reason). A field-bound `GET` requires a current
+record (`APPEND RECORD` first — `** Error: GET <field>: no current record` otherwise),
+prefills from the record, and renders a picker when the column has a resolvable lookup.
+`READ`'s submit is all-or-nothing across every field-bound `GET` in the form: every value is
+validated (declared type + lookup membership) before any is written, and a rejection sends a
+`form-error` message that keeps the form open with the offending fields outlined — Escape
+still writes nothing. Writes target the rowid captured at `GET` time (`fetchCurrentRow`),
+mirroring `grid-edit`, so pointer motion between `GET` and submit can't retarget the write.
+
 #### Cell validation (`BROWSE`)
 
 `src/shared/cellValidation.ts` holds the rules and runs on **both** sides: `Grid.ts` checks before commit (an invalid edit keeps the cell in edit mode, outlined red, with the reason shown; the error clears as the value becomes valid), and `Session`'s `grid-edit` handler re-checks authoritatively before writing — a WS message can reach the server without passing through the grid.
@@ -207,7 +246,7 @@ Declared types are recorded per `(database, table, column)` in `server/ColumnMet
 | `LOGICAL` | `.T.`/`.F.`/`.TRUE.`/`.FALSE.`/`T`/`F`/`TRUE`/`FALSE`/`1`/`0` |
 | `CHAR` / `MEMO` | anything (length is not enforced) |
 
-An empty value is always allowed (clears the cell). Columns with no recorded declared type are unconstrained. `REPLACE` enforces only `TIME` — widening it would change the semantics of existing programs.
+An empty value is always allowed (clears the cell). Columns with no recorded declared type are unconstrained. `REPLACE` enforces `TIME` and, since v1.3.0, lookup membership on any column that declares one (additive — no pre-v1.3.0 column declares a `LOOKUP`, so no existing program's behavior changes); widening validation beyond that would change the semantics of existing programs.
 
 ### Indexing & search
 | Command | What it does |
@@ -339,7 +378,7 @@ npm run coverage        # Vitest + v8 coverage report (reporting only, no thresh
 npx playwright test     # E2E browser tests — requires dev server on :5173/:3000
 ```
 
-Playwright suites (94 tests): `tests/assistant.spec.ts` (23 tests — sidebar, wizards, report designer, MODIFY STRUCTURE round-trip, `TIME(15)` column + REPLACE validation, `NUM(p,s)` wizard, Browse-action grid validation, program run, CSV/SORT/SUM-AVERAGE/REINDEX/PACK actions, demo launchers), `tests/integration.spec.ts` (20 tests — full REPL scenario), `tests/overtime.spec.ts` (9 tests — overtime.prg: menu, seeding, DATEADD week prep, TIME(15) grid rejection, recalculation, live balance, quarter-hour leave check, report, CSV), `tests/inventory.spec.ts` (8 tests — INVENTORY.prg menu + valuation/low-stock report/sort/CSV/JOIN), `tests/crm.spec.ts` (6 tests — CRM demo menu, pipeline summary, sort, report, CSV, JOIN), `tests/parity-commands.spec.ts` (6 tests — `?`/`??`, built-in functions, `WEEK()`, `DATEADD()`, `SUM`/`AVERAGE`, `SORT ON … TO`), `tests/multiarea.spec.ts` (4 tests — multi-work-area, relations, alias.field), `tests/demos.spec.ts` (4 tests — demo program + report seeding), `tests/grid-validation.spec.ts` (3 tests — BROWSE per-cell validation: TIME(15), NUM(p,s)/DATE, Esc abandons), `tests/schema-errors.spec.ts` (3 tests — malformed CREATE TABLE errors, NUM(p,s) column count, bare INPUT stores its value), `tests/copycsv.spec.ts` (2 tests — COPY TO download + APPEND FROM upload), `tests/splash.spec.ts` (2 tests — version banner + demo discoverability), `tests/join.spec.ts` (1 test — JOIN materialization), `tests/propagation.spec.ts` (1 test — live multiuser refresh), `tests/program-side-effects.spec.ts` (1 test — CSV/report side-effects fire from inside a program block).
+Playwright suites (95 tests): `tests/assistant.spec.ts` (23 tests — sidebar, wizards, report designer, MODIFY STRUCTURE round-trip, `TIME(15)` column + REPLACE validation, `NUM(p,s)` wizard, Browse-action grid validation, program run, CSV/SORT/SUM-AVERAGE/REINDEX/PACK actions, demo launchers), `tests/integration.spec.ts` (20 tests — full REPL scenario), `tests/overtime.spec.ts` (10 tests — overtime.prg: menu, seeding, DATEADD week prep, TIME(15) grid rejection, recalculation, live balance, quarter-hour leave check, report, CSV, Add-Employee lookup dropdown), `tests/inventory.spec.ts` (8 tests — INVENTORY.prg menu + valuation/low-stock report/sort/CSV/JOIN), `tests/crm.spec.ts` (6 tests — CRM demo menu, pipeline summary, sort, report, CSV, JOIN), `tests/parity-commands.spec.ts` (6 tests — `?`/`??`, built-in functions, `WEEK()`, `DATEADD()`, `SUM`/`AVERAGE`, `SORT ON … TO`), `tests/multiarea.spec.ts` (4 tests — multi-work-area, relations, alias.field), `tests/demos.spec.ts` (4 tests — demo program + report seeding), `tests/grid-validation.spec.ts` (3 tests — BROWSE per-cell validation: TIME(15), NUM(p,s)/DATE, Esc abandons), `tests/schema-errors.spec.ts` (3 tests — malformed CREATE TABLE errors, NUM(p,s) column count, bare INPUT stores its value), `tests/copycsv.spec.ts` (2 tests — COPY TO download + APPEND FROM upload), `tests/splash.spec.ts` (2 tests — version banner + demo discoverability), `tests/join.spec.ts` (1 test — JOIN materialization), `tests/propagation.spec.ts` (1 test — live multiuser refresh), `tests/program-side-effects.spec.ts` (1 test — CSV/report side-effects fire from inside a program block).
 
 ## Test discipline
 

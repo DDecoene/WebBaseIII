@@ -80,3 +80,82 @@ describe('ColumnMetaStore', () => {
     expect(store.getColumnType('OTHERDB', 'SHIFTS', 'STARTTIME')).toBeNull();
   });
 });
+
+describe('lookup persistence', () => {
+  it('round-trips a table lookup with display', () => {
+    const store = new ColumnMetaStore(tmpDbPath());
+    store.setColumnType('DB', 'EMPLOYEES', 'SCHEDID', 'CHAR', 4, null,
+      { kind: 'table', table: 'SCHEDULES', column: 'SCHEDID', display: 'DESCR' });
+    expect(store.getColumnType('DB', 'EMPLOYEES', 'SCHEDID')).toEqual({
+      baseType: 'CHAR', qualifier: 4, scale: null,
+      lookup: { kind: 'table', table: 'SCHEDULES', column: 'SCHEDID', display: 'DESCR' },
+    });
+  });
+
+  it('round-trips a literal list preserving order and case', () => {
+    const store = new ColumnMetaStore(tmpDbPath());
+    store.setColumnType('DB', 'DEALS', 'STAGE', 'CHAR', 12, null,
+      { kind: 'list', values: ['Lead', 'Won', 'lost'] });
+    expect(store.getColumnType('DB', 'DEALS', 'STAGE')?.lookup)
+      .toEqual({ kind: 'list', values: ['Lead', 'Won', 'lost'] });
+  });
+
+  it('omits the lookup key entirely when none was declared', () => {
+    const store = new ColumnMetaStore(tmpDbPath());
+    store.setColumnType('DB', 'T', 'PLAIN', 'CHAR', 10, null);
+    expect(store.getColumnType('DB', 'T', 'PLAIN')).toEqual({ baseType: 'CHAR', qualifier: 10, scale: null });
+  });
+
+  it('re-declaring a column without a lookup clears the stored one', () => {
+    const store = new ColumnMetaStore(tmpDbPath());
+    store.setColumnType('DB', 'T', 'C', 'CHAR', 4, null, { kind: 'list', values: ['A'] });
+    store.setColumnType('DB', 'T', 'C', 'CHAR', 4, null);
+    expect(store.getColumnType('DB', 'T', 'C')?.lookup).toBeUndefined();
+  });
+
+  it('scopes lookups per database (two DBs, same table+column)', () => {
+    const store = new ColumnMetaStore(tmpDbPath());
+    store.setColumnType('A', 'T', 'C', 'CHAR', 4, null, { kind: 'list', values: ['X'] });
+    store.setColumnType('B', 'T', 'C', 'CHAR', 4, null, { kind: 'list', values: ['Y'] });
+    expect(store.getColumnType('A', 'T', 'C')?.lookup).toEqual({ kind: 'list', values: ['X'] });
+    expect(store.getColumnType('B', 'T', 'C')?.lookup).toEqual({ kind: 'list', values: ['Y'] });
+  });
+
+  it('listColumnTypes carries lookups', () => {
+    const store = new ColumnMetaStore(tmpDbPath());
+    store.setColumnType('DB', 'T', 'C', 'CHAR', 4, null, { kind: 'list', values: ['A'] });
+    expect(store.listColumnTypes('DB', 'T').C.lookup).toEqual({ kind: 'list', values: ['A'] });
+  });
+
+  // A v1.2.0 store has db_name and scale but no lookup columns. It SHIPPED —
+  // it must be migrated additively, never dropped (dropping erases users'
+  // declared TIME(15)/NUM(p,s) types).
+  it('adds lookup columns to a v1.2.0 store without losing existing rows', () => {
+    const p = tmpDbPath();
+    const v120 = new Database(p);
+    v120.exec(`
+      CREATE TABLE column_types (
+        db_name    TEXT NOT NULL,
+        table_name TEXT NOT NULL,
+        col_name   TEXT NOT NULL,
+        base_type  TEXT NOT NULL,
+        qualifier  INTEGER,
+        scale      INTEGER,
+        PRIMARY KEY (db_name, table_name, col_name)
+      );
+    `);
+    v120.prepare('INSERT INTO column_types VALUES (?,?,?,?,?,?)')
+      .run('OVERTIME', 'SCHEDULEDAYS', 'TIMEIN', 'TIME', 15, null);
+    v120.close();
+
+    const store = new ColumnMetaStore(p);
+    // The pre-existing row SURVIVES:
+    expect(store.getColumnType('OVERTIME', 'SCHEDULEDAYS', 'TIMEIN'))
+      .toEqual({ baseType: 'TIME', qualifier: 15, scale: null });
+    // And the new columns work:
+    store.setColumnType('OVERTIME', 'EMPLOYEES', 'SCHEDID', 'CHAR', 4, null,
+      { kind: 'table', table: 'SCHEDULES', column: 'SCHEDID' });
+    expect(store.getColumnType('OVERTIME', 'EMPLOYEES', 'SCHEDID')?.lookup)
+      .toEqual({ kind: 'table', table: 'SCHEDULES', column: 'SCHEDID' });
+  });
+});

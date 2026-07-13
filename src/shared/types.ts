@@ -13,7 +13,16 @@ export interface FormField {
   row: number;
   col: number;
   label: string;
+  /** The submit key. For a field-bound GET this is the column name. */
   varName: string;
+  /** What form-submit writes. Absent (legacy INPUT/@SAY paths) means 'var'. */
+  target?:
+    | { kind: 'var' }
+    | { kind: 'field'; column: string; table: string; db: string; rowid: number };
+  /** Prefill. Field GETs carry the record's value; var GETs stay '' (unchanged UX). */
+  value?: string;
+  /** Resolved lookup options — render a <select>. Absent = free text. */
+  options?: import('./cellValidation').LookupOption[];
 }
 
 export interface OutputLine {
@@ -56,10 +65,11 @@ export interface IIndexStore {
 // precision/scale). qualifier carries CHAR(n) length / TIME(n) granularity /
 // NUM(p,s) precision; scale carries the NUM(p,s) scale.
 export type ColumnTypeInfo = import('./cellValidation').ColumnMeta;
+export type { Lookup, LookupOption } from './cellValidation';
 
 // Scoped by database: two databases can hold same-named tables with different types.
 export interface IColumnMetaStore {
-  setColumnType(dbName: string, tableName: string, colName: string, baseType: string, qualifier: number | null, scale: number | null): void;
+  setColumnType(dbName: string, tableName: string, colName: string, baseType: string, qualifier: number | null, scale: number | null, lookup?: import('./cellValidation').Lookup | null): void;
   getColumnType(dbName: string, tableName: string, colName: string): ColumnTypeInfo | null;
   listColumnTypes(dbName: string, tableName: string): Record<string, ColumnTypeInfo>;
   renameColumn(dbName: string, tableName: string, oldName: string, newName: string): void;
@@ -151,6 +161,7 @@ export type ServerMessage =
   | { type: 'clear' }
   | { type: 'report-preview'; html: string }
   | { type: 'error'; message: string }
+  | { type: 'form-error'; errors: { varName: string; message: string }[] }
   | { type: 'catalog'; catalog: Catalog }
   | { type: 'data-changed'; db: string; table: string }
   | { type: 'csv-download'; filename: string; content: string }

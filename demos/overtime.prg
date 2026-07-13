@@ -31,6 +31,10 @@ SELECT SCH
 USE DATABASE OVERTIME
 USE SCHEDULEDAYS
 
+SELECT SCD
+USE DATABASE OVERTIME
+USE SCHEDULES
+
 SELECT TS
 USE DATABASE OVERTIME
 USE TIMESHEET
@@ -52,8 +56,17 @@ USE LEAVETAKEN
 * wipe TIMESHEET and WEEKSUMMARY — on every run until someone used it.
 SELECT EMP
 IF RECCOUNT() == 0
+  SELECT SCD
+  DROP TABLE SCHEDULES
+  CREATE TABLE SCHEDULES (SCHEDID CHAR(4), DESCR CHAR(30))
+  APPEND RECORD
+  REPLACE SCHEDID WITH "S001", DESCR WITH "Standard 40h (08:00-16:30)"
+  APPEND RECORD
+  REPLACE SCHEDID WITH "S002", DESCR WITH "Short 31.25h (09:00-16:00)"
+
+  SELECT EMP
   DROP TABLE EMPLOYEES
-  CREATE TABLE EMPLOYEES (EMPID CHAR(4), NAME CHAR(30), SCHEDID CHAR(4))
+  CREATE TABLE EMPLOYEES (EMPID CHAR(4), NAME CHAR(30), SCHEDID CHAR(4) LOOKUP SCHEDULES.SCHEDID DISPLAY DESCR)
   INDEX ON EMPID TO BYEMP
   APPEND RECORD
   REPLACE EMPID WITH "E001", NAME WITH "Ada Lovelace", SCHEDID WITH "S001"
@@ -139,21 +152,24 @@ DO WHILE running
     CASE UPPER(TRIM(choice)) == "1"
       CLEAR
       @ 2, 5 SAY "--- ADD EMPLOYEE ---"
-      STORE SPACE(4)  TO m_emp
-      STORE SPACE(30) TO m_name
-      STORE SPACE(4)  TO m_sch
-      @ 4, 5 SAY "Employee ID (4): " GET m_emp
-      @ 5, 5 SAY "Name       (30): " GET m_name
-      @ 6, 5 SAY "Schedule ID (4): " GET m_sch
-      READ
       SELECT EMP
       SET INDEX TO BYEMP
+      STORE SPACE(4) TO m_emp
+      @ 4, 5 SAY "Employee ID (4): " GET m_emp
+      READ
       SEEK TRIM(m_emp)
       IF FOUND()
         @ 8, 5 SAY "Employee already exists: " + TRIM(m_emp)
       ELSE
+        * Create in natural order: writing the key under an active index
+        * would move the record out from under the form.
+        SET INDEX TO
         APPEND RECORD
-        REPLACE EMPID WITH TRIM(m_emp), NAME WITH TRIM(m_name), SCHEDID WITH TRIM(m_sch)
+        REPLACE EMPID WITH TRIM(m_emp)
+        @ 5, 5 SAY "Name     (30): " GET NAME
+        @ 6, 5 SAY "Schedule     : " GET SCHEDID
+        READ
+        SET INDEX TO BYEMP
         @ 8, 5 SAY "Employee added: " + TRIM(m_emp)
       ENDIF
       INPUT "Press Enter to continue" TO pause
