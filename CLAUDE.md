@@ -366,6 +366,32 @@ Beyond-parity work lands on the milestone's own `release/vX.Y.Z` line.
   grouped report, CSV export (#46) ✅
 - ~~`DATEADD()` built-in~~ — day arithmetic; W3Script had none (#52) ✅
 
+### Beyond parity (v1.3.0)
+
+- ~~`LOOKUP` column qualifier~~ — declare a column's legal values (live table or literal list),
+  enforced by `REPLACE`/`grid-edit`, rendered as a dropdown in BROWSE and forms (#58, #60) ✅
+- ~~Field-bound `@ SAY GET`~~ — a `GET` naming a table column binds to the record, prefills
+  from it, and `READ` writes it back all-or-nothing (#59) ✅
+- ~~Demos adopt lookups + Assistant wizard support~~ (#61, #62) ✅
+
+### The community roadmap (v1.4.0 → v1.5.0)
+
+**Full doc: [`docs/roadmap-v1.4-v1.5.md`](docs/roadmap-v1.4-v1.5.md)** — read it before planning
+work on these milestones; it records *why*, with citations.
+
+The direction is no longer "what did dBASE III have". It comes from what people who shipped
+xBase software for a living said after the [Show HN](https://news.ycombinator.com/item?id=48656986)
+and [r/retrocomputing](https://old.reddit.com/r/retrocomputing/comments/1ue8k6s/) threads:
+xBase shipped the *developer's tools with the app*, so the end user could open the screen
+painter and report writer and change their own forms — "still unmatched", per a 25-year
+FoxPro ISV. WebBase-III has a report designer and `BROWSE`; it has **no form designer**.
+
+- **v1.4.0 — the screen painter.** `CREATE SCREEN`/`MODIFY SCREEN` (visual `@ SAY GET`
+  designer that emits editable W3Script), a **catalog** grouping tables/screens/reports/programs
+  into a named application, and the Assistant's JOIN + work-area wizards (#34).
+- **v1.5.0 — ship it.** Publish a catalog as an app to a URL: FoxPro's distribution kit, except
+  distribution in 2026 is a link. The tools ship with the app.
+
 ## Boolean literals
 
 Both styles accepted: `TRUE`/`FALSE` and `.T.`/`.TRUE.`/`.F.`/`.FALSE.` (dBASE III style). Output always uses `.T.`/`.F.`. Logical operators likewise: `NOT`/`.NOT.`, `AND`/`.AND.`, `OR`/`.OR.`.

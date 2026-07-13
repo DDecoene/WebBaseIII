@@ -7,6 +7,20 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
 
 ---
 
+## [Unreleased] — v1.4.0 in progress
+
+Direction for v1.4.0 and v1.5.0 is set by what people who shipped xBase software for a living
+asked for after seeing v1.0.0 — see [`docs/roadmap-v1.4-v1.5.md`](docs/roadmap-v1.4-v1.5.md).
+The short version: xBase shipped the developer's tools *with* the app, so the end user could
+change their own forms and reports. WebBase-III has the report designer but no form designer.
+v1.4.0 adds the screen painter and a catalog; v1.5.0 publishes an app to a URL.
+
+### Added
+- `docs/roadmap-v1.4-v1.5.md` — community-driven roadmap, citing the Show HN and
+  r/retrocomputing threads it came from.
+
+---
+
 ## [1.3.0] — 2026-07-13
 
 ### Added
