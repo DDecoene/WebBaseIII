@@ -449,8 +449,9 @@ Complete these steps **in order** — do not skip or reorder:
 4. `CHANGELOG.md` — add entry (Added / Fixed / Changed sections) under the milestone version heading
 5. `README.md` — command tables and feature list reflect what was built
 6. `CLAUDE.md` — architecture, command tables, and roadmap updated
-7. Screenshots — retake and commit if the UI changed (`docs/screenshots/`)
-8. Any design doc in `docs/superpowers/` — mark completed items, note deviations
-9. **Tag only on release** — `vX.Y.Z` is tagged when the `release/vX.Y.Z` branch merges to `main`, not on the feature branch.
+7. **Screenshots** — retake and commit with `node scripts/capture-screenshots.mjs` (regenerates every `docs/screenshots/*.png`; needs the dev server running). **A version bump alone changes the UI**, because the version is rendered in the splash banner and the status bar — so screenshots are retaken on *every* release, not only when a feature changed the UI.
+8. **Demo GIF** — do not forget it. Same reason: the banner shows the version. `node scripts/make-demo-gif.mjs` records the frames (needs the server on :3000), then `python3 scripts/make-demo-gif.py` assembles `docs/screenshots/demo.gif` (needs PIL).
+9. Any design doc in `docs/superpowers/` — mark completed items, note deviations
+10. **Tag only on release** — `vX.Y.Z` is tagged when the `release/vX.Y.Z` branch merges to `main`, not on the feature branch.
 
 Version scheme: 0.1.0 foundation → 0.2.0 indexing → 0.3.0 language completeness → 0.4.0 multi-work-area → 0.5.0 report engine → 0.6.0 assistant → 1.0.0 feature-complete (parity milestone) → 1.1.0+ beyond-parity. Versions are milestone-driven: each milestone ships on its own `release/vX.Y.Z` branch (see Git conventions).
