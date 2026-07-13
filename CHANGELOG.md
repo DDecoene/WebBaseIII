@@ -7,7 +7,7 @@ Versions follow [Semantic Versioning](https://semver.org/) — minor bump per su
 
 ---
 
-## [Unreleased] — v1.3.0 in progress
+## [1.3.0] — 2026-07-13
 
 ### Added
 - `LOOKUP` column qualifier — language grammar and storage layer (#58). Any column can
