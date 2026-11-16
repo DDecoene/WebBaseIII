@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>WebBase-III Poster</title>
+<!--
+  A4 portrait poster (794×1123 CSS px = 210×297 mm at 96 dpi).
+  Layout follows the "Affiche" design: rounded header panel with badge,
+  title and subtitle → hero image → tinted feature panel (2×2) → footer.
+  Static, self-contained, like docs/social-preview.html.
+  Render:  open in a browser and print to PDF (A4, no margins), or
+  screenshot the .poster element at 794×1123.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;800&family=Barlow:wght@400;500;600&family=Kreon:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --accent: #00B4D7;      /* header panel, bullets, section label */
+    --accent-ink: #E5F7FB;  /* subtitle on accent */
+    --badge: #FF5000;       /* badge pill */
+    --panel: #F4F4F4;       /* feature panel */
+    --ink: #282828;         /* body text */
+    --paper: #ffffff;
+    --desk: #e7e5df;        /* backdrop around the sheet on screen */
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { background: var(--desk); }
+  body { font-family: "Barlow", sans-serif; color: var(--ink); }
+
+  .stage {
+    min-height: 100vh; padding: 40px;
+    display: flex; justify-content: center; align-items: flex-start;
+  }
+  .poster {
+    width: 794px; height: 1123px; flex: none;
+    background: var(--paper);
+    box-shadow: 0 6px 28px rgba(0,0,0,.14);
+    overflow: hidden; position: relative;
+    display: flex; flex-direction: column;
+    padding: 46px;
+  }
+
+  /* droplet: a square with one sharp corner, rotated */
+  .drop {
+    display: block; flex: none;
+    width: 11px; height: 11px;
+    border-radius: 50% 50% 50% 0;
+    transform: rotate(45deg);
+  }
+
+  /* ── header panel ─────────────────────────────── */
+  .header {
+    background: var(--accent);
+    border-radius: 28px 28px 28px 8px;
+    padding: 38px 42px;
+    position: relative; overflow: hidden;
+  }
+  .header::before {         /* large faint droplet in the corner */
+    content: ""; position: absolute; right: -40px; top: -40px;
+    width: 200px; height: 200px;
+    background: rgba(255,255,255,.10);
+    border-radius: 50% 50% 50% 0; transform: rotate(45deg);
+  }
+  .header > * { position: relative; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 10px;
+    background: var(--badge); padding: 8px 16px; border-radius: 20px;
+    font-family: "Barlow Condensed", sans-serif; font-weight: 800;
+    font-size: 18px; letter-spacing: .1em; color: #fff;
+  }
+  .badge .drop { background: #fff; }
+  .title {
+    margin: 16px 0 14px;
+    font-family: "Barlow Condensed", sans-serif; font-weight: 800;
+    font-size: 64px; line-height: .94; color: #fff;
+  }
+  .subtitle {
+    font-family: "Kreon", serif; font-weight: 500;
+    font-size: 21px; color: var(--accent-ink);
+  }
+
+  /* ── hero ─────────────────────────────────────── */
+  .hero {
+    flex: 1; min-height: 0; margin: 6px 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .hero img { width: 100%; max-height: 420px; object-fit: contain; }
+  .hero .placeholder {
+    width: 100%; height: 360px; border: 2px dashed #c9c9c9; border-radius: 16px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: "Barlow Condensed", sans-serif; font-size: 22px; color: #8a8a8a;
+  }
+
+  /* ── feature panel ────────────────────────────── */
+  .features {
+    background: var(--panel);
+    border-radius: 24px 24px 8px 24px;
+    padding: 30px 36px;
+  }
+  .features h2 {
+    font-family: "Kreon", serif; font-weight: 600;
+    font-size: 18px; color: var(--accent); margin-bottom: 18px;
+  }
+  .features ul {
+    list-style: none;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 16px 40px;
+  }
+  .features li {
+    display: flex; align-items: center; gap: 12px;
+    font-weight: 500; font-size: 18px; color: var(--ink);
+  }
+  .features .drop { background: var(--accent); }
+
+  /* ── footer ───────────────────────────────────── */
+  .footer {
+    margin-top: 24px;
+    display: flex; align-items: center; justify-content: space-between;
+    font-family: "Barlow Condensed", sans-serif; font-weight: 600;
+    font-size: 20px; color: var(--ink);
+  }
+  .footer img { height: 40px; }
+
+  @media print {
+    @page { size: A4 portrait; margin: 0; }
+    html, body { background: #fff; }
+    .stage { padding: 0; min-height: 0; }
+    .poster { box-shadow: none; }
+  }
+</style>
+</head>
+<body>
+<div class="stage">
+  <main class="poster">
+
+    <header class="header">
+      <div class="badge"><span class="drop" aria-hidden="true"></span>BADGE TEXT</div>
+      <h1 class="title">Poster<br>Title</h1>
+      <p class="subtitle">One-line subtitle goes here</p>
+    </header>
+
+    <section class="hero">
+      <div class="placeholder">Hero image</div>
+    </section>
+
+    <section class="features">
+      <h2>Features</h2>
+      <ul>
+        <li><span class="drop" aria-hidden="true"></span>Feature one</li>
+        <li><span class="drop" aria-hidden="true"></span>Feature two</li>
+        <li><span class="drop" aria-hidden="true"></span>Feature three</li>
+        <li><span class="drop" aria-hidden="true"></span>Feature four</li>
+      </ul>
+    </section>
+
+    <footer class="footer">
+      <span>Footer left</span>
+      <span>Footer right</span>
+    </footer>
+
+  </main>
+</div>
+</body>
+</html>
